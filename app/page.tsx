@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
 import ProductsTab from '@/components/ProductsTab';
+import OrdersTab from '@/components/OrdersTab';
 import { createClient } from '@/lib/supabase-client';
 
 
@@ -172,13 +173,7 @@ export default function AdminPage() {
         <main className="flex-1 p-6 lg:ml-0">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'products' && <ProductsTab />}
-            {activeTab === 'orders' && (
-              <div className="bg-white rounded-lg p-8 text-center">
-                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">주문 관리</h3>
-                <p className="text-gray-500">주문 관리 기능은 준비 중입니다.</p>
-              </div>
-            )}
+            {activeTab === 'orders' && <OrdersTab />}
             {activeTab === 'users' && (
               <div className="bg-white rounded-lg p-8 text-center">
                 <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
