@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { createClient } from '@/lib/supabase-client';
 import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
-import ProductsTab from '@/app/components/admin/ProductsTab';
+import ProductsTab from '@/components/ProductsTab';
 
 type TabType = 'products' | 'orders' | 'users' | 'settings';
 
