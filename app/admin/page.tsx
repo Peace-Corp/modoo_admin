@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
-import ProductsTab from '@/components/ProductsTab';
 import { createClient } from '@/lib/supabase-client';
-
+import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
+import ProductsTab from '@/app/components/admin/ProductsTab';
 
 type TabType = 'products' | 'orders' | 'users' | 'settings';
 
