@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
 import ProductsTab from '@/components/ProductsTab';
 import OrdersTab from '@/components/OrdersTab';
+import UsersTab from '@/components/UsersTab';
 import { createClient } from '@/lib/supabase-client';
 
 
@@ -174,13 +175,7 @@ export default function AdminPage() {
           <div className="max-w-7xl mx-auto">
             {activeTab === 'products' && <ProductsTab />}
             {activeTab === 'orders' && <OrdersTab />}
-            {activeTab === 'users' && (
-              <div className="bg-white rounded-lg p-8 text-center">
-                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">사용자 관리</h3>
-                <p className="text-gray-500">사용자 관리 기능은 준비 중입니다.</p>
-              </div>
-            )}
+            {activeTab === 'users' && <UsersTab />}
             {activeTab === 'settings' && (
               <div className="bg-white rounded-lg p-8 text-center">
                 <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
