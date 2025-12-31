@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ExtractedColor, ObjectDimensions } from '@/types/types';
-import { ChevronLeft, Palette, Ruler } from 'lucide-react';
-import { Canvas, FabricObject, Image as FabricImage, filters } from 'fabric';
+import { ChevronLeft, Palette, Ruler, Grid3x3, LayoutGrid } from 'lucide-react';
+import { SingleCanvasRenderer } from './OrderCanvasRenderer';
+import { Canvas as FabricCanvas } from 'fabric';
+import ComprehensiveDesignPreview from './ComprehensiveDesignPreview';
+
+type ViewMode = 'comprehensive' | 'detailed';
 
 interface OrderItemCanvasProps {
   orderItem: OrderItem;
@@ -14,30 +18,14 @@ interface OrderItemCanvasProps {
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('comprehensive');
   const [currentSideIndex, setCurrentSideIndex] = useState(0);
   const [extractedColors, setExtractedColors] = useState<ExtractedColor[]>([]);
   const [objectDimensions, setObjectDimensions] = useState<ObjectDimensions[]>([]);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricCanvasRef = useRef<Canvas | null>(null);
-
   useEffect(() => {
     fetchProduct();
-
-    return () => {
-      // Cleanup fabric canvas on unmount
-      if (fabricCanvasRef.current) {
-        fabricCanvasRef.current.dispose();
-        fabricCanvasRef.current = null;
-      }
-    };
   }, [orderItem.product_id]);
-
-  useEffect(() => {
-    if (product) {
-      renderCanvas();
-    }
-  }, [product, currentSideIndex]);
 
   const fetchProduct = async () => {
     setLoading(true);
@@ -59,189 +47,77 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
   };
 
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
-      : null;
-  };
-
-  const applyColorFilter = (fabricImg: FabricImage, targetColor: string) => {
-    const rgb = hexToRgb(targetColor);
-    if (!rgb) return;
-
-    // Create a color overlay filter using BlendColor
-    const blendFilter = new filters.BlendColor({
-      color: targetColor,
-      mode: 'multiply',
-      alpha: 0.5,
-    });
-
-    fabricImg.filters = [blendFilter];
-    fabricImg.applyFilters();
-  };
-
-  const renderCanvas = async () => {
-    if (!product || !canvasRef.current) return;
-
-    const currentSide = product.configuration[currentSideIndex];
+  const handleCanvasReady = (canvas: FabricCanvas, sideId: string, canvasScale: number) => {
+    // Extract colors and dimensions from the rendered canvas
+    const currentSide = product?.configuration.find(s => s.id === sideId);
     if (!currentSide) return;
 
-    // Dispose existing canvas
-    if (fabricCanvasRef.current) {
-      fabricCanvasRef.current.dispose();
-      fabricCanvasRef.current = null;
+    const objects = canvas.getObjects();
+    const colors: ExtractedColor[] = [];
+    const dimensions: ObjectDimensions[] = [];
+
+    const realDimensions = currentSide.realLifeDimensions;
+    const printArea = currentSide.printArea;
+
+    let pixelToMmRatio = 1;
+    if (realDimensions && realDimensions.printAreaWidthMm > 0 && printArea.width > 0) {
+      pixelToMmRatio = realDimensions.printAreaWidthMm / printArea.width;
     }
 
-    const sideId = currentSide.id;
-    const canvasState = orderItem.canvas_state[sideId];
-
-    try {
-      // Load product background image first to get dimensions
-      const productImg = await FabricImage.fromURL(currentSide.imageUrl, {
-        crossOrigin: 'anonymous',
-      });
-
-      // Apply color filter if item has a color selection
-      if (orderItem.item_options?.color_hex) {
-        applyColorFilter(productImg, orderItem.item_options.color_hex);
+    objects.forEach((obj) => {
+      // Skip the background image
+      const objData = obj as { data?: { id?: string } };
+      if (objData.data?.id === 'background-product-image') {
+        return;
       }
 
-      // Calculate canvas size and scaling
-      const maxCanvasWidth = 900;
-      const maxCanvasHeight = 1100;
-
-      const scale = Math.min(
-        maxCanvasWidth / productImg.width!,
-        maxCanvasHeight / productImg.height!,
-        1 // Don't scale up, only down
-      );
-
-      const scaledImgWidth = productImg.width! * scale;
-      const scaledImgHeight = productImg.height! * scale;
-
-      // Canvas should have some padding around the image
-      const canvasWidth = Math.max(scaledImgWidth, 600);
-      const canvasHeight = Math.max(scaledImgHeight, 700);
-
-      // Create fabric canvas
-      const fabricCanvas = new Canvas(canvasRef.current, {
-        width: canvasWidth,
-        height: canvasHeight,
-        selection: false,
-        renderOnAddRemove: false,
-        backgroundColor: '#f5f5f5',
-      });
-
-      fabricCanvasRef.current = fabricCanvas;
-
-      // Scale the background image
-      productImg.scale(scale);
-
-      // Center the background image on the canvas
-      const imgLeft = (canvasWidth - scaledImgWidth) / 2;
-      const imgTop = (canvasHeight - scaledImgHeight) / 2;
-
-      productImg.set({
-        left: imgLeft,
-        top: imgTop,
-      });
-
-      // Set as background
-      fabricCanvas.backgroundImage = productImg;
-
-      // If there's canvas state, load the objects
-      if (canvasState && canvasState.objects && canvasState.objects.length > 0) {
-        // Load from JSON
-        await new Promise<void>((resolve, reject) => {
-          fabricCanvas.loadFromJSON(canvasState, () => {
-            // Get the print area offset
-            const printArea = currentSide.printArea;
-            const realDimensions = currentSide.realLifeDimensions;
-
-            // Calculate pixel to mm ratio
-            let pixelToMmRatio = 1;
-            if (realDimensions && realDimensions.printAreaWidthMm > 0 && printArea.width > 0) {
-              pixelToMmRatio = realDimensions.printAreaWidthMm / printArea.width;
-            }
-
-            // Adjust object positions to account for print area offset
-            const objects = fabricCanvas.getObjects();
-            const colors: ExtractedColor[] = [];
-            const dimensions: ObjectDimensions[] = [];
-
-            objects.forEach((obj: FabricObject) => {
-              // Adjust position for centered background and print area
-              const adjustedLeft = imgLeft + (obj.left || 0) + printArea.x * scale;
-              const adjustedTop = imgTop + (obj.top || 0) + printArea.y * scale;
-
-              obj.set({
-                left: adjustedLeft,
-                top: adjustedTop,
-                selectable: false,
-                evented: false,
-              });
-
-              // Extract colors
-              const fill = obj.fill;
-              if (fill && typeof fill === 'string' && fill !== 'transparent') {
-                if (!colors.find(c => c.hex.toLowerCase() === fill.toLowerCase())) {
-                  colors.push({ hex: fill });
-                }
-              }
-
-              const stroke = obj.stroke;
-              if (stroke && typeof stroke === 'string') {
-                if (!colors.find(c => c.hex.toLowerCase() === stroke.toLowerCase())) {
-                  colors.push({ hex: stroke });
-                }
-              }
-
-              // Calculate dimensions
-              const objWidth = (obj.width || 0) * (obj.scaleX || 1);
-              const objHeight = (obj.height || 0) * (obj.scaleY || 1);
-
-              let objectType = obj.type || 'Object';
-              objectType = objectType.charAt(0).toUpperCase() + objectType.slice(1);
-
-              const dimension: ObjectDimensions = {
-                objectType,
-                widthMm: objWidth * pixelToMmRatio,
-                heightMm: objHeight * pixelToMmRatio,
-                fill: fill && typeof fill === 'string' && fill !== 'transparent' ? fill : undefined,
-              };
-
-              // Add text content for text objects
-              if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
-                const textObj = obj as any;
-                const text = textObj.text || '';
-                dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
-              }
-
-              dimensions.push(dimension);
-            });
-
-            setExtractedColors(colors);
-            setObjectDimensions(dimensions);
-
-            fabricCanvas.renderAll();
-            resolve();
-          }, (error: Error) => {
-            console.error('Error loading canvas from JSON:', error);
-            reject(error);
-          });
-        });
-      } else {
-        // No objects, just render the background
-        fabricCanvas.renderAll();
+      // Extract colors
+      const fill = obj.fill;
+      if (fill && typeof fill === 'string' && fill !== 'transparent') {
+        if (!colors.find(c => c.hex.toLowerCase() === fill.toLowerCase())) {
+          colors.push({ hex: fill });
+        }
       }
-    } catch (error) {
-      console.error('Error rendering canvas:', error);
-    }
+
+      const stroke = obj.stroke;
+      if (stroke && typeof stroke === 'string') {
+        if (!colors.find(c => c.hex.toLowerCase() === stroke.toLowerCase())) {
+          colors.push({ hex: stroke });
+        }
+      }
+
+      // Calculate dimensions
+      // The object is scaled on the canvas, so we need to divide by canvasScale
+      // to get the original size, then multiply by pixelToMmRatio
+      const objWidthOnCanvas = (obj.width || 0) * (obj.scaleX || 1);
+      const objHeightOnCanvas = (obj.height || 0) * (obj.scaleY || 1);
+
+      // Convert back to original pixel size (before canvas scaling)
+      const objWidthOriginal = objWidthOnCanvas / canvasScale;
+      const objHeightOriginal = objHeightOnCanvas / canvasScale;
+
+      let objectType = obj.type || 'Object';
+      objectType = objectType.charAt(0).toUpperCase() + objectType.slice(1);
+
+      const dimension: ObjectDimensions = {
+        objectType,
+        widthMm: objWidthOriginal * pixelToMmRatio,
+        heightMm: objHeightOriginal * pixelToMmRatio,
+        fill: fill && typeof fill === 'string' && fill !== 'transparent' ? fill : undefined,
+      };
+
+      // Add text content for text objects
+      if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
+        const textObj = obj as { text?: string };
+        const text = textObj.text || '';
+        dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+      }
+
+      dimensions.push(dimension);
+    });
+
+    setExtractedColors(colors);
+    setObjectDimensions(dimensions);
   };
 
   const getColorName = (hex: string): string => {
@@ -295,20 +171,55 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">디자인 미리보기</h2>
-          <p className="text-gray-500 mt-1">{orderItem.product_title}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">디자인 미리보기</h2>
+            <p className="text-gray-500 mt-1">{orderItem.product_title}</p>
+          </div>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode('comprehensive')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'comprehensive'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            전체 보기
+          </button>
+          <button
+            onClick={() => setViewMode('detailed')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              viewMode === 'detailed'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Grid3x3 className="w-4 h-4" />
+            상세 보기
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Comprehensive View */}
+      {viewMode === 'comprehensive' && (
+        <ComprehensiveDesignPreview orderItem={orderItem} product={product} />
+      )}
+
+      {/* Detailed View */}
+      {viewMode === 'detailed' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Canvas Preview */}
         <div className="lg:col-span-2 bg-white rounded-lg p-6 shadow-sm">
           {/* Side selector */}
@@ -332,21 +243,21 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
           {/* Canvas */}
           <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-[500px]">
-            <canvas
-              ref={canvasRef}
-              className="max-w-full h-auto border border-gray-200 rounded shadow-sm"
-            />
+            {currentSide && orderItem.canvas_state[currentSide.id] && (
+              <SingleCanvasRenderer
+                side={currentSide}
+                canvasState={
+                  typeof orderItem.canvas_state[currentSide.id] === 'string'
+                    ? (orderItem.canvas_state[currentSide.id] as unknown as string)
+                    : JSON.stringify(orderItem.canvas_state[currentSide.id])
+                }
+                productColor={orderItem.item_options?.color_hex || '#FFFFFF'}
+                width={400}
+                height={500}
+                onCanvasReady={handleCanvasReady}
+              />
+            )}
           </div>
-
-          {/* Color filter info */}
-          {orderItem.item_options?.color_hex && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <span className="font-medium">적용된 색상 필터:</span>{' '}
-                {orderItem.item_options.color_name} ({orderItem.item_options.color_hex})
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Right Panel - Colors and Dimensions */}
@@ -405,7 +316,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                       )}
                     </div>
                     {dimension.text && (
-                      <p className="text-xs text-gray-600 mb-1 italic">"{dimension.text}"</p>
+                      <p className="text-xs text-gray-600 mb-1 italic">&quot;{dimension.text}&quot;</p>
                     )}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
@@ -473,6 +384,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
