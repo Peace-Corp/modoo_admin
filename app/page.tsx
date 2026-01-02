@@ -14,7 +14,7 @@ type TabType = 'products' | 'orders' | 'users' | 'settings';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, isAuthenticated, setUser, setLoading } = useAuthStore();
+  const { user, isAuthenticated, setUser, setLoading, logout } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -103,10 +103,13 @@ export default function AdminPage() {
               </div>
             </div>
             <button
-              onClick={() => router.push('/')}
+              onClick={async () => {
+                await logout();
+                router.push('/login');
+              }}
               className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              메인으로
+              로그아웃
             </button>
           </div>
         </div>

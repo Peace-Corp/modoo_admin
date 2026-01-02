@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ExtractedColor, ObjectDimensions } from '@/types/types';
 import { ChevronLeft, Palette, Ruler, Grid3x3, LayoutGrid } from 'lucide-react';
-import { SingleCanvasRenderer } from './OrderCanvasRenderer';
+import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
 import ComprehensiveDesignPreview from './ComprehensiveDesignPreview';
 
@@ -22,6 +22,14 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   const [currentSideIndex, setCurrentSideIndex] = useState(0);
   const [extractedColors, setExtractedColors] = useState<ExtractedColor[]>([]);
   const [objectDimensions, setObjectDimensions] = useState<ObjectDimensions[]>([]);
+
+  const getItemColorHex = () => {
+    const variants = orderItem.item_options?.variants;
+    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
+      return variants[0].color_hex;
+    }
+    return orderItem.item_options?.color_hex || '#FFFFFF';
+  };
 
   useEffect(() => {
     fetchProduct();
@@ -47,7 +55,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
   };
 
-  const handleCanvasReady = (canvas: FabricCanvas, sideId: string, canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: FabricCanvas, sideId: string, canvasScale: number) => {
     // Extract colors and dimensions from the rendered canvas
     const currentSide = product?.configuration.find(s => s.id === sideId);
     if (!currentSide) return;
@@ -118,7 +126,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
     setExtractedColors(colors);
     setObjectDimensions(dimensions);
-  };
+  }, [product]);
 
   const getColorName = (hex: string): string => {
     // Simple color name mapping
@@ -244,17 +252,14 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           {/* Canvas */}
           <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-[500px]">
             {currentSide && orderItem.canvas_state[currentSide.id] && (
-              <SingleCanvasRenderer
+              <SingleSideCanvas
                 side={currentSide}
-                canvasState={
-                  typeof orderItem.canvas_state[currentSide.id] === 'string'
-                    ? (orderItem.canvas_state[currentSide.id] as unknown as string)
-                    : JSON.stringify(orderItem.canvas_state[currentSide.id])
-                }
-                productColor={orderItem.item_options?.color_hex || '#FFFFFF'}
+                canvasState={orderItem.canvas_state[currentSide.id]}
+                productColor={getItemColorHex()}
                 width={400}
                 height={500}
                 onCanvasReady={handleCanvasReady}
+                renderFromCanvasStateOnly
               />
             )}
           </div>

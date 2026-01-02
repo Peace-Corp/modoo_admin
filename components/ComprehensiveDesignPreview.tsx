@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Canvas as FabricCanvas, FabricObject } from 'fabric';
+import { useState, useEffect, useCallback } from 'react';
+import { Canvas as FabricCanvas } from 'fabric';
 import { OrderItem, Product, ProductSide, ExtractedColor, ObjectDimensions } from '@/types/types';
-import { SingleCanvasRenderer } from './OrderCanvasRenderer';
+import SingleSideCanvas from './canvas/SingleSideCanvas';
 
 interface DesignElement {
   sideId: string;
@@ -43,6 +43,14 @@ export default function ComprehensiveDesignPreview({
   const [extractedColors, setExtractedColors] = useState<ExtractedColor[]>([]);
   const [sizeQuantities, setSizeQuantities] = useState<SizeQuantity[]>([]);
 
+  const getItemColorHex = () => {
+    const variants = orderItem.item_options?.variants;
+    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
+      return variants[0].color_hex;
+    }
+    return orderItem.item_options?.color_hex || '#FFFFFF';
+  };
+
   // Mock size data - in real implementation, this would come from the order
   useEffect(() => {
     // Example size data - replace with actual order size breakdown
@@ -54,7 +62,7 @@ export default function ComprehensiveDesignPreview({
     setSizeQuantities(mockSizes);
   }, [orderItem]);
 
-  const handleCanvasReady = (canvas: FabricCanvas, sideId: string, canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: FabricCanvas, sideId: string, canvasScale: number) => {
     const currentSide = product.configuration.find(s => s.id === sideId);
     if (!currentSide) return;
 
@@ -151,7 +159,7 @@ export default function ComprehensiveDesignPreview({
     });
 
     setDesignElements(prevElements => [...prevElements, ...elements]);
-  };
+  }, [product.configuration]);
 
   const totalQuantity = sizeQuantities.reduce((sum, sq) => sum + sq.quantity, 0);
 
@@ -217,17 +225,14 @@ export default function ComprehensiveDesignPreview({
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <h3 className="text-center font-medium mb-2 text-gray-700">[전면]</h3>
             {product.configuration[0] && orderItem.canvas_state[product.configuration[0].id] && (
-              <SingleCanvasRenderer
+              <SingleSideCanvas
                 side={product.configuration[0]}
-                canvasState={
-                  typeof orderItem.canvas_state[product.configuration[0].id] === 'string'
-                    ? (orderItem.canvas_state[product.configuration[0].id] as unknown as string)
-                    : JSON.stringify(orderItem.canvas_state[product.configuration[0].id])
-                }
-                productColor={orderItem.item_options?.color_hex || '#FFFFFF'}
+                canvasState={orderItem.canvas_state[product.configuration[0].id]}
+                productColor={getItemColorHex()}
                 width={250}
                 height={300}
                 onCanvasReady={handleCanvasReady}
+                renderFromCanvasStateOnly
               />
             )}
           </div>
@@ -236,17 +241,14 @@ export default function ComprehensiveDesignPreview({
             <div className="bg-white rounded-lg p-4 shadow-sm">
               <h3 className="text-center font-medium mb-2 text-gray-700">[후면]</h3>
               {orderItem.canvas_state[product.configuration[1].id] && (
-                <SingleCanvasRenderer
+                <SingleSideCanvas
                   side={product.configuration[1]}
-                  canvasState={
-                    typeof orderItem.canvas_state[product.configuration[1].id] === 'string'
-                      ? (orderItem.canvas_state[product.configuration[1].id] as unknown as string)
-                      : JSON.stringify(orderItem.canvas_state[product.configuration[1].id])
-                  }
-                  productColor={orderItem.item_options?.color_hex || '#FFFFFF'}
+                  canvasState={orderItem.canvas_state[product.configuration[1].id]}
+                  productColor={getItemColorHex()}
                   width={250}
                   height={300}
                   onCanvasReady={handleCanvasReady}
+                  renderFromCanvasStateOnly
                 />
               )}
             </div>

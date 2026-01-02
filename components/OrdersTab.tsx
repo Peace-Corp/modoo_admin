@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
 import { Order, OrderItem } from '@/types/types';
 import { Package, ChevronLeft, Calendar } from 'lucide-react';
 import OrderDetail from './OrderDetail';
@@ -11,6 +10,7 @@ export default function OrdersTab() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -18,24 +18,23 @@ export default function OrdersTab() {
 
   const fetchOrders = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
-      const supabase = createClient();
-      let query = supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await fetch(`/api/admin/orders?status=${filterStatus}`, {
+        method: 'GET',
+      });
 
-      if (filterStatus !== 'all') {
-        query = query.eq('order_status', filterStatus);
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '주문 데이터를 불러오지 못했습니다.');
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setOrders(data || []);
+      const payload = await response.json();
+      setOrders(payload?.data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      setOrders([]);
+      setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
@@ -128,6 +127,11 @@ export default function OrdersTab() {
 
       {/* Orders List */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        {errorMessage && (
+          <div className="px-6 py-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+            {errorMessage}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">

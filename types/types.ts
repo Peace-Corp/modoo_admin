@@ -20,6 +20,7 @@ export interface ProductSide {
     width: number;
     height: number;
   };
+  layers?: ProductLayer[];
   realLifeDimensions?: {
     printAreaWidthMm: number;
     printAreaHeightMm: number;
@@ -27,6 +28,16 @@ export interface ProductSide {
   };
   zoomScale?: number;
 }
+
+export interface ProductLayer {
+  id: string;
+  name: string;
+  imageUrl: string;
+  colorOptions: string[];
+  zIndex: number;
+}
+
+export type PrintMethod = 'printing' | 'embroidery';
 
 export interface SizeOption {
   id: string;
