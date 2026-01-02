@@ -999,8 +999,11 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         // Remove any existing filters
         imgObj.filters = [];
 
+        const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
+        const color = state?.productColor || productColor || productColorFromStore;
+
         const colorFilter = new fabric.filters.BlendColor({
-          color: productColor ?? productColorFromStore,
+          color: color,
           mode: 'multiply',
           alpha: 1, // Adjust opacity of the color overlay
         });
@@ -1011,7 +1014,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     });
 
     canvas.requestRenderAll();
-  }, [productColor, productColorFromStore, side.layers]);
+  }, [productColor, productColorFromStore, side.layers, canvasState]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1129,7 +1132,9 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         return;
       }
 
-      const selectedColor = layerColors[side.id]?.[layer.id] || layer.colorOptions[0] || '#FFFFFF';
+      // Check for color in canvasState first, then fall back
+      const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
+      const selectedColor = state?.layerColors?.[layer.id] || layerColors[side.id]?.[layer.id] || layer.colorOptions[0] || '#FFFFFF';
 
       layerImages.forEach((layerImg) => {
         // Remove any existing filters
@@ -1152,7 +1157,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     console.log(`[SingleSideCanvas] Successfully applied colors to ${colorsApplied}/${side.layers.length} layers for side: ${side.id}`);
 
     canvas.requestRenderAll();
-  }, [layerColors, side.id, side.layers, layersReady]);
+  }, [layerColors, side.id, side.layers, layersReady, canvasState]);
 
   return (
     <div className="relative" style={{ width, height }}>
