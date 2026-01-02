@@ -92,6 +92,14 @@ export interface OrderItem {
     color_id?: string;
     color_name?: string;
     color_hex?: string;
+    variants?: Array<{
+      size_id?: string;
+      size_name?: string;
+      color_id?: string;
+      color_name?: string;
+      color_hex?: string;
+      quantity?: number;
+    }>;
   };
   thumbnail_url: string | null;
 
@@ -146,6 +154,12 @@ export interface ObjectDimensions {
   text?: string;
   colors?: string[];
   preview?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string | number;
+  fontStyle?: string;
+  textAlign?: string;
+  lineHeight?: number;
 }
 
 export interface Profile {

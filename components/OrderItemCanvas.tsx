@@ -255,9 +255,23 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
       // Add text content for text objects
       if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
-        const textObj = obj as { text?: string };
+        const textObj = obj as {
+          text?: string;
+          fontFamily?: string;
+          fontSize?: number;
+          fontWeight?: string | number;
+          fontStyle?: string;
+          textAlign?: string;
+          lineHeight?: number;
+        };
         const text = textObj.text || '';
         dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+        dimension.fontFamily = textObj.fontFamily;
+        dimension.fontSize = textObj.fontSize;
+        dimension.fontWeight = textObj.fontWeight;
+        dimension.fontStyle = textObj.fontStyle;
+        dimension.textAlign = textObj.textAlign;
+        dimension.lineHeight = textObj.lineHeight;
       }
 
       dimensions.push(dimension);
@@ -269,6 +283,53 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   const objectDimensions = useMemo(() => {
     return Object.values(dimensionsBySide).flat();
   }, [dimensionsBySide]);
+
+  const sizeOptions = product?.size_options ?? [];
+  const sizeQuantities = useMemo(() => {
+    if (!sizeOptions.length) {
+      return new Map<string, number>();
+    }
+
+    const map = new Map<string, number>();
+    const normalizedOptions = sizeOptions.map((option) => ({
+      ...option,
+      normalizedName: option.name?.toLowerCase() || '',
+      normalizedLabel: option.label?.toLowerCase() || '',
+    }));
+
+    const findOptionId = (sizeId?: string, sizeName?: string) => {
+      if (sizeId) {
+        const match = normalizedOptions.find((option) => option.id === sizeId);
+        if (match) return match.id;
+      }
+      if (sizeName) {
+        const normalized = sizeName.toLowerCase();
+        const match = normalizedOptions.find(
+          (option) => option.normalizedName === normalized || option.normalizedLabel === normalized
+        );
+        if (match) return match.id;
+      }
+      return undefined;
+    };
+
+    const addQuantity = (sizeId?: string, sizeName?: string, quantity?: number) => {
+      if (!quantity || quantity <= 0) return;
+      const optionId = findOptionId(sizeId, sizeName);
+      if (!optionId) return;
+      map.set(optionId, (map.get(optionId) || 0) + quantity);
+    };
+
+    const variants = orderItem.item_options?.variants ?? [];
+    if (variants.length > 0) {
+      variants.forEach((variant) => {
+        addQuantity(variant.size_id, variant.size_name, variant.quantity);
+      });
+    } else {
+      addQuantity(orderItem.item_options?.size_id, orderItem.item_options?.size_name, orderItem.quantity);
+    }
+
+    return map;
+  }, [orderItem.item_options, orderItem.quantity, sizeOptions]);
 
   // Get selected mockup colors based on whether it's multi-layer or single-layer
   const getMockupColorInfo = useMemo(() => {
@@ -420,8 +481,43 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Canvas Preview */}
+          {/* Canvas Preview */}
         <div className="lg:col-span-2 bg-white rounded-lg p-6 shadow-sm">
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">주문 옵션</h3>
+            {sizeOptions.length > 0 ? (
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="w-full text-sm border-collapse">
+                  <thead className="bg-gray-50 text-black">
+                    <tr>
+                      {sizeOptions.map((size) => {
+                        const sizeLabel = size.name || '-';
+                        return (
+                          <th key={size.id} className="px-3 py-2 text-center font-medium border border-gray-200">
+                            {sizeLabel}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-black">
+                    <tr>
+                      {sizeOptions.map((size) => {
+                        const quantity = sizeQuantities.get(size.id);
+                        return (
+                          <td key={size.id} className="px-3 py-2 text-center border border-gray-200">
+                            {quantity && quantity > 0 ? quantity : '-'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">사이즈 옵션이 없습니다.</p>
+            )}
+          </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {product.configuration.map((side) => {
               const canvasState = orderItem.canvas_state[side.id];
@@ -449,7 +545,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
         {/* Right Panel - Colors and Dimensions */}
         <div className="space-y-6">
-          {/* Object Information */}
+          {/* Design Color Information */}
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Palette className="w-5 h-5 text-gray-600" />
@@ -486,6 +582,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
             )}
           </div>
 
+          {/* Object Information */}
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Ruler className="w-5 h-5 text-gray-600" />
@@ -528,6 +625,54 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                         {dimension.text && (
                           <p className="text-xs text-gray-600 mb-1 italic">&quot;{dimension.text}&quot;</p>
                         )}
+                        {(dimension.fontFamily ||
+                          dimension.fontWeight ||
+                          dimension.fontStyle ||
+                          dimension.textAlign ||
+                          dimension.lineHeight) && (
+                          <div className="text-xs text-gray-600 mb-2 space-y-1">
+                            {dimension.fontFamily && (
+                              <div>
+                                <span className="text-gray-500">폰트:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.fontFamily}
+                                </span>
+                              </div>
+                            )}
+                            {dimension.fontWeight && (
+                              <div>
+                                <span className="text-gray-500">굵기:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.fontWeight}
+                                </span>
+                              </div>
+                            )}
+                            {dimension.fontStyle && (
+                              <div>
+                                <span className="text-gray-500">스타일:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.fontStyle}
+                                </span>
+                              </div>
+                            )}
+                            {dimension.textAlign && (
+                              <div>
+                                <span className="text-gray-500">정렬:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.textAlign}
+                                </span>
+                              </div>
+                            )}
+                            {typeof dimension.lineHeight === 'number' && (
+                              <div>
+                                <span className="text-gray-500">줄간격:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.lineHeight}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
                             <span className="text-gray-500">너비:</span>
@@ -567,48 +712,6 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
             )}
           </div>
 
-          {/* Item Options */}
-          {orderItem.item_options && (
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">제품 옵션</h3>
-              <div className="space-y-2">
-                {orderItem.item_options.color_name && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">색상:</span>
-                    <div className="flex items-center gap-2">
-                      {orderItem.item_options.color_hex && (
-                        <div
-                          className="w-4 h-4 rounded border border-gray-300"
-                          style={{ backgroundColor: orderItem.item_options.color_hex }}
-                        />
-                      )}
-                      <span className="font-medium text-gray-900">
-                        {orderItem.item_options.color_name}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {orderItem.item_options.size_name && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">사이즈:</span>
-                    <span className="font-medium text-gray-900">
-                      {orderItem.item_options.size_name}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">수량:</span>
-                  <span className="font-medium text-gray-900">{orderItem.quantity}</span>
-                </div>
-                <div className="flex justify-between text-sm pt-2 border-t">
-                  <span className="text-gray-500">금액:</span>
-                  <span className="font-semibold text-gray-900">
-                    {(orderItem.price_per_item * orderItem.quantity).toLocaleString()}원
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -112,9 +112,9 @@ export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProp
                       )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{item.product_title}</h4>
+                      <h4 className="font-medium text-black">{item.product_title}</h4>
                       {item.item_options && (
-                        <div className="text-sm text-gray-500 mt-1">
+                        <div className="text-sm  mt-1">
                           {item.item_options.color_name && (
                             <span>색상: {item.item_options.color_name}</span>
                           )}
