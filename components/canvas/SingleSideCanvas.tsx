@@ -130,60 +130,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     // Check if side has layers (multi-layer mode) or single imageUrl (legacy mode)
     const hasLayers = side.layers && side.layers.length > 0;
 
-    // Creating the Snap Line (Vertical)
-    // For multi-layer mode: use canvas center
-    // For single-image mode: use print area center (will be updated when image loads)
-    const snapLineCenterX = hasLayers ? width / 2 : tempPrintCenterX;
-    const snapLineTop = hasLayers ? 0 : tempCenteredTop;
-    const snapLineBottom = hasLayers ? height : tempCenteredTop + printH;
-
-    const verticalSnapLine = new fabric.Line(
-      [snapLineCenterX, snapLineTop, snapLineCenterX, snapLineBottom],
-      {
-        stroke: '#FF0072', // Hot pink
-        strokeWidth: 1,
-        selectable: false,
-        evented: false,
-        visible: false, // Hidden by default
-        excludeFromExport: true, // Don't save this in the image
-        data: {id: 'center-line'}
-      }
-    )
-    canvas.add(verticalSnapLine)
-
-
-    // Creating the clipping mask(invisible, stricly designes where ink can go)
-    // Define this area using the printArea data (will be updated when image loads)
-    const clipPath = new fabric.Rect({
-      left: tempCenteredLeft,
-      top: tempCenteredTop,
-      width: side.printArea.width,
-      height: side.printArea.height,
-      absolutePositioned: true, // fixes the mask to the canvas ignoring zoom/pan
-    })
-
-    // Apply the clipping to the entire canvas
-    canvas.clipPath = clipPath;
-
-    // Create the visual guide box (dashed border)
-    const guideBox = new fabric.Rect({
-      left: tempCenteredLeft,
-      top: tempCenteredTop,
-      width: side.printArea.width,
-      height: side.printArea.height,
-      fill: 'transparent',
-      stroke: '#fffff',     // Blue border
-      strokeWidth: 1,
-      strokeDashArray: [5, 5], // Dashed line
-      selectable: false,     // Users cannot click/move the border itself
-      evented: false,        // Clicks pass through it
-      visible: false,        // Hidden by default
-      excludeFromExport: true, // Don't include this box in the final saved image
-      data: {id: 'visual-guide-box'}
-    });
-
-    canvas.add(guideBox);
-
     if (hasLayers) {
       // Multi-layer mode: Initialize layer colors and load all layers
       initializeLayerColors(side.id, side.layers!);
@@ -424,31 +370,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         const printAreaTop = imageTop + scaledPrintY;
         const printCenterX = printAreaLeft + (scaledPrintW / 2);
 
-        // Update guide box position
-        guideBox.set({
-          left: printAreaLeft,
-          top: printAreaTop,
-          width: scaledPrintW,
-          height: scaledPrintH,
-        });
-
-        // Update clip path position
-        clipPath.set({
-          left: printAreaLeft,
-          top: printAreaTop,
-          width: scaledPrintW,
-          height: scaledPrintH,
-        });
-
-        // Update vertical snap line
-        // For multi-layer mode, keep it at canvas center spanning full height
-        verticalSnapLine.set({
-          x1: width / 2,
-          y1: 0,
-          x2: width / 2,
-          y2: height,
-        });
-
         // Store values for use in event handlers
         // @ts-expect-error - Adding custom properties
         canvas.printAreaLeft = printAreaLeft;
@@ -472,9 +393,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         // For multi-layer mode, store canvas center as the snap center
         // @ts-expect-error - Custom property
         canvas.printCenterX = width / 2;
-
-        // Don't add guide box for multi-layer mode
-        // canvas.add(guideBox); // Skipped for multi-layer mode
 
         // Force a render to ensure all objects are processed by Fabric.js
         canvas.requestRenderAll();
@@ -646,30 +564,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         const printAreaTop = imageTop + scaledPrintY;
         const printCenterX = printAreaLeft + (scaledPrintW / 2);
 
-        // Update guide box position to be relative to product image
-        guideBox.set({
-          left: printAreaLeft,
-          top: printAreaTop,
-          width: scaledPrintW,
-          height: scaledPrintH,
-        });
-
-        // Update clip path position
-        clipPath.set({
-          left: printAreaLeft,
-          top: printAreaTop,
-          width: scaledPrintW,
-          height: scaledPrintH,
-        });
-
-        // Update vertical snap line
-        verticalSnapLine.set({
-          x1: printCenterX,
-          y1: printAreaTop,
-          x2: printCenterX,
-          y2: printAreaTop + scaledPrintH,
-        });
-
         // Store these values for use in event handlers and pricing calculations
         // @ts-expect-error - Adding custom properties to fabric.Canvas for print area tracking
         canvas.printAreaLeft = printAreaLeft;
@@ -691,8 +585,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         canvas.scaledImageWidth = imgWidth * scale;
         // @ts-expect-error - Custom property
         canvas.scaledImageHeight = imgHeight * scale;
-
-        canvas.add(guideBox);
 
         // Force a render to ensure all objects are processed by Fabric.js
         canvas.requestRenderAll();
@@ -780,47 +672,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         setScaleBoxVisible(true);
     };
 
-    // 4. Event Listeners for Visibility Logic
-    // Only show guide box for single-image mode (not multi-layer mode)
-    const showGuide = () => {
-        if (!hasLayers) {
-          guideBox.set('visible', true);
-          canvas.requestRenderAll();
-        }
-    };
-
-    const hideGuide = () => {
-        if (!hasLayers) {
-          guideBox.set('visible', false);
-          canvas.requestRenderAll();
-        }
-    };
-
-    // Show when an object is selected
-    canvas.on('selection:created', () => {
-        showGuide();
-        // Get the active object (which could be a single object or ActiveSelection for multiple)
-        const activeObject = canvas.getActiveObject();
-        if (activeObject) {
-          updateScaleBox(activeObject);
-        }
-    });
-
-    canvas.on('selection:updated', () => {
-        showGuide();
-        // Get the active object (which could be a single object or ActiveSelection for multiple)
-        const activeObject = canvas.getActiveObject();
-        if (activeObject) {
-          updateScaleBox(activeObject);
-        }
-    });
-
-    // Hide when selection is cleared
-    canvas.on('selection:cleared', () => {
-        hideGuide();
-        setScaleBoxVisible(false);
-    });
-
     // 5. Enforce Clipping on Added Objects
     // Whenever an object is added (Text, Shape, Logo), we apply the clipPath to IT.
     // Skip clipping entirely for multi-layer mode
@@ -845,27 +696,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         if (obj.type !== 'image' && !obj.data.printMethod) {
           // @ts-expect-error - Setting custom data property
           obj.data.printMethod = 'printing'; // Default to printing
-        }
-
-        // Only apply clipping in single-image mode (not multi-layer mode)
-        if (!hasLayers) {
-          // Apply the specific clip area to this object (using values relative to product image)
-          // @ts-expect-error - Custom property
-          const printLeft = canvas.printAreaLeft || tempCenteredLeft;
-          // @ts-expect-error - Custom property
-          const printTop = canvas.printAreaTop || tempCenteredTop;
-          // @ts-expect-error - Custom property
-          const printWidth = canvas.printAreaWidth || side.printArea.width;
-          // @ts-expect-error - Custom property
-          const printHeight = canvas.printAreaHeight || side.printArea.height;
-
-          obj.clipPath = new fabric.Rect({
-            left: printLeft,
-            top: printTop,
-            width: printWidth,
-            height: printHeight,
-            absolutePositioned: true,
-          });
         }
 
         // Make objects selectable based on current edit mode
@@ -915,28 +745,9 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
         // Update scale box position during movement
         updateScaleBox(obj);
-
-        const objCenter = obj.getCenterPoint();
-
-        // Get the current print center X (will be updated after image loads)
-        // @ts-expect-error - Custom property
-        const currentPrintCenterX = canvas.printCenterX || tempPrintCenterX;
-
-        // 1. Snap: force the object to the center line
-        if (Math.abs(objCenter.x - currentPrintCenterX) < snapThreshold) {
-          obj.setPositionByOrigin(
-            new fabric.Point(currentPrintCenterX, objCenter.y),
-            'center',
-            'center'
-          );
-          verticalSnapLine.set('visible', true);
-        } else {
-          verticalSnapLine.set('visible', false)
-        }
     });
 
     canvas.on('mouse:up', () => {
-        verticalSnapLine.set('visible', false);
         canvas.requestRenderAll();
     });
 
