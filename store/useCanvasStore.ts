@@ -207,7 +207,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const next = { ...existing };
       layers.forEach((layer) => {
         if (!next[layer.id]) {
-          next[layer.id] = layer.colorOptions?.[0] || '#FFFFFF';
+          next[layer.id] = layer.colorOptions?.[0]?.hex || '#FFFFFF';
         }
       });
       return { layerColors: { ...state.layerColors, [sideId]: next } };

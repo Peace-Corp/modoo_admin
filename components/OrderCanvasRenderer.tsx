@@ -31,7 +31,10 @@ interface ProductLayer {
   id: string;
   name: string;
   imageUrl: string;
-  colorOptions: string[];
+  colorOptions: Array<{
+    hex: string;
+    colorCode: string;
+  }>;
   zIndex: number;
 }
 
@@ -60,6 +63,7 @@ interface ProductSide {
     productWidthMm: number;
   };
   zoomScale?: number;
+  layers?: ProductLayer[];
 }
 
 interface OrderItem {
@@ -121,6 +125,7 @@ interface SingleCanvasRendererProps {
   width?: number;
   height?: number;
   onCanvasReady?: (canvas: fabric.Canvas, sideId: string, scale: number) => void;
+  renderFromCanvasStateOnly?: boolean;
 }
 
 const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
@@ -771,7 +776,7 @@ const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
 
       // Check for color in canvasState first, then fall back
       const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
-      const selectedColor = state?.layerColors?.[layer.id] || layer.colorOptions[0] || '#FFFFFF';
+      const selectedColor = state?.layerColors?.[layer.id] || layer.colorOptions[0]?.hex || '#FFFFFF';
 
       layerImages.forEach((layerImg) => {
         // Remove any existing filters

@@ -33,7 +33,10 @@ export interface ProductLayer {
   id: string;
   name: string;
   imageUrl: string;
-  colorOptions: string[];
+  colorOptions: Array<{
+    hex: string;
+    colorCode: string;
+  }>;
   zIndex: number;
 }
 

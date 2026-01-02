@@ -59,6 +59,39 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   });
   const [scaleBoxPosition, setScaleBoxPosition] = useState({ x: 0, y: 0 });
 
+  const normalizeStacking = (canvas: fabric.Canvas, currentSide: ProductSide) => {
+    const objects = canvas.getObjects();
+    const backgroundObjects = objects.filter((obj) => {
+      const objData = obj as { data?: { id?: string } };
+      return objData.data?.id === 'background-product-image';
+    });
+
+    if (backgroundObjects.length > 0) {
+      if (currentSide.layers && currentSide.layers.length > 0) {
+        const layerOrder = new Map(currentSide.layers.map((layer) => [layer.id, layer.zIndex]));
+        const sortedBackgrounds = [...backgroundObjects].sort((a, b) => {
+          const aData = a as { data?: { layerId?: string } };
+          const bData = b as { data?: { layerId?: string } };
+          const aIndex = layerOrder.get(aData.data?.layerId ?? '') ?? 0;
+          const bIndex = layerOrder.get(bData.data?.layerId ?? '') ?? 0;
+          return aIndex - bIndex;
+        });
+
+        sortedBackgrounds.forEach((obj, index) => {
+          canvas.moveObjectTo(obj, index);
+        });
+      } else {
+        backgroundObjects.forEach((obj) => canvas.sendObjectToBack(obj));
+      }
+    }
+
+    objects.forEach((obj) => {
+      const objData = obj as { data?: { id?: string } };
+      if (objData.data?.id === 'background-product-image') return;
+      canvas.bringObjectToFront(obj);
+    });
+  };
+
   // Update isEdit ref when prop changes
   useEffect(() => {
     isEditRef.current = isEdit;
@@ -79,6 +112,8 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     setLayersReady(false);
     layerImagesRef.current.clear();
     productImageRef.current = null;
+    lastCanvasStateRef.current = null;
+    lastCanvasSideRef.current = null;
 
     console.log(`[SingleSideCanvas] Initializing canvas for side: ${side.id}`);
     if (!canvasHostRef.current) {
@@ -677,10 +712,17 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     // Skip clipping entirely for multi-layer mode
     canvas.on('object:added', (e) => {
         const obj = e.target;
-        if (suppressObjectAddedRef.current) return;
-        // Skip guide boxes, snap lines, and background product image
+        if (!obj) return;
+
         // @ts-expect-error - Checking custom data property
-        if (!obj || obj.excludeFromExport || (obj.data?.id === 'background-product-image')) return;
+        if (obj.data?.id === 'background-product-image') {
+          normalizeStacking(canvas, side);
+          return;
+        }
+
+        if (suppressObjectAddedRef.current) return;
+        // Skip guide boxes and snap lines
+        if (obj.excludeFromExport) return;
 
         // Assign a unique ID to each user-added object if it doesn't have one
         // @ts-expect-error - Setting custom data property
@@ -704,6 +746,8 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
         // Increment canvas version to trigger updates in components that depend on canvas state
         incrementCanvasVersion();
+
+        normalizeStacking(canvas, side);
     })
 
     const snapThreshold = 10;
@@ -871,7 +915,26 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
     existingObjects.forEach((obj) => canvas.remove(obj));
 
+    const getBackgroundObjects = () =>
+      canvas.getObjects().filter((obj) => {
+        const objData = obj as { data?: { id?: string } };
+        return objData.data?.id === 'background-product-image';
+      });
+
+    const waitForBackground = async () => {
+      const maxFrames = 20;
+      for (let i = 0; i < maxFrames; i++) {
+        const backgroundObjects = getBackgroundObjects();
+        if (backgroundObjects.length > 0) {
+          return backgroundObjects;
+        }
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
+      return getBackgroundObjects();
+    };
+
     const applyObjects = async () => {
+      await waitForBackground();
       suppressObjectAddedRef.current = renderFromCanvasStateOnly;
       const objects = await fabric.util.enlivenObjects(parsedState.objects);
 
@@ -886,6 +949,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         canvas.bringObjectToFront(fabricObj);
       });
 
+      normalizeStacking(canvas, side);
       canvas.requestRenderAll();
       suppressObjectAddedRef.current = false;
       lastCanvasStateRef.current = serializedState;
@@ -945,7 +1009,11 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
       // Check for color in canvasState first, then fall back
       const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
-      const selectedColor = state?.layerColors?.[layer.id] || layerColors[side.id]?.[layer.id] || layer.colorOptions[0] || '#FFFFFF';
+      const selectedColor =
+        state?.layerColors?.[layer.id] ||
+        layerColors[side.id]?.[layer.id] ||
+        layer.colorOptions[0]?.hex ||
+        '#FFFFFF';
 
       layerImages.forEach((layerImg) => {
         // Remove any existing filters

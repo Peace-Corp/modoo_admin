@@ -23,7 +23,7 @@ const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers 
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Product Colors</h3>
       <div className="space-y-3">
         {sortedLayers.map((layer) => {
-          const currentColor = layerColors[sideId]?.[layer.id] || layer.colorOptions[0] || '#FFFFFF';
+          const currentColor = layerColors[sideId]?.[layer.id] || layer.colorOptions[0]?.hex || '#FFFFFF';
 
           return (
             <div key={layer.id} className="space-y-2">
@@ -33,23 +33,23 @@ const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers 
               <div className="flex gap-2 flex-wrap">
                 {layer.colorOptions.map((color) => (
                   <button
-                    key={color}
-                    onClick={() => handleColorChange(layer.id, color)}
+                    key={`${layer.id}-${color.hex}`}
+                    onClick={() => handleColorChange(layer.id, color.hex)}
                     className={`
                       w-10 h-10 rounded-full border-2 transition-all duration-200
-                      ${currentColor === color
+                      ${currentColor === color.hex
                         ? 'border-blue-500 scale-110 shadow-md'
                         : 'border-gray-300 hover:border-gray-400 hover:scale-105'
                       }
                     `}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Select ${color} for ${layer.name}`}
+                    style={{ backgroundColor: color.hex }}
+                    aria-label={`Select ${color.colorCode || color.hex} for ${layer.name}`}
                   >
-                    {currentColor === color && (
+                    {currentColor === color.hex && (
                       <svg
                         className="w-full h-full p-2"
                         fill="none"
-                        stroke={getContrastColor(color)}
+                        stroke={getContrastColor(color.hex)}
                         strokeWidth="3"
                         viewBox="0 0 24 24"
                       >

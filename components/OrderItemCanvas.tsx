@@ -1,27 +1,35 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
-import { OrderItem, Product, ExtractedColor, ObjectDimensions } from '@/types/types';
-import { ChevronLeft, Palette, Ruler, Grid3x3, LayoutGrid } from 'lucide-react';
+import { OrderItem, Product, ProductSide, ObjectDimensions } from '@/types/types';
+import { ChevronLeft, Ruler, Grid3x3 } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
-import ComprehensiveDesignPreview from './ComprehensiveDesignPreview';
-
-type ViewMode = 'comprehensive' | 'detailed';
 
 interface OrderItemCanvasProps {
   orderItem: OrderItem;
   onBack: () => void;
 }
 
+const parseCanvasState = (value: unknown) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      console.error('Error parsing canvas state:', error);
+      return null;
+    }
+  }
+  return value;
+};
+
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('comprehensive');
-  const [currentSideIndex, setCurrentSideIndex] = useState(0);
-  const [extractedColors, setExtractedColors] = useState<ExtractedColor[]>([]);
-  const [objectDimensions, setObjectDimensions] = useState<ObjectDimensions[]>([]);
+  const [dimensionsBySide, setDimensionsBySide] = useState<Record<string, ObjectDimensions[]>>({});
+  const [productColors, setProductColors] = useState<Array<{ name: string; hex: string; color_code?: string }>>([]);
 
   const getItemColorHex = () => {
     const variants = orderItem.item_options?.variants;
@@ -30,6 +38,21 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
     return orderItem.item_options?.color_hex || '#FFFFFF';
   };
+
+  const getAppliedProductColorHex = useCallback(() => {
+    const canvasStates = Object.values(orderItem.canvas_state || {});
+    for (const canvasStateRaw of canvasStates) {
+      const canvasState = parseCanvasState(canvasStateRaw);
+      if (typeof canvasState?.productColor === 'string' && canvasState.productColor.startsWith('#')) {
+        return canvasState.productColor;
+      }
+    }
+    const variants = orderItem.item_options?.variants;
+    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
+      return variants[0].color_hex;
+    }
+    return orderItem.item_options?.color_hex || '#FFFFFF';
+  }, [orderItem.canvas_state, orderItem.item_options]);
 
   useEffect(() => {
     fetchProduct();
@@ -48,10 +71,48 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
       if (error) throw error;
 
       setProduct(data);
+
+      // Fetch product colors for single-layer products (no colorOptions in config)
+      const hasLayerColorOptions = data.configuration.some((side: ProductSide) =>
+        side.layers?.some((layer) => Array.isArray(layer.colorOptions) && layer.colorOptions.length > 0)
+      );
+      if (!hasLayerColorOptions) {
+        const colorId = orderItem.item_options?.color_id;
+        const appliedColorHex = getAppliedProductColorHex();
+        if (appliedColorHex || colorId) {
+          fetchProductColors(orderItem.product_id, colorId, appliedColorHex);
+        }
+      }
     } catch (error) {
       console.error('Error fetching product:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProductColors = async (productId: string, colorId?: string, colorHex?: string) => {
+    try {
+      const supabase = createClient();
+      let query = supabase
+        .from('product_colors')
+        .select('name, hex, color_code')
+        .eq('product_id', productId);
+
+      if (colorHex) {
+        query = query.ilike('hex', colorHex);
+      } else if (colorId) {
+        query = query.eq('color_id', colorId);
+      }
+
+      const { data, error } = await query.single();
+
+      if (error) throw error;
+
+      if (data) {
+        setProductColors([data]);
+      }
+    } catch (error) {
+      console.error('Error fetching product colors:', error);
     }
   };
 
@@ -61,7 +122,6 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     if (!currentSide) return;
 
     const objects = canvas.getObjects();
-    const colors: ExtractedColor[] = [];
     const dimensions: ObjectDimensions[] = [];
 
     const realDimensions = currentSide.realLifeDimensions;
@@ -79,22 +139,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         return;
       }
 
-      // Extract colors
-      const fill = obj.fill;
-      if (fill && typeof fill === 'string' && fill !== 'transparent') {
-        if (!colors.find(c => c.hex.toLowerCase() === fill.toLowerCase())) {
-          colors.push({ hex: fill });
-        }
-      }
-
-      const stroke = obj.stroke;
-      if (stroke && typeof stroke === 'string') {
-        if (!colors.find(c => c.hex.toLowerCase() === stroke.toLowerCase())) {
-          colors.push({ hex: stroke });
-        }
-      }
-
       // Calculate dimensions
+      const fill = obj.fill;
+
       // The object is scaled on the canvas, so we need to divide by canvasScale
       // to get the original size, then multiply by pixelToMmRatio
       const objWidthOnCanvas = (obj.width || 0) * (obj.scaleX || 1);
@@ -124,33 +171,97 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
       dimensions.push(dimension);
     });
 
-    setExtractedColors(colors);
-    setObjectDimensions(dimensions);
+    setDimensionsBySide(prev => ({ ...prev, [sideId]: dimensions }));
   }, [product]);
 
-  const getColorName = (hex: string): string => {
-    // Simple color name mapping
-    const colorNames: Record<string, string> = {
-      '#000000': 'Black',
-      '#000': 'Black',
-      '#ffffff': 'White',
-      '#fff': 'White',
-      '#ff0000': 'Red',
-      '#f00': 'Red',
-      '#00ff00': 'Green',
-      '#0f0': 'Green',
-      '#0000ff': 'Blue',
-      '#00f': 'Blue',
-      '#ffff00': 'Yellow',
-      '#ff0': 'Yellow',
-      '#ff00ff': 'Magenta',
-      '#f0f': 'Magenta',
-      '#00ffff': 'Cyan',
-      '#0ff': 'Cyan',
-    };
+  const objectDimensions = useMemo(() => {
+    return Object.values(dimensionsBySide).flat();
+  }, [dimensionsBySide]);
 
-    return colorNames[hex.toLowerCase()] || hex;
-  };
+  // Get selected mockup colors based on whether it's multi-layer or single-layer
+  const getMockupColorInfo = useMemo(() => {
+    if (!product) return [];
+
+    const hasLayerColorOptions = product.configuration.some((side: ProductSide) =>
+      side.layers?.some((layer) => Array.isArray(layer.colorOptions) && layer.colorOptions.length > 0)
+    );
+
+    if (hasLayerColorOptions) {
+      // Multi-layer product: get colors from canvas_state.layerColors and match with colorCode
+      const colors: Array<{ name: string; hex: string; colorCode?: string; label?: string }> = [];
+
+      const addLayerColors = (side: ProductSide, layerColors: Record<string, unknown> | undefined) => {
+        if (!layerColors || !side.layers) return 0;
+        let added = 0;
+
+        Object.entries(layerColors).forEach(([layerId, colorHex]) => {
+          if (typeof colorHex !== 'string' || !colorHex.startsWith('#')) return;
+          const layer = side.layers?.find(l => l.id === layerId);
+          if (!layer) return;
+
+          const colorOption = layer.colorOptions?.find(
+            option => option.hex.toLowerCase() === colorHex.toLowerCase()
+          );
+
+          colors.push({
+            name: layer.name,
+            hex: colorHex,
+            colorCode: colorOption?.colorCode,
+            label: `${side.name} - ${layer.name}`
+          });
+          added += 1;
+        });
+
+        return added;
+      };
+
+      product.configuration.forEach((side: ProductSide) => {
+        const canvasStateRaw = orderItem.canvas_state[side.id];
+        const canvasState = parseCanvasState(canvasStateRaw);
+        addLayerColors(side, canvasState?.layerColors as Record<string, unknown> | undefined);
+      });
+
+      if (colors.length === 0 && orderItem.color_selections) {
+        product.configuration.forEach((side: ProductSide) => {
+          const sideColors = orderItem.color_selections?.[side.id];
+          if (sideColors && typeof sideColors === 'object') {
+            addLayerColors(side, sideColors as Record<string, unknown>);
+          }
+        });
+      }
+
+      return colors;
+    } else {
+      // Single-layer product: show the applied mockup filter color
+      const appliedColorHex = getAppliedProductColorHex();
+
+      const matchedColor = appliedColorHex
+        ? productColors.find(
+            color => color.hex.toLowerCase() === appliedColorHex?.toLowerCase()
+          )
+        : undefined;
+
+      if (matchedColor && appliedColorHex) {
+        return [{
+          name: matchedColor.name,
+          hex: appliedColorHex,
+          colorCode: matchedColor.color_code,
+          label: undefined
+        }];
+      }
+
+      if (appliedColorHex) {
+        return [{
+          name: orderItem.item_options?.color_name || 'Selected Color',
+          hex: appliedColorHex,
+          colorCode: undefined,
+          label: undefined
+        }];
+      }
+
+      return [];
+    }
+  }, [getAppliedProductColorHex, orderItem.canvas_state, orderItem.color_selections, product, productColors]);
 
   if (loading) {
     return (
@@ -174,8 +285,6 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     );
   }
 
-  const currentSide = product.configuration[currentSideIndex];
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -193,115 +302,80 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           </div>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => setViewMode('comprehensive')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'comprehensive'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            전체 보기
-          </button>
-          <button
-            onClick={() => setViewMode('detailed')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'detailed'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Grid3x3 className="w-4 h-4" />
-            상세 보기
-          </button>
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+          <Grid3x3 className="w-4 h-4" />
+          전체 캔버스 보기
         </div>
       </div>
 
-      {/* Comprehensive View */}
-      {viewMode === 'comprehensive' && (
-        <ComprehensiveDesignPreview orderItem={orderItem} product={product} />
-      )}
-
-      {/* Detailed View */}
-      {viewMode === 'detailed' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Canvas Preview */}
         <div className="lg:col-span-2 bg-white rounded-lg p-6 shadow-sm">
-          {/* Side selector */}
-          {product.configuration.length > 1 && (
-            <div className="flex gap-2 mb-4 border-b pb-4">
-              {product.configuration.map((side, index) => (
-                <button
-                  key={side.id}
-                  onClick={() => setCurrentSideIndex(index)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    currentSideIndex === index
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {side.name}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {product.configuration.map((side) => {
+              const canvasState = orderItem.canvas_state[side.id];
+              if (!canvasState) return null;
 
-          {/* Canvas */}
-          <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-[500px]">
-            {currentSide && orderItem.canvas_state[currentSide.id] && (
-              <SingleSideCanvas
-                side={currentSide}
-                canvasState={orderItem.canvas_state[currentSide.id]}
-                productColor={getItemColorHex()}
-                width={400}
-                height={500}
-                onCanvasReady={handleCanvasReady}
-                renderFromCanvasStateOnly
-              />
-            )}
+              return (
+                <div key={side.id} className="space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700">{side.name}</h3>
+                  <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-125">
+                    <SingleSideCanvas
+                      side={side}
+                      canvasState={canvasState}
+                      productColor={getItemColorHex()}
+                      width={400}
+                      height={500}
+                      onCanvasReady={handleCanvasReady}
+                      renderFromCanvasStateOnly
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Right Panel - Colors and Dimensions */}
         <div className="space-y-6">
-          {/* Extracted Colors */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Palette className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">디자인 색상</h3>
-            </div>
-            {extractedColors.length > 0 ? (
-              <div className="space-y-2">
-                {extractedColors.map((color, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg"
-                  >
-                    <div
-                      className="w-10 h-10 rounded border border-gray-300 flex-shrink-0"
-                      style={{ backgroundColor: color.hex }}
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{getColorName(color.hex)}</p>
-                      <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">디자인에 사용된 색상이 없습니다.</p>
-            )}
-          </div>
-
-          {/* Object Dimensions */}
+          {/* Object Information */}
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Ruler className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">객체 크기 (mm)</h3>
+              <h3 className="text-lg font-semibold text-gray-900">객체 정보</h3>
             </div>
+            {getMockupColorInfo.length > 0 ? (
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-2">디자인 색상</p>
+                <div className="space-y-2">
+                  {getMockupColorInfo.map((color, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg"
+                    >
+                      <div
+                        className="w-10 h-10 rounded border border-gray-300 flex-shrink-0"
+                        style={{ backgroundColor: color.hex }}
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{color.name}</p>
+                        {color.label && (
+                          <p className="text-xs text-gray-400">{color.label}</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
+                          {color.colorCode && (
+                            <p className="text-xs text-gray-500 font-mono">({color.colorCode})</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-6">제품 색상 정보가 없습니다.</p>
+            )}
             {objectDimensions.length > 0 ? (
               <div className="space-y-3">
                 {objectDimensions.map((dimension, index) => (
@@ -389,7 +463,6 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           )}
         </div>
       </div>
-      )}
     </div>
   );
 }
