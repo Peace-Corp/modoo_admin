@@ -144,6 +144,8 @@ export interface ObjectDimensions {
   heightMm: number;
   fill?: string;
   text?: string;
+  colors?: string[];
+  preview?: string;
 }
 
 export interface Profile {

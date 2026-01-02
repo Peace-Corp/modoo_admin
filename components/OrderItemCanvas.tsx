@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ProductSide, ObjectDimensions } from '@/types/types';
-import { ChevronLeft, Ruler, Grid3x3 } from 'lucide-react';
+import { ChevronLeft, Palette, Ruler, Grid3x3 } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
 
@@ -23,6 +23,31 @@ const parseCanvasState = (value: unknown) => {
     }
   }
   return value;
+};
+
+const normalizeColorToHex = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'transparent') return null;
+
+  if (trimmed.startsWith('#')) {
+    const hex = trimmed.length === 4
+      ? `#${trimmed.slice(1).split('').map((c) => c + c).join('')}`
+      : trimmed;
+    if (/^#([0-9a-f]{6})$/i.test(hex)) {
+      return hex.toUpperCase();
+    }
+    return null;
+  }
+
+  const rgbMatch = trimmed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!rgbMatch) return null;
+
+  const toHex = (raw: string) => {
+    const num = Math.max(0, Math.min(255, Number(raw)));
+    return num.toString(16).padStart(2, '0');
+  };
+
+  return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`.toUpperCase();
 };
 
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
@@ -141,6 +166,71 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
       // Calculate dimensions
       const fill = obj.fill;
+      const colors = new Set<string>();
+      const addColor = (colorValue: unknown) => {
+        if (typeof colorValue !== 'string') return;
+        const normalized = normalizeColorToHex(colorValue);
+        if (normalized) {
+          colors.add(normalized);
+        }
+      };
+
+      addColor(fill);
+      addColor(obj.stroke);
+
+      if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
+        const textObj = obj as {
+          styles?: Record<string, Record<string, { fill?: string; stroke?: string }>>;
+        };
+        if (textObj.styles) {
+          Object.values(textObj.styles).forEach((lineStyles) => {
+            Object.values(lineStyles).forEach((charStyle) => {
+              addColor(charStyle.fill);
+              addColor(charStyle.stroke);
+            });
+          });
+        }
+      }
+
+      if (fill && typeof fill === 'object' && 'colorStops' in fill) {
+        const gradient = fill as { colorStops?: unknown };
+        const stops = gradient.colorStops;
+        if (Array.isArray(stops)) {
+          stops.forEach((stop) => {
+            if (stop && typeof stop === 'object' && 'color' in stop) {
+              addColor((stop as { color?: string }).color);
+            }
+          });
+        } else if (stops && typeof stops === 'object') {
+          Object.values(stops).forEach((stop) => {
+            if (stop && typeof stop === 'object' && 'color' in stop) {
+              addColor((stop as { color?: string }).color);
+            }
+          });
+        }
+      }
+
+      let preview = '';
+      try {
+        const bounds = obj.getBoundingRect();
+        const padding = 12;
+        const left = Math.max(0, bounds.left - padding);
+        const top = Math.max(0, bounds.top - padding);
+        const width = bounds.width + (padding * 2);
+        const height = bounds.height + (padding * 2);
+
+        preview = canvas.toDataURL({
+          format: 'png',
+          quality: 0.8,
+          multiplier: 1,
+          left,
+          top,
+          width,
+          height,
+        });
+      } catch (error) {
+        console.error('Error generating object preview:', error);
+      }
 
       // The object is scaled on the canvas, so we need to divide by canvasScale
       // to get the original size, then multiply by pixelToMmRatio
@@ -159,6 +249,8 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         widthMm: objWidthOriginal * pixelToMmRatio,
         heightMm: objHeightOriginal * pixelToMmRatio,
         fill: fill && typeof fill === 'string' && fill !== 'transparent' ? fill : undefined,
+        colors: colors.size > 0 ? Array.from(colors) : undefined,
+        preview: preview || undefined,
       };
 
       // Add text content for text objects
@@ -188,7 +280,10 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
     if (hasLayerColorOptions) {
       // Multi-layer product: get colors from canvas_state.layerColors and match with colorCode
-      const colors: Array<{ name: string; hex: string; colorCode?: string; label?: string }> = [];
+      const colorsMap = new Map<
+        string,
+        { name: string; hex: string; colorCode?: string; labelParts: Set<string> }
+      >();
 
       const addLayerColors = (side: ProductSide, layerColors: Record<string, unknown> | undefined) => {
         if (!layerColors || !side.layers) return 0;
@@ -203,11 +298,22 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
             option => option.hex.toLowerCase() === colorHex.toLowerCase()
           );
 
-          colors.push({
+          const existing = colorsMap.get(layer.id);
+          if (existing && existing.hex.toLowerCase() === colorHex.toLowerCase()) {
+            existing.labelParts.add(side.name);
+            return;
+          }
+
+          if (existing) {
+            existing.labelParts.add(side.name);
+            return;
+          }
+
+          colorsMap.set(layer.id, {
             name: layer.name,
             hex: colorHex,
             colorCode: colorOption?.colorCode,
-            label: `${side.name} - ${layer.name}`
+            labelParts: new Set([side.name]),
           });
           added += 1;
         });
@@ -221,7 +327,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         addLayerColors(side, canvasState?.layerColors as Record<string, unknown> | undefined);
       });
 
-      if (colors.length === 0 && orderItem.color_selections) {
+      if (colorsMap.size === 0 && orderItem.color_selections) {
         product.configuration.forEach((side: ProductSide) => {
           const sideColors = orderItem.color_selections?.[side.id];
           if (sideColors && typeof sideColors === 'object') {
@@ -230,7 +336,12 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         });
       }
 
-      return colors;
+      return Array.from(colorsMap.values()).map((entry) => ({
+        name: entry.name,
+        hex: entry.hex,
+        colorCode: entry.colorCode,
+        label: Array.from(entry.labelParts).join(', '),
+      }));
     } else {
       // Single-layer product: show the applied mockup filter color
       const appliedColorHex = getAppliedProductColorHex();
@@ -341,41 +452,45 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           {/* Object Information */}
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
+              <Palette className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">디자인 색상</h3>
+            </div>
+            {getMockupColorInfo.length > 0 ? (
+              <div className="space-y-2">
+                {getMockupColorInfo.map((color, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg"
+                  >
+                    <div
+                      className="w-10 h-10 rounded border border-gray-300 flex-shrink-0"
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{color.name}</p>
+                      {color.label && (
+                        <p className="text-xs text-gray-400">{color.label}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
+                        {color.colorCode && (
+                          <p className="text-xs text-gray-500 font-mono">({color.colorCode})</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">제품 색상 정보가 없습니다.</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
               <Ruler className="w-5 h-5 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">객체 정보</h3>
             </div>
-            {getMockupColorInfo.length > 0 ? (
-              <div className="mb-6">
-                <p className="text-sm font-semibold text-gray-700 mb-2">디자인 색상</p>
-                <div className="space-y-2">
-                  {getMockupColorInfo.map((color, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg"
-                    >
-                      <div
-                        className="w-10 h-10 rounded border border-gray-300 flex-shrink-0"
-                        style={{ backgroundColor: color.hex }}
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{color.name}</p>
-                        {color.label && (
-                          <p className="text-xs text-gray-400">{color.label}</p>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
-                          {color.colorCode && (
-                            <p className="text-xs text-gray-500 font-mono">({color.colorCode})</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 mb-6">제품 색상 정보가 없습니다.</p>
-            )}
             {objectDimensions.length > 0 ? (
               <div className="space-y-3">
                 {objectDimensions.map((dimension, index) => (
@@ -383,32 +498,65 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                     key={index}
                     className="p-3 border border-gray-200 rounded-lg bg-gray-50"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900">
-                        {dimension.objectType}
-                      </span>
-                      {dimension.fill && (
-                        <div
-                          className="w-4 h-4 rounded-full border border-gray-300"
-                          style={{ backgroundColor: dimension.fill }}
-                        />
-                      )}
-                    </div>
-                    {dimension.text && (
-                      <p className="text-xs text-gray-600 mb-1 italic">&quot;{dimension.text}&quot;</p>
-                    )}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-500">너비:</span>
-                        <span className="ml-1 font-medium text-gray-900">
-                          {dimension.widthMm.toFixed(1)} mm
-                        </span>
+                    <div className="flex items-start gap-3">
+                      <div className="w-16 h-16 rounded border border-gray-200 bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                        {dimension.preview ? (
+                          <img
+                            src={dimension.preview}
+                            alt={dimension.objectType}
+                            className="max-w-full max-h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">No Preview</span>
+                        )}
                       </div>
-                      <div>
-                        <span className="text-gray-500">높이:</span>
-                        <span className="ml-1 font-medium text-gray-900">
-                          {dimension.heightMm.toFixed(1)} mm
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {dimension.objectType}
+                          </span>
+                          {dimension.colors?.[0] && (
+                            <div
+                              className="w-4 h-4 rounded-full border border-gray-300"
+                              style={{ backgroundColor: dimension.colors[0] }}
+                            />
+                          )}
+                        </div>
+                        {dimension.text && (
+                          <p className="text-xs text-gray-600 mb-1 italic">&quot;{dimension.text}&quot;</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-500">너비:</span>
+                            <span className="ml-1 font-medium text-gray-900">
+                              {dimension.widthMm.toFixed(1)} mm
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">높이:</span>
+                            <span className="ml-1 font-medium text-gray-900">
+                              {dimension.heightMm.toFixed(1)} mm
+                            </span>
+                          </div>
+                        </div>
+                        {dimension.colors && dimension.colors.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {dimension.colors.map((color) => (
+                              <div key={color} className="flex items-center gap-1 text-xs">
+                                <span
+                                  className="w-3 h-3 rounded border border-gray-300"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <span className="font-mono text-gray-600">{color}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-gray-500">색상 정보 없음</p>
+                        )}
                       </div>
                     </div>
                   </div>
