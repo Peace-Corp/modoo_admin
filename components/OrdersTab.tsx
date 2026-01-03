@@ -1,20 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Order, OrderItem } from '@/types/types';
-import { Package, ChevronLeft, Calendar } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Order } from '@/types/types';
+import { Package, Calendar } from 'lucide-react';
+import { createClient } from '@/lib/supabase-client';
+import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from './OrderDetail';
 
+type FactoryProfile = {
+  id: string;
+  email: string | null;
+};
+
 export default function OrdersTab() {
+  const { user } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [factories, setFactories] = useState<FactoryProfile[]>([]);
+  const [loadingFactories, setLoadingFactories] = useState(false);
 
   useEffect(() => {
     fetchOrders();
   }, [filterStatus]);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchFactories();
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (user?.role === 'factory' && user.id) {
+      setFactories([{ id: user.id, email: user.email || null }]);
+    }
+  }, [user?.role, user?.id, user?.email]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -37,6 +59,27 @@ export default function OrdersTab() {
       setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFactories = async () => {
+    setLoadingFactories(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('role', 'factory')
+        .order('email', { ascending: true });
+
+      if (error) throw error;
+
+      setFactories(data || []);
+    } catch (error) {
+      console.error('Error fetching factories:', error);
+      setFactories([]);
+    } finally {
+      setLoadingFactories(false);
     }
   };
 
@@ -71,6 +114,26 @@ export default function OrdersTab() {
     });
   };
 
+  const factoryMap = useMemo(() => {
+    const map = new Map<string, FactoryProfile>();
+    factories.forEach((factory) => map.set(factory.id, factory));
+    return map;
+  }, [factories]);
+
+  const getFactoryLabel = (factoryId: string | null | undefined) => {
+    if (!factoryId) return '미배정';
+    if (factoryId === user?.id && user?.email) return user.email;
+    const factory = factoryMap.get(factoryId);
+    return factory?.email || factoryId;
+  };
+
+  const handleOrderUpdate = (updatedOrder: Order) => {
+    setSelectedOrder(updatedOrder);
+    setOrders((prev) =>
+      prev.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -85,6 +148,10 @@ export default function OrdersTab() {
         order={selectedOrder}
         onBack={() => setSelectedOrder(null)}
         onUpdate={fetchOrders}
+        onOrderUpdate={handleOrderUpdate}
+        factories={factories}
+        canAssign={user?.role === 'admin'}
+        loadingFactories={loadingFactories}
       />
     );
   }
@@ -155,6 +222,9 @@ export default function OrdersTab() {
                   결제 상태
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  공장 배정
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   배송 방법
                 </th>
               </tr>
@@ -200,6 +270,11 @@ export default function OrdersTab() {
                       )}`}
                     >
                       {order.payment_status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">
+                      {getFactoryLabel(order.assigned_factory_id)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

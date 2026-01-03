@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
 import { Profile } from '@/types/types';
-import { Users, Calendar, Shield, User as UserIcon, AlertCircle } from 'lucide-react';
+import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory } from 'lucide-react';
 
 export default function UsersTab() {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -20,61 +19,72 @@ export default function UsersTab() {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      let query = supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await fetch(`/api/admin/users?role=${filterRole}`, {
+        method: 'GET',
+      });
 
-      if (filterRole !== 'all') {
-        query = query.eq('role', filterRole);
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '사용자 목록을 불러오는데 실패했습니다.');
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setUsers(data || []);
+      const payload = await response.json();
+      setUsers(payload?.data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      setError('사용자 목록을 불러오는데 실패했습니다.');
+      setUsers([]);
+      setError(error instanceof Error ? error.message : '사용자 목록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: 'user' | 'admin') => {
+  const updateUserRole = async (userId: string, newRole: 'customer' | 'admin' | 'factory') => {
     setUpdatingUserId(userId);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '사용자 권한 변경에 실패했습니다.');
+      }
 
-      // Update local state
-      setUsers(users.map(user =>
-        user.id === userId ? { ...user, role: newRole } : user
-      ));
+      const payload = await response.json();
+      const updatedRole = payload?.data?.role ?? newRole;
+
+      setUsers((prev) => {
+        if (filterRole !== 'all' && updatedRole !== filterRole) {
+          return prev.filter((user) => user.id !== userId);
+        }
+        return prev.map((user) =>
+          user.id === userId ? { ...user, role: updatedRole } : user
+        );
+      });
     } catch (error) {
       console.error('Error updating user role:', error);
-      setError('사용자 권한 변경에 실패했습니다.');
+      setError(error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.');
     } finally {
       setUpdatingUserId(null);
     }
   };
 
   const getRoleColor = (role: string) => {
-    return role === 'admin'
-      ? 'bg-purple-100 text-purple-800'
-      : 'bg-gray-100 text-gray-800';
+    if (role === 'admin') return 'bg-purple-100 text-purple-800';
+    if (role === 'factory') return 'bg-orange-100 text-orange-800';
+    return 'bg-gray-100 text-gray-800';
   };
 
   const getRoleLabel = (role: string) => {
-    return role === 'admin' ? '관리자' : '일반 사용자';
+    if (role === 'admin') return '관리자';
+    if (role === 'factory') return '공장';
+    return '일반 사용자';
   };
 
   const formatDate = (dateString: string) => {
@@ -118,7 +128,8 @@ export default function UsersTab() {
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
-            { value: 'user', label: '일반 사용자' },
+            { value: 'customer', label: '일반 사용자' },
+            { value: 'factory', label: '공장' },
             { value: 'admin', label: '관리자' },
           ].map((filter) => (
             <button
@@ -189,6 +200,7 @@ export default function UsersTab() {
                       )}`}
                     >
                       {user.role === 'admin' && <Shield className="w-3 h-3" />}
+                      {user.role === 'factory' && <Factory className="w-3 h-3" />}
                       {getRoleLabel(user.role)}
                     </span>
                   </td>
@@ -200,43 +212,24 @@ export default function UsersTab() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      {user.role === 'user' ? (
-                        <button
-                          onClick={() => updateUserRole(user.id, 'admin')}
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={user.role}
+                          onChange={(event) => updateUserRole(user.id, event.target.value as 'customer' | 'admin' | 'factory')}
                           disabled={updatingUserId === user.id}
-                          className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 disabled:opacity-50"
                         >
-                          {updatingUserId === user.id ? (
-                            <>
-                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              처리중...
-                            </>
-                          ) : (
-                            <>
-                              <Shield className="w-3 h-3" />
-                              관리자로 변경
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => updateUserRole(user.id, 'user')}
-                          disabled={updatingUserId === user.id}
-                          className="px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                        >
-                          {updatingUserId === user.id ? (
-                            <>
-                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                              처리중...
-                            </>
-                          ) : (
-                            <>
-                              <UserIcon className="w-3 h-3" />
-                              사용자로 변경
-                            </>
-                          )}
-                        </button>
-                      )}
+                          <option value="customer">일반 사용자</option>
+                          <option value="factory">공장</option>
+                          <option value="admin">관리자</option>
+                        </select>
+                        {updatingUserId === user.id && (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                            처리중...
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

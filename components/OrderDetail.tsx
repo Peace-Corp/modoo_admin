@@ -1,25 +1,44 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package } from 'lucide-react';
+import { ChevronLeft, MapPin, CreditCard, Package, Factory } from 'lucide-react';
 import OrderItemCanvas from './OrderItemCanvas';
 
 interface OrderDetailProps {
   order: Order;
   onBack: () => void;
   onUpdate: () => void;
+  onOrderUpdate: (order: Order) => void;
+  factories: Array<{ id: string; email: string | null }>;
+  canAssign: boolean;
+  loadingFactories: boolean;
 }
 
-export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProps) {
+export default function OrderDetail({
+  order,
+  onBack,
+  onUpdate,
+  onOrderUpdate,
+  factories,
+  canAssign,
+  loadingFactories,
+}: OrderDetailProps) {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null);
+  const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_factory_id || '');
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrderItems();
   }, [order.id]);
+
+  useEffect(() => {
+    setSelectedFactoryId(order.assigned_factory_id || '');
+  }, [order.assigned_factory_id]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -54,6 +73,53 @@ export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProp
     (sum, item) => sum + item.price_per_item * item.quantity,
     0
   );
+
+  const factoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    factories.forEach((factory) => {
+      if (factory.id) {
+        map.set(factory.id, factory.email || factory.id);
+      }
+    });
+    return map;
+  }, [factories]);
+
+  const currentFactoryLabel = order.assigned_factory_id
+    ? factoryMap.get(order.assigned_factory_id) || order.assigned_factory_id
+    : '미배정';
+
+  const handleAssignFactory = async () => {
+    if (!canAssign) return;
+
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          factoryId: selectedFactoryId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공장 배정에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      if (payload?.data) {
+        onOrderUpdate(payload.data as Order);
+        onUpdate();
+      }
+    } catch (error) {
+      console.error('Error assigning factory:', error);
+      setAssignError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   if (selectedItem) {
     return (
@@ -115,11 +181,15 @@ export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProp
                       <h4 className="font-medium text-black">{item.product_title}</h4>
                       {item.item_options && (
                         <div className="text-sm  mt-1">
-                          {item.item_options.color_name && (
-                            <span>색상: {item.item_options.color_name}</span>
+                          {(item.item_options.color_name || item.item_options.variants?.[0]?.color_name) && (
+                            <span>
+                              색상: {item.item_options.color_name || item.item_options.variants?.[0]?.color_name}
+                            </span>
                           )}
-                          {item.item_options.size_name && (
-                            <span className="ml-3">사이즈: {item.item_options.size_name}</span>
+                          {(item.item_options.size_name || item.item_options.variants?.[0]?.size_name) && (
+                            <span className="ml-3">
+                              사이즈: {item.item_options.size_name || item.item_options.variants?.[0]?.size_name}
+                            </span>
                           )}
                         </div>
                       )}
@@ -251,6 +321,54 @@ export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProp
                 <p className="text-sm text-gray-500">주문 일시</p>
                 <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Factory Assignment */}
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Factory className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">공장 배정</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-sm text-gray-500">현재 배정</p>
+                <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
+              </div>
+
+              {canAssign && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
+                    <select
+                      value={selectedFactoryId}
+                      onChange={(event) => setSelectedFactoryId(event.target.value)}
+                      disabled={loadingFactories || assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    >
+                      <option value="">미배정</option>
+                      {factories.map((factory) => (
+                        <option key={factory.id} value={factory.id}>
+                          {factory.email || factory.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleAssignFactory}
+                    disabled={assigning || loadingFactories}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    {assigning ? '배정 중...' : '배정 저장'}
+                  </button>
+                </>
+              )}
+
+              {assignError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {assignError}
+                </div>
+              )}
             </div>
           </div>
         </div>

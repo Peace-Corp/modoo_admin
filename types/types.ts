@@ -10,6 +10,13 @@ export interface Product {
   updated_at: string;
 }
 
+export interface ProductConfig {
+  id?: string;
+  title?: string;
+  base_price?: number;
+  sides: ProductSide[];
+}
+
 export interface ProductSide {
   id: string;
   name: string;
@@ -69,6 +76,7 @@ export interface Order {
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
   order_status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+  assigned_factory_id: string | null;
   total_amount: number;
 
   created_at: string;
@@ -112,6 +120,8 @@ export interface CanvasState {
   objects: CanvasObject[];
   background?: string;
   backgroundImage?: any;
+  productColor?: string;
+  layerColors?: Record<string, unknown>;
 }
 
 export interface CanvasObject {
@@ -147,6 +157,7 @@ export interface ExtractedColor {
 }
 
 export interface ObjectDimensions {
+  objectId?: string;
   objectType: string;
   widthMm: number;
   heightMm: number;
@@ -166,7 +177,56 @@ export interface Profile {
   id: string;
   email: string;
   phone_number: string | null;
-  role: 'user' | 'admin';
+  role: 'customer' | 'admin' | 'factory';
   created_at: string;
   updated_at: string;
+}
+
+export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized';
+
+export interface CoBuyCustomField {
+  id: string;
+  type: 'text' | 'email' | 'phone' | 'dropdown';
+  label: string;
+  required: boolean;
+  fixed?: boolean;
+  options?: string[];
+}
+
+export interface CoBuySession {
+  id: string;
+  user_id: string;
+  saved_design_id: string;
+  title: string;
+  description: string | null;
+  status: CoBuyStatus;
+  share_token: string;
+  start_date: string;
+  end_date: string;
+  max_participants: number | null;
+  current_participant_count: number;
+  custom_fields: CoBuyCustomField[];
+  bulk_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+  profiles?: {
+    email: string | null;
+    phone_number?: string | null;
+  } | null;
+  cancellation_requested_at?: string | null;
+}
+
+export interface CoBuyParticipant {
+  id: string;
+  cobuy_session_id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  field_responses: Record<string, string>;
+  selected_size: string;
+  payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+  payment_key: string | null;
+  payment_amount: number | null;
+  paid_at: string | null;
+  joined_at: string;
 }

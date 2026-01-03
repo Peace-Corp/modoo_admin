@@ -80,6 +80,14 @@ interface OrderItem {
     color_id?: string;
     color_name?: string;
     color_hex?: string;
+    variants?: Array<{
+      size_id?: string;
+      size_name?: string;
+      color_id?: string;
+      color_name?: string;
+      color_hex?: string;
+      quantity?: number;
+    }>;
   };
   thumbnail_url?: string | null;
 }
@@ -968,7 +976,8 @@ const OrderCanvasRenderer: React.FC<OrderCanvasRendererProps> = ({
           }
 
           const canvasState = item.canvas_state as Record<string, string>;
-          const productColor = item.item_options?.color_hex || '#FFFFFF';
+          const productColor =
+            item.item_options?.color_hex || item.item_options?.variants?.[0]?.color_hex || '#FFFFFF';
 
           return (
             <div
@@ -980,14 +989,16 @@ const OrderCanvasRenderer: React.FC<OrderCanvasRendererProps> = ({
                   <h3 className="font-semibold text-gray-900">
                     {item.product_title}
                   </h3>
-                  {item.item_options?.size_name && (
+                  {(item.item_options?.size_name || item.item_options?.variants?.[0]?.size_name) && (
                     <div className="mt-1 text-sm text-gray-600">
-                      Size: {item.item_options.size_name}
+                      Size: {item.item_options?.size_name || item.item_options?.variants?.[0]?.size_name}
                     </div>
                   )}
-                  {item.item_options?.color_name && (
+                  {(item.item_options?.color_name || item.item_options?.variants?.[0]?.color_name) && (
                     <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
-                      <span>Color: {item.item_options.color_name}</span>
+                      <span>
+                        Color: {item.item_options?.color_name || item.item_options?.variants?.[0]?.color_name}
+                      </span>
                       <div
                         className="h-4 w-4 rounded-full border border-gray-300"
                         style={{ backgroundColor: productColor }}

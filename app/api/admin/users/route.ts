@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
+const allowedRoles = new Set(['customer', 'admin', 'factory']);
+
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
@@ -28,22 +30,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+    if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
     }
 
     const url = new URL(request.url);
-    const status = url.searchParams.get('status') || 'all';
+    const role = url.searchParams.get('role') || 'all';
 
     const adminClient = createAdminClient();
-    let query = adminClient.from('orders').select('*').order('created_at', { ascending: false });
+    let query = adminClient
+      .from('profiles')
+      .select('id, email, phone_number, role, created_at, updated_at')
+      .order('created_at', { ascending: false });
 
-    if (profile.role === 'factory') {
-      query = query.eq('assigned_factory_id', user.id);
-    }
-
-    if (status !== 'all') {
-      query = query.eq('order_status', status);
+    if (role !== 'all') {
+      if (!allowedRoles.has(role)) {
+        return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
+      }
+      query = query.eq('role', role);
     }
 
     const { data, error } = await query;
@@ -54,7 +58,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: data || [] });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.';
+    const message = error instanceof Error ? error.message : '사용자 목록을 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -90,26 +94,23 @@ export async function PATCH(request: Request) {
     }
 
     const payload = await request.json().catch(() => null);
-    const orderId = payload?.orderId;
-    const factoryId = payload?.factoryId ?? null;
+    const userId = payload?.userId;
+    const role = payload?.role;
 
-    if (!orderId || typeof orderId !== 'string') {
-      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
+    if (!userId || typeof userId !== 'string') {
+      return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
     }
 
-    if (factoryId !== null && typeof factoryId !== 'string') {
-      return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+    if (!role || typeof role !== 'string' || !allowedRoles.has(role)) {
+      return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
     }
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
-      .from('orders')
-      .update({
-        assigned_factory_id: factoryId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', orderId)
-      .select()
+      .from('profiles')
+      .update({ role })
+      .eq('id', userId)
+      .select('id, email, phone_number, role, created_at, updated_at')
       .single();
 
     if (error) {
@@ -118,7 +119,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ data });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '공장 배정에 실패했습니다.';
+    const message = error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -38,7 +38,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">관리자 로그인</h1>
-          <p className="text-sm text-gray-500 mt-2">관리자 계정으로 로그인하세요.</p>
+          <p className="text-sm text-gray-500 mt-2">관리자/공장 계정으로 로그인하세요.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">

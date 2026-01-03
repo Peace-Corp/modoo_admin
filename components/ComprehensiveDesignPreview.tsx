@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Canvas as FabricCanvas } from 'fabric';
-import { OrderItem, Product, ProductSide, ExtractedColor, ObjectDimensions } from '@/types/types';
+import { OrderItem, Product, ProductSide, ExtractedColor, CanvasState } from '@/types/types';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 
 interface DesignElement {
@@ -57,7 +57,10 @@ export default function ComprehensiveDesignPreview({
     const sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
     const mockSizes: SizeQuantity[] = sizes.map(size => ({
       size,
-      quantity: size === orderItem.item_options?.size_name ? orderItem.quantity : 0,
+      quantity:
+        size === (orderItem.item_options?.size_name || orderItem.item_options?.variants?.[0]?.size_name)
+          ? orderItem.quantity
+          : 0,
     }));
     setSizeQuantities(mockSizes);
   }, [orderItem]);
@@ -231,7 +234,7 @@ export default function ComprehensiveDesignPreview({
             {product.configuration[0] && orderItem.canvas_state[product.configuration[0].id] && (
               <SingleSideCanvas
                 side={product.configuration[0]}
-                canvasState={orderItem.canvas_state[product.configuration[0].id]}
+                canvasState={orderItem.canvas_state[product.configuration[0].id] as CanvasState | string | null}
                 productColor={getItemColorHex()}
                 width={250}
                 height={300}
@@ -247,7 +250,7 @@ export default function ComprehensiveDesignPreview({
               {orderItem.canvas_state[product.configuration[1].id] && (
                 <SingleSideCanvas
                   side={product.configuration[1]}
-                  canvasState={orderItem.canvas_state[product.configuration[1].id]}
+                  canvasState={orderItem.canvas_state[product.configuration[1].id] as CanvasState | string | null}
                   productColor={getItemColorHex()}
                   width={250}
                   height={300}
@@ -264,7 +267,7 @@ export default function ComprehensiveDesignPreview({
               <div className="text-gray-600">색상</div>
               <div className="text-gray-600">재질</div>
               <div className="font-medium">
-                {orderItem.item_options?.color_name || '기본'}
+                {orderItem.item_options?.color_name || orderItem.item_options?.variants?.[0]?.color_name || '기본'}
               </div>
               <div className="font-medium">X</div>
               <div className="text-gray-600">원단</div>
@@ -436,7 +439,9 @@ export default function ComprehensiveDesignPreview({
           </div>
           <div>
             <div className="text-gray-500">사이즈</div>
-            <div className="font-medium">{orderItem.item_options?.size_name || '-'}</div>
+            <div className="font-medium">
+              {orderItem.item_options?.size_name || orderItem.item_options?.variants?.[0]?.size_name || '-'}
+            </div>
           </div>
           <div>
             <div className="text-gray-500">수량</div>

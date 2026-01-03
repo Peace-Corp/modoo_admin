@@ -8,7 +8,7 @@ export interface UserData {
   name?: string;
   avatar_url?: string;
   phone?: string;
-  role?: 'admin' | 'customer';
+  role?: 'admin' | 'customer' | 'factory';
   created_at?: string;
 }
 

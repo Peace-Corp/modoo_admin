@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2, ShoppingBag, ChevronLeft } from 'lucide-react';
+import { Edit, Eye, EyeOff, Plus, Package, Edit2 } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
-import OrderCanvasRenderer from './OrderCanvasRenderer';
 
-type EditorMode = 'print-area' | 'full-edit' | 'view-orders' | null;
+type EditorMode = 'print-area' | 'full-edit' | null;
 
 export default function ProductsTab() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -16,8 +15,6 @@ export default function ProductsTab() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [productOrderItems, setProductOrderItems] = useState<any[]>([]);
-  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -42,26 +39,6 @@ export default function ProductsTab() {
     }
   };
 
-  const fetchOrderItemsForProduct = async (productId: string) => {
-    setLoadingOrderItems(true);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setProductOrderItems(data || []);
-    } catch (error) {
-      console.error('Error fetching order items:', error);
-      setProductOrderItems([]);
-    } finally {
-      setLoadingOrderItems(false);
-    }
-  };
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
@@ -133,47 +110,6 @@ export default function ProductsTab() {
     );
   }
 
-  // Show Order Items View
-  if (editorMode === 'view-orders' && selectedProduct) {
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleCancel}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {selectedProduct.title} - 주문 내역
-            </h2>
-            <p className="text-gray-500 mt-1">
-              이 제품을 사용한 주문 아이템들을 확인할 수 있습니다 ({productOrderItems.length}개)
-            </p>
-          </div>
-        </div>
-
-        {/* Order Canvas Renderer */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          {loadingOrderItems ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : (
-            <OrderCanvasRenderer
-              orderItems={productOrderItems}
-              canvasWidth={400}
-              canvasHeight={400}
-              layout="grid"
-              showItemInfo={true}
-            />
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -280,17 +216,6 @@ export default function ProductsTab() {
                       >
                         <Edit className="w-4 h-4" />
                         인쇄 영역
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setEditorMode('view-orders');
-                          fetchOrderItemsForProduct(product.id);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                      >
-                        <ShoppingBag className="w-4 h-4" />
-                        주문 내역
                       </button>
                     </div>
                   </td>

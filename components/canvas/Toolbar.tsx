@@ -8,7 +8,7 @@ import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
 import { createClient } from '@/lib/supabase-client';
 import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage } from '@/lib/cloudconvert';
-import LoadingModal from '@/app/components/LoadingModal';
+import LoadingModal from '@/components/LoadingModal';
 
 interface ToolbarProps {
   sides?: ProductSide[];
