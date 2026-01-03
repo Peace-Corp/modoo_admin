@@ -5,10 +5,9 @@ import dynamic from 'next/dynamic';
 import { ProductConfig } from "@/types/types";
 import Toolbar from "./Toolbar";
 import { useCanvasStore } from '@/store/useCanvasStore';
-import Header from "../Header";
 
 
-const SingleSideCanvas = dynamic(() => import('@/app/components/canvas/SingleSideCanvas'), {
+const SingleSideCanvas = dynamic(() => import('./SingleSideCanvas'), {
   ssr: false,
   loading: () => <div className="w-125 h-125 bg-gray-100 animate-pulse" />,
 });

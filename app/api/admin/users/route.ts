@@ -1,0 +1,125 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
+
+const allowedRoles = new Set(['customer', 'admin', 'factory']);
+
+export async function GET(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 401 });
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 403 });
+    }
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    }
+
+    const url = new URL(request.url);
+    const role = url.searchParams.get('role') || 'all';
+
+    const adminClient = createAdminClient();
+    let query = adminClient
+      .from('profiles')
+      .select('id, email, phone_number, role, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (role !== 'all') {
+      if (!allowedRoles.has(role)) {
+        return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
+      }
+      query = query.eq('role', role);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data: data || [] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '사용자 목록을 불러오지 못했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 401 });
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 403 });
+    }
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    }
+
+    const payload = await request.json().catch(() => null);
+    const userId = payload?.userId;
+    const role = payload?.role;
+
+    if (!userId || typeof userId !== 'string') {
+      return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    if (!role || typeof role !== 'string' || !allowedRoles.has(role)) {
+      return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('profiles')
+      .update({ role })
+      .eq('id', userId)
+      .select('id, email, phone_number, role, created_at, updated_at')
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

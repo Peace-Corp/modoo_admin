@@ -50,7 +50,8 @@ const normalizeSide = (side: Partial<ProductSide>, index: number): ProductSide =
 const normalizeSides = (rawSides: ProductSide[] | null | undefined) =>
   (rawSides || []).map((side, index) => normalizeSide(side, index));
 
-const isLayeredSide = (side: ProductSide) => Array.isArray(side.layers) && side.layers.length > 0;
+const isLayeredSide = (side: ProductSide): side is ProductSide & { layers: ProductLayer[] } =>
+  Array.isArray(side.layers) && side.layers.length > 0;
 
 const getSidePreviewUrl = (side: ProductSide) => {
   if (isLayeredSide(side)) {

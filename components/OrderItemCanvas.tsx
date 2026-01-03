@@ -12,7 +12,7 @@ interface OrderItemCanvasProps {
   onBack: () => void;
 }
 
-const parseCanvasState = (value: unknown) => {
+const parseCanvasState = (value: unknown): CanvasState | null => {
   if (!value) return null;
   if (typeof value === 'string') {
     try {
@@ -22,7 +22,7 @@ const parseCanvasState = (value: unknown) => {
       return null;
     }
   }
-  return value;
+  return value as CanvasState;
 };
 
 const normalizeColorToHex = (value: string): string | null => {
@@ -407,11 +407,16 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
       const objWidthOriginal = objWidthOnCanvas / canvasScale;
       const objHeightOriginal = objHeightOnCanvas / canvasScale;
 
-      const objectWidthMm = typeof (obj as { widthMm?: number }).widthMm === 'number'
-        ? (obj as { widthMm: number }).widthMm
+      const objWithMm = obj as unknown as {
+        widthMm?: number;
+        heightMm?: number;
+      };
+
+      const objectWidthMm = typeof objWithMm.widthMm === 'number'
+        ? objWithMm.widthMm
         : stateDimension?.widthMm;
-      const objectHeightMm = typeof (obj as { heightMm?: number }).heightMm === 'number'
-        ? (obj as { heightMm: number }).heightMm
+      const objectHeightMm = typeof objWithMm.heightMm === 'number'
+        ? objWithMm.heightMm
         : stateDimension?.heightMm;
 
       const resolvedWidthMm = typeof objectWidthMm === 'number'

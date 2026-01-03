@@ -10,6 +10,13 @@ export interface Product {
   updated_at: string;
 }
 
+export interface ProductConfig {
+  id?: string;
+  title?: string;
+  base_price?: number;
+  sides: ProductSide[];
+}
+
 export interface ProductSide {
   id: string;
   name: string;
@@ -113,6 +120,8 @@ export interface CanvasState {
   objects: CanvasObject[];
   background?: string;
   backgroundImage?: any;
+  productColor?: string;
+  layerColors?: Record<string, unknown>;
 }
 
 export interface CanvasObject {

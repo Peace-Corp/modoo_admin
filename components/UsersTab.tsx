@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
 import { Profile } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory } from 'lucide-react';
 
@@ -20,24 +19,21 @@ export default function UsersTab() {
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      let query = supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await fetch(`/api/admin/users?role=${filterRole}`, {
+        method: 'GET',
+      });
 
-      if (filterRole !== 'all') {
-        query = query.eq('role', filterRole);
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '사용자 목록을 불러오는데 실패했습니다.');
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setUsers(data || []);
+      const payload = await response.json();
+      setUsers(payload?.data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      setError('사용자 목록을 불러오는데 실패했습니다.');
+      setUsers([]);
+      setError(error instanceof Error ? error.message : '사용자 목록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -47,21 +43,33 @@ export default function UsersTab() {
     setUpdatingUserId(userId);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '사용자 권한 변경에 실패했습니다.');
+      }
 
-      // Update local state
-      setUsers(users.map(user =>
-        user.id === userId ? { ...user, role: newRole } : user
-      ));
+      const payload = await response.json();
+      const updatedRole = payload?.data?.role ?? newRole;
+
+      setUsers((prev) => {
+        if (filterRole !== 'all' && updatedRole !== filterRole) {
+          return prev.filter((user) => user.id !== userId);
+        }
+        return prev.map((user) =>
+          user.id === userId ? { ...user, role: updatedRole } : user
+        );
+      });
     } catch (error) {
       console.error('Error updating user role:', error);
-      setError('사용자 권한 변경에 실패했습니다.');
+      setError(error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.');
     } finally {
       setUpdatingUserId(null);
     }
