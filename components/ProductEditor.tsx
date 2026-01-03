@@ -443,8 +443,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
     setSaving(true);
     try {
-      const supabase = createClient();
-
       const configuration = sides.map((side) => {
         const hasLayers = isLayeredSide(side);
         return {
@@ -464,34 +462,30 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         is_active: isActive,
         configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
-        updated_at: new Date().toISOString(),
       };
 
-      if (isNewProduct) {
-        // Create new product
-        const { data, error } = await supabase
-          .from('products')
-          .insert({
-            ...productData,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        onSave(data);
-      } else {
-        // Update existing product
-        const { data, error } = await supabase
-          .from('products')
-          .update(productData)
-          .eq('id', product.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        onSave(data);
+      if (!isNewProduct && !product?.id) {
+        throw new Error('제품 ID가 필요합니다.');
       }
+
+      const response = await fetch('/api/admin/products', {
+        method: isNewProduct ? 'POST' : 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          isNewProduct ? productData : { id: product?.id, ...productData }
+        ),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 저장에 실패했습니다.');
+      }
+
+      const responsePayload = await response.json();
+      const savedProduct = responsePayload?.data as Product;
+      onSave(savedProduct);
     } catch (error) {
       console.error('Error saving product:', error);
       alert('제품 저장 중 오류가 발생했습니다.');

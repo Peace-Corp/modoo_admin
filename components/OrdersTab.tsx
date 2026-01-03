@@ -1,16 +1,10 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Order } from '@/types/types';
+import { Factory, Order } from '@/types/types';
 import { Package, Calendar } from 'lucide-react';
-import { createClient } from '@/lib/supabase-client';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from './OrderDetail';
-
-type FactoryProfile = {
-  id: string;
-  email: string | null;
-};
 
 export default function OrdersTab() {
   const { user } = useAuthStore();
@@ -19,7 +13,7 @@ export default function OrdersTab() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [factories, setFactories] = useState<FactoryProfile[]>([]);
+  const [factories, setFactories] = useState<Factory[]>([]);
   const [loadingFactories, setLoadingFactories] = useState(false);
 
   useEffect(() => {
@@ -33,10 +27,24 @@ export default function OrdersTab() {
   }, [user?.role]);
 
   useEffect(() => {
-    if (user?.role === 'factory' && user.id) {
-      setFactories([{ id: user.id, email: user.email || null }]);
+    if (user?.role === 'factory') {
+      if (user.factory_id) {
+        setFactories([
+          {
+            id: user.factory_id,
+            name: user.factory_name || user.email || '공장',
+            email: user.email || null,
+            phone_number: user.phone || null,
+            is_active: true,
+            created_at: user.created_at || new Date().toISOString(),
+            updated_at: user.created_at || new Date().toISOString(),
+          },
+        ]);
+      } else {
+        setFactories([]);
+      }
     }
-  }, [user?.role, user?.id, user?.email]);
+  }, [user?.role, user?.factory_id, user?.factory_name, user?.email, user?.phone]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -65,16 +73,13 @@ export default function OrdersTab() {
   const fetchFactories = async () => {
     setLoadingFactories(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('role', 'factory')
-        .order('email', { ascending: true });
-
-      if (error) throw error;
-
-      setFactories(data || []);
+      const response = await fetch('/api/admin/factories', { method: 'GET' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setFactories(payload?.data || []);
     } catch (error) {
       console.error('Error fetching factories:', error);
       setFactories([]);
@@ -115,16 +120,15 @@ export default function OrdersTab() {
   };
 
   const factoryMap = useMemo(() => {
-    const map = new Map<string, FactoryProfile>();
+    const map = new Map<string, Factory>();
     factories.forEach((factory) => map.set(factory.id, factory));
     return map;
   }, [factories]);
 
   const getFactoryLabel = (factoryId: string | null | undefined) => {
     if (!factoryId) return '미배정';
-    if (factoryId === user?.id && user?.email) return user.email;
     const factory = factoryMap.get(factoryId);
-    return factory?.email || factoryId;
+    return factory?.name || factory?.email || factoryId;
   };
 
   const handleOrderUpdate = (updatedOrder: Order) => {

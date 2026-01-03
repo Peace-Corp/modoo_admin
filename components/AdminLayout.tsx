@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag } from 'lucide-react';
+import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -16,6 +16,7 @@ const navItems: Array<{
   roles: AdminRole[];
 }> = [
   { href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
+  { href: '/content', label: '콘텐츠 관리', icon: MessageSquare, roles: ['admin'] },
   { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
   { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
   { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin'] },
@@ -23,7 +24,7 @@ const navItems: Array<{
 ];
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
-  admin: ['/products', '/orders', '/cobuy', '/users', '/settings'],
+  admin: ['/products', '/content', '/orders', '/cobuy', '/users', '/settings'],
   factory: ['/orders'],
 };
 
@@ -60,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('role, email, phone_number')
+          .select('role, email, phone_number, factory_id, factory:factories(id, name)')
           .eq('id', supabaseUser.id)
           .single();
 
@@ -77,6 +78,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }
         }
 
+        const factoryRecord = Array.isArray(profile.factory)
+          ? profile.factory[0]
+          : profile.factory;
+
         setUser({
           id: supabaseUser.id,
           email: supabaseUser.email || profile.email || '',
@@ -84,6 +89,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           avatar_url: supabaseUser.user_metadata?.avatar_url,
           phone: supabaseUser.phone || profile.phone_number,
           role: profile.role,
+          factory_id: profile.factory_id ?? null,
+          factory_name: factoryRecord?.name ?? null,
         });
       } catch (error) {
         console.error('Error checking admin auth:', error);
