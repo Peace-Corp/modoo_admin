@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-client';
-import { Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package, Factory } from 'lucide-react';
+import type { Factory, Order, OrderItem } from '@/types/types';
+import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon } from 'lucide-react';
 import OrderItemCanvas from './OrderItemCanvas';
 
 interface OrderDetailProps {
@@ -11,7 +11,7 @@ interface OrderDetailProps {
   onBack: () => void;
   onUpdate: () => void;
   onOrderUpdate: (order: Order) => void;
-  factories: Array<{ id: string; email: string | null }>;
+  factories: Factory[];
   canAssign: boolean;
   loadingFactories: boolean;
 }
@@ -75,17 +75,19 @@ export default function OrderDetail({
   );
 
   const factoryMap = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, Factory>();
     factories.forEach((factory) => {
       if (factory.id) {
-        map.set(factory.id, factory.email || factory.id);
+        map.set(factory.id, factory);
       }
     });
     return map;
   }, [factories]);
 
   const currentFactoryLabel = order.assigned_factory_id
-    ? factoryMap.get(order.assigned_factory_id) || order.assigned_factory_id
+    ? factoryMap.get(order.assigned_factory_id)?.name ||
+      factoryMap.get(order.assigned_factory_id)?.email ||
+      order.assigned_factory_id
     : '미배정';
 
   const handleAssignFactory = async () => {
@@ -235,6 +237,54 @@ export default function OrderDetail({
               </div>
             </div>
           </div>
+
+          {/* Factory Assignment */}
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <FactoryIcon className="w-5 h-5 text-gray-600" />
+              <h3 className="text-lg font-semibold text-gray-900">공장 배정</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-sm text-gray-500">현재 배정</p>
+                <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
+              </div>
+
+              {canAssign && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
+                    <select
+                      value={selectedFactoryId}
+                      onChange={(event) => setSelectedFactoryId(event.target.value)}
+                      disabled={loadingFactories || assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    >
+                      <option value="">미배정</option>
+                      {factories.map((factory) => (
+                        <option key={factory.id} value={factory.id}>
+                          {factory.name || factory.email || factory.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleAssignFactory}
+                    disabled={assigning || loadingFactories}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    {assigning ? '배정 중...' : '배정 저장'}
+                  </button>
+                </>
+              )}
+
+              {assignError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {assignError}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right Column - Customer & Shipping Info */}
@@ -324,53 +374,7 @@ export default function OrderDetail({
             </div>
           </div>
 
-          {/* Factory Assignment */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Factory className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">공장 배정</h3>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div>
-                <p className="text-sm text-gray-500">현재 배정</p>
-                <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
-              </div>
-
-              {canAssign && (
-                <>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
-                    <select
-                      value={selectedFactoryId}
-                      onChange={(event) => setSelectedFactoryId(event.target.value)}
-                      disabled={loadingFactories || assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    >
-                      <option value="">미배정</option>
-                      {factories.map((factory) => (
-                        <option key={factory.id} value={factory.id}>
-                          {factory.email || factory.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    onClick={handleAssignFactory}
-                    disabled={assigning || loadingFactories}
-                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-                  >
-                    {assigning ? '배정 중...' : '배정 저장'}
-                  </button>
-                </>
-              )}
-
-              {assignError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                  {assignError}
-                </div>
-              )}
-            </div>
-          </div>
+          
         </div>
       </div>
     </div>

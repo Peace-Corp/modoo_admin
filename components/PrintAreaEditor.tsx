@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Product, ProductSide } from '@/types/types';
-import { createClient } from '@/lib/supabase-client';
 import { Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PrintAreaEditorProps {
@@ -282,21 +281,21 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
   const handleSave = async () => {
     setSaving(true);
     try {
-      const supabase = createClient();
+      const response = await fetch('/api/admin/products', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: product.id, configuration: sides }),
+      });
 
-      const { data, error } = await supabase
-        .from('products')
-        .update({
-          configuration: sides,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', product.id)
-        .select()
-        .single();
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 저장에 실패했습니다.');
+      }
 
-      if (error) throw error;
-
-      onSave(data);
+      const payload = await response.json();
+      onSave(payload?.data as Product);
     } catch (error) {
       console.error('Error saving product:', error);
       alert('제품 저장 중 오류가 발생했습니다.');

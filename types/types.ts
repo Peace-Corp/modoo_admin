@@ -178,6 +178,17 @@ export interface Profile {
   email: string;
   phone_number: string | null;
   role: 'customer' | 'admin' | 'factory';
+  factory_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Factory {
+  id: string;
+  name: string;
+  email: string | null;
+  phone_number: string | null;
+  is_active: boolean | null;
   created_at: string;
   updated_at: string;
 }

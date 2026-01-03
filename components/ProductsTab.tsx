@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2 } from 'lucide-react';
+import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2 } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
 
@@ -15,6 +14,7 @@ export default function ProductsTab() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -23,15 +23,13 @@ export default function ProductsTab() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      setProducts(data || []);
+      const response = await fetch('/api/admin/products');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setProducts(payload?.data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -42,17 +40,24 @@ export default function ProductsTab() {
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('products')
-        .update({ is_active: !currentStatus })
-        .eq('id', productId);
+      const response = await fetch('/api/admin/products', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: productId, is_active: !currentStatus }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 상태 변경에 실패했습니다.');
+      }
 
-      // Update local state
+      const payload = await response.json();
+      const updatedProduct = payload?.data as Product;
+
       setProducts(products.map(p =>
-        p.id === productId ? { ...p, is_active: !currentStatus } : p
+        p.id === updatedProduct.id ? updatedProduct : p
       ));
     } catch (error) {
       console.error('Error toggling product status:', error);
@@ -72,6 +77,30 @@ export default function ProductsTab() {
     setSelectedProduct(null);
     setEditorMode(null);
     setIsCreatingNew(false);
+  };
+
+  const handleDeleteProduct = async (productId: string, productTitle: string) => {
+    const confirmed = window.confirm(`"${productTitle}" 제품을 삭제할까요?`);
+    if (!confirmed) return;
+
+    setDeletingProductId(productId);
+    try {
+      const response = await fetch(`/api/admin/products?id=${productId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 삭제에 실패했습니다.');
+      }
+
+      setProducts((prev) => prev.filter((product) => product.id !== productId));
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert(error instanceof Error ? error.message : '제품 삭제에 실패했습니다.');
+    } finally {
+      setDeletingProductId(null);
+    }
   };
 
   const handleCancel = () => {
@@ -216,6 +245,14 @@ export default function ProductsTab() {
                       >
                         <Edit className="w-4 h-4" />
                         인쇄 영역
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product.id, product.title)}
+                        disabled={deletingProductId === product.id}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {deletingProductId === product.id ? '삭제 중...' : '삭제'}
                       </button>
                     </div>
                   </td>

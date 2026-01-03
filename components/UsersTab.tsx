@@ -1,19 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Profile } from '@/types/types';
-import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Factory, Profile } from '@/types/types';
+import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon } from 'lucide-react';
 
 export default function UsersTab() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('all');
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [updatingFactoryId, setUpdatingFactoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [factories, setFactories] = useState<Factory[]>([]);
+  const [loadingFactories, setLoadingFactories] = useState(false);
 
   useEffect(() => {
     fetchUsers();
   }, [filterRole]);
+
+  useEffect(() => {
+    fetchFactories();
+  }, []);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -57,14 +64,18 @@ export default function UsersTab() {
       }
 
       const payload = await response.json();
-      const updatedRole = payload?.data?.role ?? newRole;
+      const updatedUser = payload?.data as Profile | undefined;
+      const updatedRole = updatedUser?.role ?? newRole;
+      const updatedFactoryId = updatedUser?.factory_id ?? null;
 
       setUsers((prev) => {
         if (filterRole !== 'all' && updatedRole !== filterRole) {
           return prev.filter((user) => user.id !== userId);
         }
         return prev.map((user) =>
-          user.id === userId ? { ...user, role: updatedRole } : user
+          user.id === userId
+            ? { ...user, role: updatedRole, factory_id: updatedFactoryId }
+            : user
         );
       });
     } catch (error) {
@@ -72,6 +83,58 @@ export default function UsersTab() {
       setError(error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.');
     } finally {
       setUpdatingUserId(null);
+    }
+  };
+
+  const updateUserFactory = async (userId: string, factoryId: string | null) => {
+    setUpdatingFactoryId(userId);
+    setError(null);
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, factoryId }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '공장 배정에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const updatedUser = payload?.data as Profile | undefined;
+      const updatedFactoryId = updatedUser?.factory_id ?? factoryId;
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId ? { ...user, factory_id: updatedFactoryId } : user
+        )
+      );
+    } catch (error) {
+      console.error('Error updating factory assignment:', error);
+      setError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
+    } finally {
+      setUpdatingFactoryId(null);
+    }
+  };
+
+  const fetchFactories = async () => {
+    setLoadingFactories(true);
+    try {
+      const response = await fetch('/api/admin/factories', { method: 'GET' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setFactories(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching factories:', error);
+      setFactories([]);
+    } finally {
+      setLoadingFactories(false);
     }
   };
 
@@ -86,6 +149,12 @@ export default function UsersTab() {
     if (role === 'factory') return '공장';
     return '일반 사용자';
   };
+
+  const factoryMap = useMemo(() => {
+    const map = new Map<string, Factory>();
+    factories.forEach((factory) => map.set(factory.id, factory));
+    return map;
+  }, [factories]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ko-KR', {
@@ -166,6 +235,9 @@ export default function UsersTab() {
                   권한
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  공장
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   가입일
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -200,9 +272,42 @@ export default function UsersTab() {
                       )}`}
                     >
                       {user.role === 'admin' && <Shield className="w-3 h-3" />}
-                      {user.role === 'factory' && <Factory className="w-3 h-3" />}
+                      {user.role === 'factory' && <FactoryIcon className="w-3 h-3" />}
                       {getRoleLabel(user.role)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {user.role === 'factory' ? (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={user.factory_id || ''}
+                          onChange={(event) =>
+                            updateUserFactory(user.id, event.target.value || null)
+                          }
+                          disabled={loadingFactories || updatingFactoryId === user.id}
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 disabled:opacity-50"
+                        >
+                          <option value="">공장 선택</option>
+                          {factories.map((factory) => (
+                            <option key={factory.id} value={factory.id}>
+                              {factory.name}
+                            </option>
+                          ))}
+                        </select>
+                        {updatingFactoryId === user.id && (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                            처리중...
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-500">
+                        {user.factory_id && factoryMap.get(user.factory_id)?.name
+                          ? factoryMap.get(user.factory_id)?.name
+                          : '-'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-sm text-gray-900">

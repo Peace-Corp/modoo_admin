@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Product } from '@/types/types';
-import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 
 type SectionKey = 'reviews' | 'examples' | 'inquiries';
 
@@ -130,6 +130,7 @@ export default function ContentManagementTab() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchReviews();
@@ -917,114 +918,137 @@ export default function ContentManagementTab() {
                     )
                   )
                 );
+                const isExpanded = expandedInquiryId === inquiry.id;
+                const detailsId = `inquiry-details-${inquiry.id}`;
 
                 return (
-                  <div key={inquiry.id} className="bg-white rounded-lg shadow-sm p-5 space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div key={inquiry.id} className="bg-white rounded-lg shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedInquiryId((prev) => (prev === inquiry.id ? null : inquiry.id))
+                      }
+                      aria-expanded={isExpanded}
+                      aria-controls={detailsId}
+                      className="w-full px-5 py-4 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
+                    >
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{inquiry.title}</h3>
+                        <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
                         <p className="text-xs text-gray-500 mt-1">{formatDate(inquiry.created_at)}</p>
                       </div>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
-                          inquiry.status
-                        )}`}
-                      >
-                        {getStatusLabel(inquiry.status)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-gray-700">문의 내용</p>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{inquiry.content}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-gray-700">관련 제품</p>
-                      {productNames.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {productNames.map((name) => (
-                            <span
-                              key={name}
-                              className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">연결된 제품이 없습니다.</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <label className="text-sm text-gray-700">상태 변경</label>
-                      <select
-                        value={inquiry.status}
-                        onChange={(event) =>
-                          handleStatusChange(inquiry.id, event.target.value as InquiryStatus)
-                        }
-                        disabled={updatingStatusId === inquiry.id}
-                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white disabled:opacity-50"
-                      >
-                        <option value="pending">대기중</option>
-                        <option value="ongoing">진행중</option>
-                        <option value="completed">완료</option>
-                      </select>
-                      {updatingStatusId === inquiry.id && (
-                        <span className="text-xs text-gray-500">업데이트 중...</span>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-gray-700">답변</p>
-                      {inquiry.inquiry_replies && inquiry.inquiry_replies.length > 0 ? (
-                        <div className="space-y-3">
-                          {inquiry.inquiry_replies.map((reply) => (
-                            <div key={reply.id} className="border-l-2 border-blue-200 pl-3">
-                              <div className="flex items-center justify-between text-xs text-gray-500">
-                                <span>
-                                  관리자 {reply.admin_id ? reply.admin_id.slice(0, 8) : ''}
-                                </span>
-                                <span>{formatDate(reply.created_at)}</span>
-                              </div>
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                {reply.content}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">등록된 답변이 없습니다.</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <textarea
-                        placeholder="답변을 입력하세요."
-                        value={replyDrafts[inquiry.id] || ''}
-                        onChange={(event) =>
-                          setReplyDrafts((prev) => ({
-                            ...prev,
-                            [inquiry.id]: event.target.value,
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                        rows={3}
-                      />
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => handleReplySubmit(inquiry.id)}
-                          disabled={
-                            submittingReplyId === inquiry.id ||
-                            !(replyDrafts[inquiry.id] || '').trim()
-                          }
-                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
+                            inquiry.status
+                          )}`}
                         >
-                          {submittingReplyId === inquiry.id ? '전송 중...' : '답변 전송'}
-                        </button>
+                          {getStatusLabel(inquiry.status)}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        )}
                       </div>
-                    </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div id={detailsId} className="px-5 pb-5 space-y-4">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">문의 내용</p>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            {inquiry.content}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">관련 제품</p>
+                          {productNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {productNames.map((name) => (
+                                <span
+                                  key={name}
+                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
+                                >
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">연결된 제품이 없습니다.</p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm text-gray-700">상태 변경</label>
+                          <select
+                            value={inquiry.status}
+                            onChange={(event) =>
+                              handleStatusChange(inquiry.id, event.target.value as InquiryStatus)
+                            }
+                            disabled={updatingStatusId === inquiry.id}
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white disabled:opacity-50"
+                          >
+                            <option value="pending">대기중</option>
+                            <option value="ongoing">진행중</option>
+                            <option value="completed">완료</option>
+                          </select>
+                          {updatingStatusId === inquiry.id && (
+                            <span className="text-xs text-gray-500">업데이트 중...</span>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-gray-700">답변</p>
+                          {inquiry.inquiry_replies && inquiry.inquiry_replies.length > 0 ? (
+                            <div className="space-y-3">
+                              {inquiry.inquiry_replies.map((reply) => (
+                                <div key={reply.id} className="border-l-2 border-blue-200 pl-3">
+                                  <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <span>
+                                      관리자 {reply.admin_id ? reply.admin_id.slice(0, 8) : ''}
+                                    </span>
+                                    <span>{formatDate(reply.created_at)}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                    {reply.content}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">등록된 답변이 없습니다.</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <textarea
+                            placeholder="답변을 입력하세요."
+                            value={replyDrafts[inquiry.id] || ''}
+                            onChange={(event) =>
+                              setReplyDrafts((prev) => ({
+                                ...prev,
+                                [inquiry.id]: event.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            rows={3}
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleReplySubmit(inquiry.id)}
+                              disabled={
+                                submittingReplyId === inquiry.id ||
+                                !(replyDrafts[inquiry.id] || '').trim()
+                              }
+                              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                              {submittingReplyId === inquiry.id ? '전송 중...' : '답변 전송'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

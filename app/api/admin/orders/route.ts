@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, factory_id')
       .eq('id', user.id)
       .single();
 
@@ -39,7 +39,10 @@ export async function GET(request: Request) {
     let query = adminClient.from('orders').select('*').order('created_at', { ascending: false });
 
     if (profile.role === 'factory') {
-      query = query.eq('assigned_factory_id', user.id);
+      if (!profile.factory_id) {
+        return NextResponse.json({ data: [] });
+      }
+      query = query.eq('assigned_factory_id', profile.factory_id);
     }
 
     if (status !== 'all') {
@@ -77,7 +80,7 @@ export async function PATCH(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, factory_id')
       .eq('id', user.id)
       .single();
 
@@ -102,6 +105,17 @@ export async function PATCH(request: Request) {
     }
 
     const adminClient = createAdminClient();
+    if (factoryId !== null) {
+      const { data: factory, error: factoryError } = await adminClient
+        .from('factories')
+        .select('id')
+        .eq('id', factoryId)
+        .single();
+
+      if (factoryError || !factory) {
+        return NextResponse.json({ error: '공장을 찾을 수 없습니다.' }, { status: 400 });
+      }
+    }
     const { data, error } = await adminClient
       .from('orders')
       .update({

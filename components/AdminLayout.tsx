@@ -61,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('role, email, phone_number')
+          .select('role, email, phone_number, factory_id, factory:factories(id, name)')
           .eq('id', supabaseUser.id)
           .single();
 
@@ -85,6 +85,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           avatar_url: supabaseUser.user_metadata?.avatar_url,
           phone: supabaseUser.phone || profile.phone_number,
           role: profile.role,
+          factory_id: profile.factory_id ?? null,
+          factory_name: profile.factory?.name ?? null,
         });
       } catch (error) {
         console.error('Error checking admin auth:', error);
