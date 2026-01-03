@@ -28,6 +28,14 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
 
   const currentSide = sides[currentSideIndex];
 
+  const resolveBaseImageUrl = (side: ProductSide) => {
+    if (side.imageUrl) return side.imageUrl;
+    const layers = Array.isArray(side.layers) ? side.layers : [];
+    if (layers.length === 0) return '';
+    const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+    return sortedLayers.find((layer) => layer.imageUrl)?.imageUrl || '';
+  };
+
   // Helper function to calculate real-life dimensions from pixel dimensions
   const calculateRealLifeDimensions = (printArea: { width: number; height: number }) => {
     const productWidthMm = currentSide.realLifeDimensions?.productWidthMm || 0;
@@ -60,9 +68,16 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const baseImageUrl = resolveBaseImageUrl(currentSide);
+    if (!baseImageUrl) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setImageLoaded(false);
+      return;
+    }
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = currentSide.imageUrl;
+    img.src = baseImageUrl;
 
     img.onload = () => {
       // Set canvas size based on container
@@ -133,6 +148,11 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
       });
 
       setImageLoaded(true);
+    };
+
+    img.onerror = () => {
+      console.error('Failed to load product image:', baseImageUrl);
+      setImageLoaded(false);
     };
   };
 

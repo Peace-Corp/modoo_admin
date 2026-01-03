@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Product, ProductSide, SizeOption } from '@/types/types';
+import { useState, useRef } from 'react';
+import { Product, ProductLayer, ProductSide, SizeOption } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
@@ -10,6 +10,55 @@ interface ProductEditorProps {
   onSave: (product: Product) => void;
   onCancel: () => void;
 }
+
+const buildPrintArea = (printArea?: ProductSide['printArea']) => ({
+  x: Math.max(0, Math.round(printArea?.x ?? 0)),
+  y: Math.max(0, Math.round(printArea?.y ?? 0)),
+  width: Math.max(0, Math.round(printArea?.width ?? 200)),
+  height: Math.max(0, Math.round(printArea?.height ?? 200)),
+});
+
+const buildRealLifeDimensions = (dimensions?: ProductSide['realLifeDimensions']) => ({
+  productWidthMm: Math.max(0, Math.round(dimensions?.productWidthMm ?? 0)),
+  printAreaWidthMm: Math.max(0, Math.round(dimensions?.printAreaWidthMm ?? 0)),
+  printAreaHeightMm: Math.max(0, Math.round(dimensions?.printAreaHeightMm ?? 0)),
+});
+
+const normalizeLayer = (layer: Partial<ProductLayer>, index: number): ProductLayer => ({
+  id: layer.id || `layer-${Date.now()}-${index}`,
+  name: layer.name || `Layer ${index + 1}`,
+  imageUrl: typeof layer.imageUrl === 'string' ? layer.imageUrl : '',
+  colorOptions: Array.isArray(layer.colorOptions)
+    ? layer.colorOptions.map((option) => ({
+        hex: typeof option?.hex === 'string' ? option.hex : '#FFFFFF',
+        colorCode: typeof option?.colorCode === 'string' ? option.colorCode : '',
+      }))
+    : [],
+  zIndex: typeof layer.zIndex === 'number' ? layer.zIndex : index,
+});
+
+const normalizeSide = (side: Partial<ProductSide>, index: number): ProductSide => ({
+  id: side.id || `side-${Date.now()}-${index}`,
+  name: side.name || `면 ${index + 1}`,
+  imageUrl: typeof side.imageUrl === 'string' ? side.imageUrl : '',
+  printArea: buildPrintArea(side.printArea),
+  layers: Array.isArray(side.layers) ? side.layers.map((layer, layerIndex) => normalizeLayer(layer, layerIndex)) : [],
+  realLifeDimensions: buildRealLifeDimensions(side.realLifeDimensions),
+  zoomScale: typeof side.zoomScale === 'number' ? side.zoomScale : 1.0,
+});
+
+const normalizeSides = (rawSides: ProductSide[] | null | undefined) =>
+  (rawSides || []).map((side, index) => normalizeSide(side, index));
+
+const isLayeredSide = (side: ProductSide) => Array.isArray(side.layers) && side.layers.length > 0;
+
+const getSidePreviewUrl = (side: ProductSide) => {
+  if (isLayeredSide(side)) {
+    const sortedLayers = [...side.layers].sort((a, b) => a.zIndex - b.zIndex);
+    return sortedLayers.find((layer) => layer.imageUrl)?.imageUrl || '';
+  }
+  return side.imageUrl;
+};
 
 export default function ProductEditor({ product, onSave, onCancel }: ProductEditorProps) {
   const isNewProduct = !product;
@@ -21,7 +70,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
 
   // Product sides
-  const [sides, setSides] = useState<ProductSide[]>(product?.configuration || []);
+  const [sides, setSides] = useState<ProductSide[]>(() => normalizeSides(product?.configuration || []));
   const [currentSideIndex, setCurrentSideIndex] = useState(0);
 
   // Size options
@@ -30,11 +79,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // UI state
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [currentSideEditing, setCurrentSideEditing] = useState<number | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<{ sideIndex: number; layerIndex?: number } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentSide = sides[currentSideIndex];
+  const isCurrentSideLayered = currentSide ? isLayeredSide(currentSide) : false;
+  const currentSideLayers = currentSide?.layers ?? [];
 
   // Add new side
   const handleAddSide = () => {
@@ -42,17 +93,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       id: `side-${Date.now()}`,
       name: `면 ${sides.length + 1}`,
       imageUrl: '',
-      printArea: {
-        x: 0,
-        y: 0,
-        width: 200,
-        height: 200,
-      },
-      realLifeDimensions: {
-        printAreaWidthMm: 0,
-        printAreaHeightMm: 0,
-        productWidthMm: 0,
-      },
+      printArea: buildPrintArea(),
+      layers: [],
+      realLifeDimensions: buildRealLifeDimensions(),
       zoomScale: 1.0,
     };
     setSides([...sides, newSide]);
@@ -81,6 +124,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     setSides(newSides);
   };
 
+  const updateRealLifeDimensions = (index: number, field: keyof NonNullable<ProductSide['realLifeDimensions']>, value: number) => {
+    const newSides = [...sides];
+    newSides[index] = {
+      ...newSides[index],
+      realLifeDimensions: {
+        ...buildRealLifeDimensions(newSides[index].realLifeDimensions),
+        [field]: Math.max(0, Math.round(value)),
+      },
+    };
+    setSides(newSides);
+  };
+
   // Update print area
   const updatePrintArea = (index: number, field: string, value: number) => {
     const newSides = [...sides];
@@ -94,8 +149,158 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     setSides(newSides);
   };
 
+  const setSideMode = (index: number, mode: 'single' | 'layered') => {
+    const newSides = [...sides];
+    const currentSide = newSides[index];
+    if (mode === 'layered') {
+      newSides[index] = {
+        ...currentSide,
+        layers: currentSide.layers && currentSide.layers.length > 0
+          ? currentSide.layers
+          : [
+              {
+                id: `layer-${Date.now()}`,
+                name: 'Layer 1',
+                imageUrl: '',
+                colorOptions: [],
+                zIndex: 0,
+              },
+            ],
+        imageUrl: currentSide.imageUrl || '',
+      };
+    } else {
+      newSides[index] = {
+        ...currentSide,
+        layers: [],
+      };
+    }
+    setSides(newSides);
+  };
+
+  const addLayer = (sideIndex: number) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    layers.push({
+      id: `layer-${Date.now()}`,
+      name: `Layer ${layers.length + 1}`,
+      imageUrl: '',
+      colorOptions: [],
+      zIndex: layers.length,
+    });
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
+  const removeLayer = (sideIndex: number, layerIndex: number) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    if (layers.length <= 1) {
+      alert('최소 1개의 레이어가 필요합니다.');
+      return;
+    }
+    layers.splice(layerIndex, 1);
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
+  const updateLayerField = (
+    sideIndex: number,
+    layerIndex: number,
+    field: keyof ProductLayer,
+    value: string | number
+  ) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    if (!layers[layerIndex]) return;
+    layers[layerIndex] = {
+      ...layers[layerIndex],
+      [field]: value,
+    };
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
+  const addLayerColorOption = (sideIndex: number, layerIndex: number) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    const layer = layers[layerIndex];
+    if (!layer) return;
+    const colorOptions = Array.isArray(layer.colorOptions) ? [...layer.colorOptions] : [];
+    colorOptions.push({ hex: '#FFFFFF', colorCode: '' });
+    layers[layerIndex] = {
+      ...layer,
+      colorOptions,
+    };
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
+  const updateLayerColorOption = (
+    sideIndex: number,
+    layerIndex: number,
+    optionIndex: number,
+    field: 'hex' | 'colorCode',
+    value: string
+  ) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    const layer = layers[layerIndex];
+    if (!layer) return;
+    const colorOptions = Array.isArray(layer.colorOptions) ? [...layer.colorOptions] : [];
+    if (!colorOptions[optionIndex]) return;
+    colorOptions[optionIndex] = {
+      ...colorOptions[optionIndex],
+      [field]: value,
+    };
+    layers[layerIndex] = {
+      ...layer,
+      colorOptions,
+    };
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
+  const removeLayerColorOption = (sideIndex: number, layerIndex: number, optionIndex: number) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    const layer = layers[layerIndex];
+    if (!layer) return;
+    const colorOptions = Array.isArray(layer.colorOptions) ? [...layer.colorOptions] : [];
+    colorOptions.splice(optionIndex, 1);
+    layers[layerIndex] = {
+      ...layer,
+      colorOptions,
+    };
+    newSides[sideIndex] = {
+      ...side,
+      layers,
+    };
+    setSides(newSides);
+  };
+
   // Handle image upload
-  const handleImageUpload = async (index: number, file: File) => {
+  const handleImageUpload = async (target: { sideIndex: number; layerIndex?: number }, file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('이미지 파일만 업로드 가능합니다.');
       return;
@@ -128,8 +333,11 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         .from('products')
         .getPublicUrl(filePath);
 
-      // Update side with new image URL
-      updateSideField(index, 'imageUrl', publicUrl);
+      if (typeof target.layerIndex === 'number') {
+        updateLayerField(target.sideIndex, target.layerIndex, 'imageUrl', publicUrl);
+      } else {
+        updateSideField(target.sideIndex, 'imageUrl', publicUrl);
+      }
 
       alert('이미지가 업로드되었습니다.');
     } catch (error) {
@@ -141,16 +349,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   };
 
   // Trigger file input
-  const triggerFileInput = (index: number) => {
-    setCurrentSideEditing(index);
+  const triggerFileInput = (sideIndex: number, layerIndex?: number) => {
+    setUploadTarget({ sideIndex, layerIndex });
     fileInputRef.current?.click();
   };
 
   // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && currentSideEditing !== null) {
-      handleImageUpload(currentSideEditing, file);
+    if (file && uploadTarget) {
+      const target = uploadTarget;
+      setUploadTarget(null);
+      handleImageUpload(target, file);
     }
     e.target.value = ''; // Reset input
   };
@@ -158,7 +368,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // Add size option
   const handleAddSizeOption = () => {
     const newSize: SizeOption = {
-      id: `size-${Date.now()}`,
+      id: '',
       name: '',
       label: '',
     };
@@ -199,7 +409,24 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         alert(`면 ${i + 1}의 이름을 입력해주세요.`);
         return false;
       }
-      if (!sides[i].imageUrl.trim()) {
+      const hasLayers = isLayeredSide(sides[i]);
+      if (hasLayers) {
+        const layers = sides[i].layers || [];
+        if (layers.length === 0) {
+          alert(`면 ${i + 1}에 최소 1개의 레이어가 필요합니다.`);
+          return false;
+        }
+        for (let j = 0; j < layers.length; j++) {
+          if (!layers[j].name.trim()) {
+            alert(`면 ${i + 1}의 레이어 ${j + 1} 이름을 입력해주세요.`);
+            return false;
+          }
+          if (!layers[j].imageUrl.trim()) {
+            alert(`면 ${i + 1}의 레이어 ${j + 1} 이미지를 업로드해주세요.`);
+            return false;
+          }
+        }
+      } else if (!sides[i].imageUrl.trim()) {
         alert(`면 ${i + 1}의 이미지를 업로드해주세요.`);
         return false;
       }
@@ -217,12 +444,24 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     try {
       const supabase = createClient();
 
+      const configuration = sides.map((side) => {
+        const hasLayers = isLayeredSide(side);
+        return {
+          ...side,
+          imageUrl: hasLayers ? '' : side.imageUrl,
+          layers: hasLayers ? side.layers : [],
+          printArea: buildPrintArea(side.printArea),
+          realLifeDimensions: buildRealLifeDimensions(side.realLifeDimensions),
+          zoomScale: typeof side.zoomScale === 'number' ? side.zoomScale : 1.0,
+        };
+      });
+
       const productData = {
         title,
         base_price: basePrice,
         category: category || null,
         is_active: isActive,
-        configuration: sides,
+        configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
         updated_at: new Date().toISOString(),
       };
@@ -362,7 +601,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
             <div className="space-y-2">
               {sizeOptions.map((size, index) => (
-                <div key={size.id} className="flex gap-2">
+                <div key={`size-${index}`} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={size.id}
+                    onChange={(e) => updateSizeOption(index, 'id', e.target.value)}
+                    className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    placeholder="ID"
+                  />
                   <input
                     type="text"
                     value={size.name}
@@ -407,67 +653,83 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
 
             <div className="space-y-3">
-              {sides.map((side, index) => (
-                <div
-                  key={side.id}
-                  className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                    currentSideIndex === index
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => setCurrentSideIndex(index)}
-                >
-                  <div className="flex items-center gap-3">
-                    {side.imageUrl ? (
-                      <img
-                        src={side.imageUrl}
-                        alt={side.name}
-                        className="w-16 h-16 object-cover rounded border border-gray-200"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                        <ImageIcon className="w-6 h-6 text-gray-400" />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        value={side.name}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          updateSideField(index, 'name', e.target.value);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full px-2 py-1 text-sm font-medium border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                        placeholder="면 이름"
-                      />
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triggerFileInput(index);
-                          }}
-                          disabled={uploading}
-                          className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
-                        >
-                          <Upload className="w-3 h-3" />
-                          {side.imageUrl ? '변경' : '업로드'}
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveSide(index);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          삭제
-                        </button>
+              {sides.map((side, index) => {
+                const previewUrl = getSidePreviewUrl(side);
+                const layered = isLayeredSide(side);
+                const layerCount = side.layers?.length ?? 0;
+                return (
+                  <div
+                    key={`${side.id}-${index}`}
+                    className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                      currentSideIndex === index
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setCurrentSideIndex(index)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {previewUrl ? (
+                        <img
+                          src={previewUrl}
+                          alt={side.name}
+                          className="w-16 h-16 object-cover rounded border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                          <ImageIcon className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="text"
+                            value={side.name}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateSideField(index, 'name', e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full px-2 py-1 text-sm font-medium border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                            placeholder="면 이름"
+                          />
+                          <span
+                            className={`px-2 py-0.5 text-[10px] rounded-full ${
+                              layered ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {layered ? `레이어 ${layerCount}` : '단일'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          {!layered && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerFileInput(index);
+                              }}
+                              disabled={uploading}
+                              className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+                            >
+                              <Upload className="w-3 h-3" />
+                              {side.imageUrl ? '변경' : '업로드'}
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveSide(index);
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            삭제
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {sides.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
@@ -507,6 +769,57 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
+                </div>
+              </div>
+
+              {/* Side Settings */}
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">면 설정</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">면 ID</label>
+                    <input
+                      type="text"
+                      value={currentSide.id}
+                      onChange={(e) => updateSideField(currentSideIndex, 'id', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="예: front"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">렌더링 모드</label>
+                    <select
+                      value={isCurrentSideLayered ? 'layered' : 'single'}
+                      onChange={(e) => setSideMode(currentSideIndex, e.target.value as 'single' | 'layered')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="single">단일 이미지</option>
+                      <option value="layered">레이어</option>
+                    </select>
+                  </div>
+                  {!isCurrentSideLayered && (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">이미지 URL</label>
+                      <input
+                        type="text"
+                        value={currentSide.imageUrl}
+                        onChange={(e) => updateSideField(currentSideIndex, 'imageUrl', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="https://..."
+                      />
+                      <button
+                        onClick={() => triggerFileInput(currentSideIndex)}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" />
+                        이미지 업로드
+                      </button>
+                      <p className="text-xs text-gray-500">
+                        단일 이미지 제품의 색상은 product_colors 테이블에서 관리됩니다.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -553,6 +866,40 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 </div>
               </div>
 
+              {/* Real Life Dimensions */}
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">실제 치수 (mm)</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">제품 너비</label>
+                    <input
+                      type="number"
+                      value={currentSide.realLifeDimensions?.productWidthMm || 0}
+                      onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'productWidthMm', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">인쇄 영역 너비</label>
+                    <input
+                      type="number"
+                      value={currentSide.realLifeDimensions?.printAreaWidthMm || 0}
+                      onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaWidthMm', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">인쇄 영역 높이</label>
+                    <input
+                      type="number"
+                      value={currentSide.realLifeDimensions?.printAreaHeightMm || 0}
+                      onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaHeightMm', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Zoom Scale */}
               <div className="bg-white rounded-lg p-4 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">줌 배율</h3>
@@ -574,6 +921,126 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   </p>
                 </div>
               </div>
+
+              {/* Layer Configuration */}
+              {isCurrentSideLayered && (
+                <div className="bg-white rounded-lg p-4 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">레이어 설정</h3>
+                    <button
+                      onClick={() => addLayer(currentSideIndex)}
+                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="w-4 h-4" />
+                      레이어 추가
+                    </button>
+                  </div>
+
+                  {currentSideLayers.map((layer, layerIndex) => (
+                    <div key={`${layer.id}-${layerIndex}`} className="border border-gray-200 rounded-lg p-3 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">레이어 ID</label>
+                              <input
+                                type="text"
+                                value={layer.id}
+                                onChange={(e) => updateLayerField(currentSideIndex, layerIndex, 'id', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">이름</label>
+                              <input
+                                type="text"
+                                value={layer.name}
+                                onChange={(e) => updateLayerField(currentSideIndex, layerIndex, 'name', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Z-Index</label>
+                              <input
+                                type="number"
+                                value={layer.zIndex}
+                                onChange={(e) => updateLayerField(currentSideIndex, layerIndex, 'zIndex', parseInt(e.target.value) || 0)}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <button
+                                onClick={() => triggerFileInput(currentSideIndex, layerIndex)}
+                                disabled={uploading}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+                              >
+                                <Upload className="w-3 h-3" />
+                                이미지 업로드
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">이미지 URL</label>
+                            <input
+                              type="text"
+                              value={layer.imageUrl}
+                              onChange={(e) => updateLayerField(currentSideIndex, layerIndex, 'imageUrl', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removeLayer(currentSideIndex, layerIndex)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-gray-600">컬러 옵션</p>
+                          <button
+                            onClick={() => addLayerColorOption(currentSideIndex, layerIndex)}
+                            className="text-xs text-blue-600 hover:text-blue-700"
+                          >
+                            옵션 추가
+                          </button>
+                        </div>
+                        {layer.colorOptions.length === 0 && (
+                          <p className="text-xs text-gray-400">등록된 컬러 옵션이 없습니다.</p>
+                        )}
+                        {layer.colorOptions.map((option, optionIndex) => (
+                          <div key={`${layer.id}-color-${optionIndex}`} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={option.hex}
+                              onChange={(e) => updateLayerColorOption(currentSideIndex, layerIndex, optionIndex, 'hex', e.target.value)}
+                              className="w-20 px-2 py-1 text-xs border border-gray-300 rounded"
+                              placeholder="#FFFFFF"
+                            />
+                            <input
+                              type="text"
+                              value={option.colorCode}
+                              onChange={(e) => updateLayerColorOption(currentSideIndex, layerIndex, optionIndex, 'colorCode', e.target.value)}
+                              className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded"
+                              placeholder="WHT-001"
+                            />
+                            <button
+                              onClick={() => removeLayerColorOption(currentSideIndex, layerIndex, optionIndex)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           ) : (
             <div className="bg-white rounded-lg p-8 text-center">

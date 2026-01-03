@@ -3,16 +3,34 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Settings, Users, BarChart3, Menu, X } from 'lucide-react';
+import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useAuthStore } from '@/store/useAuthStore';
 
-const navItems = [
-  { href: '/products', label: '제품 관리', icon: Package },
-  { href: '/orders', label: '주문 관리', icon: BarChart3 },
-  { href: '/users', label: '사용자 관리', icon: Users },
-  { href: '/settings', label: '설정', icon: Settings },
+type AdminRole = 'admin' | 'factory';
+
+const navItems: Array<{
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles: AdminRole[];
+}> = [
+  { href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
+  { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
+  { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
+  { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin'] },
+  { href: '/settings', label: '설정', icon: Settings, roles: ['admin'] },
 ];
+
+const allowedRoutesByRole: Record<AdminRole, string[]> = {
+  admin: ['/products', '/orders', '/cobuy', '/users', '/settings'],
+  factory: ['/orders'],
+};
+
+const defaultRouteByRole: Record<AdminRole, string> = {
+  admin: '/products',
+  factory: '/orders',
+};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -53,8 +71,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
 
         if (profile.role !== 'admin') {
-          router.push('/login');
-          return;
+          if (profile.role !== 'factory') {
+            router.push('/login');
+            return;
+          }
         }
 
         setUser({
@@ -87,11 +107,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setSidebarOpen(false);
   }, [pathname]);
 
+  const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
+  const hasAccess = role === 'admin' || role === 'factory';
+
+  useEffect(() => {
+    if (!role || isLoginRoute) return;
+
+    const allowedRoutes = allowedRoutesByRole[role] || [];
+    const isAllowed = allowedRoutes.some(
+      (route) => pathname === route || (pathname ?? '').startsWith(`${route}/`)
+    );
+
+    if (!isAllowed) {
+      router.push(defaultRouteByRole[role]);
+    }
+  }, [pathname, role, isLoginRoute, router]);
+
   if (isLoginRoute) {
     return <>{children}</>;
   }
 
-  if (isCheckingAuth || !isAuthenticated || user?.role !== 'admin') {
+  if (isCheckingAuth || !isAuthenticated || !hasAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -150,7 +186,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           `}
         >
           <nav className="p-4 space-y-1">
-            {navItems.map((item) => (
+            {navItems
+              .filter((item) => !role || item.roles.includes(role))
+              .map((item) => (
               <SidebarLink
                 key={item.href}
                 href={item.href}
@@ -163,9 +201,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </aside>
 
-        <main className="flex-1 p-6 lg:ml-0">
-          <div className="max-w-7xl mx-auto">{children}</div>
-        </main>
+        <main className="flex-1 p-6 lg:ml-0">{children}</main>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
     }
 
@@ -37,6 +37,10 @@ export async function GET(request: Request) {
 
     const adminClient = createAdminClient();
     let query = adminClient.from('orders').select('*').order('created_at', { ascending: false });
+
+    if (profile.role === 'factory') {
+      query = query.eq('assigned_factory_id', user.id);
+    }
 
     if (status !== 'all') {
       query = query.eq('order_status', status);
@@ -51,6 +55,70 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: data || [] });
   } catch (error) {
     const message = error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 401 });
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 403 });
+    }
+
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    }
+
+    const payload = await request.json().catch(() => null);
+    const orderId = payload?.orderId;
+    const factoryId = payload?.factoryId ?? null;
+
+    if (!orderId || typeof orderId !== 'string') {
+      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    if (factoryId !== null && typeof factoryId !== 'string') {
+      return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('orders')
+      .update({
+        assigned_factory_id: factoryId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '공장 배정에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
