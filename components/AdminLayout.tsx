@@ -78,6 +78,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }
         }
 
+        const factoryRecord = Array.isArray(profile.factory)
+          ? profile.factory[0]
+          : profile.factory;
+
         setUser({
           id: supabaseUser.id,
           email: supabaseUser.email || profile.email || '',
@@ -86,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           phone: supabaseUser.phone || profile.phone_number,
           role: profile.role,
           factory_id: profile.factory_id ?? null,
-          factory_name: profile.factory?.name ?? null,
+          factory_name: factoryRecord?.name ?? null,
         });
       } catch (error) {
         console.error('Error checking admin auth:', error);

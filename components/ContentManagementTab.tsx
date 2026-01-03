@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Product } from '@/types/types';
 import { ChevronDown, ChevronUp, Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 
 type SectionKey = 'reviews' | 'examples' | 'inquiries';
@@ -111,7 +110,7 @@ export default function ContentManagementTab() {
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [productionExamples, setProductionExamples] = useState<ProductionExampleRecord[]>([]);
   const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState<Record<SectionKey, boolean>>({
     reviews: true,
     examples: true,
