@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
-import { OrderItem, Product, ProductSide, ObjectDimensions } from '@/types/types';
+import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState } from '@/types/types';
 import { ChevronLeft, Palette, Ruler, Grid3x3 } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
@@ -102,7 +102,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         side.layers?.some((layer) => Array.isArray(layer.colorOptions) && layer.colorOptions.length > 0)
       );
       if (!hasLayerColorOptions) {
-        const colorId = orderItem.item_options?.color_id;
+        const colorId = orderItem.item_options?.variants?.[0]?.color_id ?? orderItem.item_options?.color_id;
         const appliedColorHex = getAppliedProductColorHex();
         if (appliedColorHex || colorId) {
           fetchProductColors(orderItem.product_id, colorId, appliedColorHex);
@@ -149,6 +149,31 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     const objects = canvas.getObjects();
     const dimensions: ObjectDimensions[] = [];
 
+    const canvasStateRaw = orderItem.canvas_state?.[sideId];
+    const canvasState = parseCanvasState(canvasStateRaw);
+    const stateObjects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
+    const stateDimensionsById = new Map<string, { widthMm?: number; heightMm?: number }>();
+
+    stateObjects.forEach((stateObj) => {
+      if (!stateObj || typeof stateObj !== 'object') return;
+      const typedObj = stateObj as {
+        objectId?: string;
+        widthMm?: number;
+        heightMm?: number;
+        data?: { objectId?: string; widthMm?: number; heightMm?: number };
+      };
+      const objectId = typedObj.data?.objectId || typedObj.objectId;
+      const widthMm = typeof typedObj.widthMm === 'number'
+        ? typedObj.widthMm
+        : typedObj.data?.widthMm;
+      const heightMm = typeof typedObj.heightMm === 'number'
+        ? typedObj.heightMm
+        : typedObj.data?.heightMm;
+      if (objectId && typeof widthMm === 'number' && typeof heightMm === 'number') {
+        stateDimensionsById.set(objectId, { widthMm, heightMm });
+      }
+    });
+
     const realDimensions = currentSide.realLifeDimensions;
     const printArea = currentSide.printArea;
 
@@ -159,10 +184,13 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
     objects.forEach((obj) => {
       // Skip the background image
-      const objData = obj as { data?: { id?: string } };
+      const objData = obj as { data?: { id?: string; objectId?: string } };
       if (objData.data?.id === 'background-product-image') {
         return;
       }
+
+      const objectId = objData.data?.objectId;
+      const stateDimension = objectId ? stateDimensionsById.get(objectId) : undefined;
 
       // Calculate dimensions
       const fill = obj.fill;
@@ -241,13 +269,28 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
       const objWidthOriginal = objWidthOnCanvas / canvasScale;
       const objHeightOriginal = objHeightOnCanvas / canvasScale;
 
+      const objectWidthMm = typeof (obj as { widthMm?: number }).widthMm === 'number'
+        ? (obj as { widthMm: number }).widthMm
+        : stateDimension?.widthMm;
+      const objectHeightMm = typeof (obj as { heightMm?: number }).heightMm === 'number'
+        ? (obj as { heightMm: number }).heightMm
+        : stateDimension?.heightMm;
+
+      const resolvedWidthMm = typeof objectWidthMm === 'number'
+        ? objectWidthMm
+        : objWidthOriginal * pixelToMmRatio;
+      const resolvedHeightMm = typeof objectHeightMm === 'number'
+        ? objectHeightMm
+        : objHeightOriginal * pixelToMmRatio;
+
       let objectType = obj.type || 'Object';
       objectType = objectType.charAt(0).toUpperCase() + objectType.slice(1);
 
       const dimension: ObjectDimensions = {
+        objectId,
         objectType,
-        widthMm: objWidthOriginal * pixelToMmRatio,
-        heightMm: objHeightOriginal * pixelToMmRatio,
+        widthMm: resolvedWidthMm,
+        heightMm: resolvedHeightMm,
         fill: fill && typeof fill === 'string' && fill !== 'transparent' ? fill : undefined,
         colors: colors.size > 0 ? Array.from(colors) : undefined,
         preview: preview || undefined,
@@ -278,7 +321,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     });
 
     setDimensionsBySide(prev => ({ ...prev, [sideId]: dimensions }));
-  }, [product]);
+  }, [orderItem.canvas_state, product]);
 
   const objectDimensions = useMemo(() => {
     return Object.values(dimensionsBySide).flat();
@@ -424,7 +467,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
       if (appliedColorHex) {
         return [{
-          name: orderItem.item_options?.color_name || 'Selected Color',
+          name: orderItem.item_options?.variants?.[0]?.color_name || orderItem.item_options?.color_name || 'Selected Color',
           hex: appliedColorHex,
           colorCode: undefined,
           label: undefined
@@ -520,7 +563,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {product.configuration.map((side) => {
-              const canvasState = orderItem.canvas_state[side.id];
+              const canvasState = orderItem.canvas_state[side.id] as CanvasState | string | null;
               if (!canvasState) return null;
 
               return (

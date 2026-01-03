@@ -115,11 +115,15 @@ export default function OrderDetail({ order, onBack, onUpdate }: OrderDetailProp
                       <h4 className="font-medium text-black">{item.product_title}</h4>
                       {item.item_options && (
                         <div className="text-sm  mt-1">
-                          {item.item_options.color_name && (
-                            <span>색상: {item.item_options.color_name}</span>
+                          {(item.item_options.color_name || item.item_options.variants?.[0]?.color_name) && (
+                            <span>
+                              색상: {item.item_options.color_name || item.item_options.variants?.[0]?.color_name}
+                            </span>
                           )}
-                          {item.item_options.size_name && (
-                            <span className="ml-3">사이즈: {item.item_options.size_name}</span>
+                          {(item.item_options.size_name || item.item_options.variants?.[0]?.size_name) && (
+                            <span className="ml-3">
+                              사이즈: {item.item_options.size_name || item.item_options.variants?.[0]?.size_name}
+                            </span>
                           )}
                         </div>
                       )}

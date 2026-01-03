@@ -147,6 +147,7 @@ export interface ExtractedColor {
 }
 
 export interface ObjectDimensions {
+  objectId?: string;
   objectType: string;
   widthMm: number;
   heightMm: number;
