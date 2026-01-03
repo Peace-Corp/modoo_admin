@@ -182,6 +182,58 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface Review {
+  id: string;
+  product_id: string;
+  user_id: string | null;
+  rating: number;
+  title: string;
+  content: string;
+  author_name: string;
+  is_verified_purchase: boolean | null;
+  helpful_count: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionExample {
+  id: string;
+  product_id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  sort_order: number;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Inquiry {
+  id: string;
+  user_id: string | null;
+  title: string;
+  content: string;
+  status: 'pending' | 'ongoing' | 'completed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InquiryProduct {
+  id: string;
+  inquiry_id: string;
+  product_id: string;
+  created_at: string;
+}
+
+export interface InquiryReply {
+  id: string;
+  inquiry_id: string;
+  admin_id: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized';
 
 export interface CoBuyCustomField {

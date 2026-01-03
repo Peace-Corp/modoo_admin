@@ -1,0 +1,1037 @@
+'use client';
+
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { createClient } from '@/lib/supabase-client';
+import { uploadFileToStorage } from '@/lib/supabase-storage';
+import { Product } from '@/types/types';
+import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+
+type SectionKey = 'reviews' | 'examples' | 'inquiries';
+
+type ProductSummary = {
+  id: string;
+  title: string;
+};
+
+type ReviewRecord = {
+  id: string;
+  product_id: string;
+  rating: number;
+  title: string;
+  content: string;
+  author_name: string;
+  is_verified_purchase: boolean | null;
+  helpful_count: number | null;
+  created_at: string;
+  product?: ProductSummary | null;
+};
+
+type ProductionExampleRecord = {
+  id: string;
+  product_id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  sort_order: number;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
+  product?: ProductSummary | null;
+};
+
+type InquiryStatus = 'pending' | 'ongoing' | 'completed';
+
+type InquiryProductRecord = {
+  id: string;
+  product_id: string;
+  product?: ProductSummary | null;
+};
+
+type InquiryReplyRecord = {
+  id: string;
+  content: string;
+  admin_id: string | null;
+  created_at: string;
+};
+
+type InquiryRecord = {
+  id: string;
+  user_id: string | null;
+  title: string;
+  content: string;
+  status: InquiryStatus;
+  created_at: string;
+  updated_at: string;
+  inquiry_products?: InquiryProductRecord[] | null;
+  inquiry_replies?: InquiryReplyRecord[] | null;
+};
+
+type ExampleFormState = {
+  id?: string | null;
+  product_id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+const emptyExampleForm: ExampleFormState = {
+  product_id: '',
+  title: '',
+  description: '',
+  image_url: '',
+  sort_order: 0,
+  is_active: true,
+};
+
+const EXAMPLE_IMAGE_BUCKET = 'products';
+const EXAMPLE_IMAGE_FOLDER = 'production-examples';
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const sortExamples = (examples: ProductionExampleRecord[]) => {
+  return [...examples].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export default function ContentManagementTab() {
+  const [activeSection, setActiveSection] = useState<SectionKey>('reviews');
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const [productionExamples, setProductionExamples] = useState<ProductionExampleRecord[]>([]);
+  const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<Record<SectionKey, boolean>>({
+    reviews: true,
+    examples: true,
+    inquiries: true,
+  });
+  const [errors, setErrors] = useState<Record<SectionKey, string | null>>({
+    reviews: null,
+    examples: null,
+    inquiries: null,
+  });
+  const [exampleForm, setExampleForm] = useState<ExampleFormState>(emptyExampleForm);
+  const [exampleFormOpen, setExampleFormOpen] = useState(false);
+  const [exampleFormError, setExampleFormError] = useState<string | null>(null);
+  const [savingExample, setSavingExample] = useState(false);
+  const [uploadingExampleImage, setUploadingExampleImage] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchReviews();
+    fetchProductionExamples();
+    fetchInquiries();
+    fetchProducts();
+  }, []);
+
+  const fetchReviews = async () => {
+    setLoading((prev) => ({ ...prev, reviews: true }));
+    setErrors((prev) => ({ ...prev, reviews: null }));
+    try {
+      const response = await fetch('/api/admin/reviews');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '리뷰 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setReviews(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      setReviews([]);
+      setErrors((prev) => ({
+        ...prev,
+        reviews: error instanceof Error ? error.message : '리뷰 데이터를 불러오지 못했습니다.',
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, reviews: false }));
+    }
+  };
+
+  const fetchProductionExamples = async () => {
+    setLoading((prev) => ({ ...prev, examples: true }));
+    setErrors((prev) => ({ ...prev, examples: null }));
+    try {
+      const response = await fetch('/api/admin/production-examples');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제작 사례 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setProductionExamples(sortExamples(payload?.data || []));
+    } catch (error) {
+      console.error('Error fetching production examples:', error);
+      setProductionExamples([]);
+      setErrors((prev) => ({
+        ...prev,
+        examples: error instanceof Error ? error.message : '제작 사례 데이터를 불러오지 못했습니다.',
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, examples: false }));
+    }
+  };
+
+  const fetchInquiries = async () => {
+    setLoading((prev) => ({ ...prev, inquiries: true }));
+    setErrors((prev) => ({ ...prev, inquiries: null }));
+    try {
+      const response = await fetch('/api/admin/inquiries');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '문의 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setInquiries(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching inquiries:', error);
+      setInquiries([]);
+      setErrors((prev) => ({
+        ...prev,
+        inquiries: error instanceof Error ? error.message : '문의 데이터를 불러오지 못했습니다.',
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, inquiries: false }));
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, title')
+        .order('title', { ascending: true });
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setProducts([]);
+    }
+  };
+
+  const sectionTabs = useMemo(
+    () => [
+      { key: 'reviews', label: '리뷰', count: reviews.length },
+      { key: 'examples', label: '제작 사례', count: productionExamples.length },
+      { key: 'inquiries', label: '문의', count: inquiries.length },
+    ],
+    [reviews.length, productionExamples.length, inquiries.length]
+  );
+
+  const handleDeleteReview = async (reviewId: string) => {
+    const confirmed = window.confirm('이 리뷰를 삭제할까요?');
+    if (!confirmed) return;
+
+    setErrors((prev) => ({ ...prev, reviews: null }));
+    try {
+      const response = await fetch(`/api/admin/reviews?id=${reviewId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '리뷰 삭제에 실패했습니다.');
+      }
+
+      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      setErrors((prev) => ({
+        ...prev,
+        reviews: error instanceof Error ? error.message : '리뷰 삭제에 실패했습니다.',
+      }));
+    }
+  };
+
+  const handleExampleFormToggle = () => {
+    setExampleFormOpen((prev) => !prev);
+    setExampleFormError(null);
+    if (exampleFormOpen) {
+      setExampleForm(emptyExampleForm);
+    }
+  };
+
+  const handleExampleEdit = (example: ProductionExampleRecord) => {
+    setExampleForm({
+      id: example.id,
+      product_id: example.product_id,
+      title: example.title,
+      description: example.description ?? '',
+      image_url: example.image_url ?? '',
+      sort_order: example.sort_order ?? 0,
+      is_active: Boolean(example.is_active),
+    });
+    setExampleFormOpen(true);
+    setExampleFormError(null);
+  };
+
+  const handleExampleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setExampleFormError('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    setUploadingExampleImage(true);
+    setExampleFormError(null);
+
+    try {
+      const supabase = createClient();
+      const uploadResult = await uploadFileToStorage(
+        supabase,
+        file,
+        EXAMPLE_IMAGE_BUCKET,
+        EXAMPLE_IMAGE_FOLDER
+      );
+
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || '이미지 업로드에 실패했습니다.');
+      }
+
+      setExampleForm((prev) => ({ ...prev, image_url: uploadResult.url ?? '' }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '이미지 업로드에 실패했습니다.';
+      setExampleFormError(message);
+    } finally {
+      setUploadingExampleImage(false);
+    }
+  };
+
+  const handleExampleImageInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    handleExampleImageUpload(file);
+    event.target.value = '';
+  };
+
+  const handleExampleSave = async () => {
+    setExampleFormError(null);
+
+    if (uploadingExampleImage) {
+      setExampleFormError('이미지 업로드가 완료될 때까지 기다려주세요.');
+      return;
+    }
+
+    if (!exampleForm.product_id) {
+      setExampleFormError('제품을 선택해주세요.');
+      return;
+    }
+
+    if (!exampleForm.title.trim()) {
+      setExampleFormError('제목을 입력해주세요.');
+      return;
+    }
+
+    if (!exampleForm.image_url.trim()) {
+      setExampleFormError('이미지 URL을 입력하거나 이미지를 업로드해주세요.');
+      return;
+    }
+
+    setSavingExample(true);
+    setErrors((prev) => ({ ...prev, examples: null }));
+
+    const payload = {
+      id: exampleForm.id ?? undefined,
+      product_id: exampleForm.product_id,
+      title: exampleForm.title.trim(),
+      description: exampleForm.description.trim(),
+      image_url: exampleForm.image_url.trim(),
+      sort_order: exampleForm.sort_order,
+      is_active: exampleForm.is_active,
+    };
+
+    try {
+      const response = await fetch('/api/admin/production-examples', {
+        method: exampleForm.id ? 'PATCH' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '제작 사례 저장에 실패했습니다.');
+      }
+
+      const responsePayload = await response.json();
+      const savedExample = responsePayload?.data as ProductionExampleRecord;
+
+      setProductionExamples((prev) => {
+        const updated = exampleForm.id
+          ? prev.map((example) => (example.id === savedExample.id ? savedExample : example))
+          : [savedExample, ...prev];
+        return sortExamples(updated);
+      });
+
+      setExampleForm(emptyExampleForm);
+      setExampleFormOpen(false);
+    } catch (error) {
+      console.error('Error saving production example:', error);
+      setErrors((prev) => ({
+        ...prev,
+        examples: error instanceof Error ? error.message : '제작 사례 저장에 실패했습니다.',
+      }));
+    } finally {
+      setSavingExample(false);
+    }
+  };
+
+  const handleExampleDelete = async (exampleId: string) => {
+    const confirmed = window.confirm('이 제작 사례를 삭제할까요?');
+    if (!confirmed) return;
+
+    setErrors((prev) => ({ ...prev, examples: null }));
+    try {
+      const response = await fetch(`/api/admin/production-examples?id=${exampleId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제작 사례 삭제에 실패했습니다.');
+      }
+
+      setProductionExamples((prev) => prev.filter((example) => example.id !== exampleId));
+    } catch (error) {
+      console.error('Error deleting production example:', error);
+      setErrors((prev) => ({
+        ...prev,
+        examples: error instanceof Error ? error.message : '제작 사례 삭제에 실패했습니다.',
+      }));
+    }
+  };
+
+  const handleExampleToggle = async (example: ProductionExampleRecord) => {
+    setErrors((prev) => ({ ...prev, examples: null }));
+    try {
+      const response = await fetch('/api/admin/production-examples', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: example.id,
+          is_active: !example.is_active,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '활성 상태 변경에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const updatedExample = payload?.data as ProductionExampleRecord;
+      setProductionExamples((prev) =>
+        sortExamples(prev.map((item) => (item.id === updatedExample.id ? updatedExample : item)))
+      );
+    } catch (error) {
+      console.error('Error toggling production example:', error);
+      setErrors((prev) => ({
+        ...prev,
+        examples: error instanceof Error ? error.message : '활성 상태 변경에 실패했습니다.',
+      }));
+    }
+  };
+
+  const handleReplySubmit = async (inquiryId: string) => {
+    const content = replyDrafts[inquiryId]?.trim();
+    if (!content) return;
+
+    setSubmittingReplyId(inquiryId);
+    setErrors((prev) => ({ ...prev, inquiries: null }));
+
+    try {
+      const response = await fetch('/api/admin/inquiries/replies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ inquiryId, content }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '답변 등록에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const reply = payload?.data as InquiryReplyRecord;
+
+      setInquiries((prev) =>
+        prev.map((inquiry) => {
+          if (inquiry.id !== inquiryId) return inquiry;
+          const replies = inquiry.inquiry_replies ? [...inquiry.inquiry_replies, reply] : [reply];
+          return { ...inquiry, inquiry_replies: replies };
+        })
+      );
+
+      setReplyDrafts((prev) => ({ ...prev, [inquiryId]: '' }));
+    } catch (error) {
+      console.error('Error submitting reply:', error);
+      setErrors((prev) => ({
+        ...prev,
+        inquiries: error instanceof Error ? error.message : '답변 등록에 실패했습니다.',
+      }));
+    } finally {
+      setSubmittingReplyId(null);
+    }
+  };
+
+  const handleStatusChange = async (inquiryId: string, status: InquiryStatus) => {
+    setUpdatingStatusId(inquiryId);
+    setErrors((prev) => ({ ...prev, inquiries: null }));
+
+    try {
+      const response = await fetch('/api/admin/inquiries', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ inquiryId, status }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '상태 업데이트에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const updated = payload?.data as { id: string; status: InquiryStatus };
+
+      setInquiries((prev) =>
+        prev.map((inquiry) =>
+          inquiry.id === updated.id ? { ...inquiry, status: updated.status } : inquiry
+        )
+      );
+    } catch (error) {
+      console.error('Error updating inquiry status:', error);
+      setErrors((prev) => ({
+        ...prev,
+        inquiries: error instanceof Error ? error.message : '상태 업데이트에 실패했습니다.',
+      }));
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const getStatusStyle = (status: InquiryStatus) => {
+    const styles: Record<InquiryStatus, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      ongoing: 'bg-blue-100 text-blue-800',
+      completed: 'bg-green-100 text-green-800',
+    };
+    return styles[status];
+  };
+
+  const getStatusLabel = (status: InquiryStatus) => {
+    const labels: Record<InquiryStatus, string> = {
+      pending: '대기중',
+      ongoing: '진행중',
+      completed: '완료',
+    };
+    return labels[status];
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">콘텐츠 관리</h2>
+          <p className="text-gray-500 mt-1">리뷰, 제작 사례, 문의를 한 곳에서 관리합니다.</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg p-4 shadow-sm">
+        <div className="flex gap-2 flex-wrap">
+          {sectionTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveSection(tab.key as SectionKey)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeSection === tab.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeSection === 'reviews' && (
+        <div className="space-y-4">
+          {errors.reviews && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+              {errors.reviews}
+            </div>
+          )}
+          {loading.reviews ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : reviews.length === 0 ? (
+            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+              등록된 리뷰가 없습니다.
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {reviews.map((review) => (
+                <div key={review.id} className="bg-white rounded-lg shadow-sm p-5 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500">제품</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {review.product?.title || review.product_id}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900">평점 {review.rating}</p>
+                      {review.is_verified_purchase && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">
+                          구매 인증
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">{review.title}</h3>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{review.content}</p>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{review.author_name}</span>
+                    <span>{formatDate(review.created_at)}</span>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => handleDeleteReview(review.id)}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'examples' && (
+        <div className="space-y-4">
+          {errors.examples && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+              {errors.examples}
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">제작 사례 관리</h3>
+                <p className="text-sm text-gray-500">홈페이지에 노출할 사례를 등록하세요.</p>
+              </div>
+              <button
+                onClick={handleExampleFormToggle}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                {exampleFormOpen ? '입력 닫기' : '새 사례 추가'}
+              </button>
+            </div>
+
+            {exampleFormOpen && (
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm text-gray-700">
+                    제품 선택
+                    <select
+                      value={exampleForm.product_id}
+                      onChange={(event) =>
+                        setExampleForm((prev) => ({ ...prev, product_id: event.target.value }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                    >
+                      <option value="">제품 선택</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm text-gray-700">
+                    제목
+                    <input
+                      type="text"
+                      value={exampleForm.title}
+                      onChange={(event) =>
+                        setExampleForm((prev) => ({ ...prev, title: event.target.value }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </label>
+                </div>
+                <label className="space-y-2 text-sm text-gray-700">
+                  설명
+                  <textarea
+                    value={exampleForm.description}
+                    onChange={(event) =>
+                      setExampleForm((prev) => ({ ...prev, description: event.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    rows={3}
+                  />
+                </label>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-3 text-sm text-gray-700 md:col-span-2">
+                    <label className="space-y-2 text-sm text-gray-700">
+                      이미지 URL
+                      <input
+                        type="text"
+                        value={exampleForm.image_url}
+                        onChange={(event) =>
+                          setExampleForm((prev) => ({ ...prev, image_url: event.target.value }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-gray-700">
+                      이미지 업로드
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleExampleImageInputChange}
+                        disabled={uploadingExampleImage}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                      />
+                      {uploadingExampleImage && (
+                        <span className="text-xs text-gray-500">업로드 중...</span>
+                      )}
+                    </label>
+                  </div>
+                  <label className="space-y-2 text-sm text-gray-700">
+                    정렬 순서
+                    <input
+                      type="number"
+                      value={exampleForm.sort_order}
+                      onChange={(event) =>
+                        setExampleForm((prev) => ({
+                          ...prev,
+                          sort_order: Number(event.target.value) || 0,
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </label>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={exampleForm.is_active}
+                    onChange={(event) =>
+                      setExampleForm((prev) => ({ ...prev, is_active: event.target.checked }))
+                    }
+                    className="rounded border-gray-300"
+                  />
+                  활성 상태로 노출
+                </label>
+
+                {exampleFormError && (
+                  <p className="text-sm text-red-600">{exampleFormError}</p>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setExampleForm(emptyExampleForm);
+                      setExampleFormOpen(false);
+                      setExampleFormError(null);
+                    }}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleExampleSave}
+                    disabled={savingExample || uploadingExampleImage}
+                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {savingExample
+                      ? '저장 중...'
+                      : uploadingExampleImage
+                        ? '이미지 업로드 중...'
+                        : '저장'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {loading.examples ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : productionExamples.length === 0 ? (
+            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+              등록된 제작 사례가 없습니다.
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        이미지
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        제목
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        제품
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        정렬
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        상태
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        작업
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productionExamples.map((example) => (
+                      <tr key={example.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <img
+                            src={example.image_url}
+                            alt={example.title}
+                            className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                          />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">{example.title}</div>
+                          <div className="text-xs text-gray-500 max-w-xs truncate">
+                            {example.description}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">
+                            {example.product?.title || example.product_id}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">{example.sort_order}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => handleExampleToggle(example)}
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                              example.is_active
+                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                            }`}
+                          >
+                            {example.is_active ? (
+                              <>
+                                <Eye className="w-3 h-3" />
+                                활성
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="w-3 h-3" />
+                                비활성
+                              </>
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleExampleEdit(example)}
+                              className="inline-flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              편집
+                            </button>
+                            <button
+                              onClick={() => handleExampleDelete(example.id)}
+                              className="inline-flex items-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              삭제
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'inquiries' && (
+        <div className="space-y-4">
+          {errors.inquiries && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+              {errors.inquiries}
+            </div>
+          )}
+          {loading.inquiries ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : inquiries.length === 0 ? (
+            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+              등록된 문의가 없습니다.
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {inquiries.map((inquiry) => {
+                const productNames = Array.from(
+                  new Set(
+                    (inquiry.inquiry_products || []).map(
+                      (product) => product.product?.title || product.product_id
+                    )
+                  )
+                );
+
+                return (
+                  <div key={inquiry.id} className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{inquiry.title}</h3>
+                        <p className="text-xs text-gray-500 mt-1">{formatDate(inquiry.created_at)}</p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
+                          inquiry.status
+                        )}`}
+                      >
+                        {getStatusLabel(inquiry.status)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700">문의 내용</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{inquiry.content}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700">관련 제품</p>
+                      {productNames.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {productNames.map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
+                            >
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">연결된 제품이 없습니다.</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm text-gray-700">상태 변경</label>
+                      <select
+                        value={inquiry.status}
+                        onChange={(event) =>
+                          handleStatusChange(inquiry.id, event.target.value as InquiryStatus)
+                        }
+                        disabled={updatingStatusId === inquiry.id}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white disabled:opacity-50"
+                      >
+                        <option value="pending">대기중</option>
+                        <option value="ongoing">진행중</option>
+                        <option value="completed">완료</option>
+                      </select>
+                      {updatingStatusId === inquiry.id && (
+                        <span className="text-xs text-gray-500">업데이트 중...</span>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-gray-700">답변</p>
+                      {inquiry.inquiry_replies && inquiry.inquiry_replies.length > 0 ? (
+                        <div className="space-y-3">
+                          {inquiry.inquiry_replies.map((reply) => (
+                            <div key={reply.id} className="border-l-2 border-blue-200 pl-3">
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span>
+                                  관리자 {reply.admin_id ? reply.admin_id.slice(0, 8) : ''}
+                                </span>
+                                <span>{formatDate(reply.created_at)}</span>
+                              </div>
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {reply.content}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">등록된 답변이 없습니다.</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <textarea
+                        placeholder="답변을 입력하세요."
+                        value={replyDrafts[inquiry.id] || ''}
+                        onChange={(event) =>
+                          setReplyDrafts((prev) => ({
+                            ...prev,
+                            [inquiry.id]: event.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        rows={3}
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleReplySubmit(inquiry.id)}
+                          disabled={
+                            submittingReplyId === inquiry.id ||
+                            !(replyDrafts[inquiry.id] || '').trim()
+                          }
+                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          {submittingReplyId === inquiry.id ? '전송 중...' : '답변 전송'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
