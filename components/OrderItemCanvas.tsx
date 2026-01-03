@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState } from '@/types/types';
-import { ChevronLeft, Palette, Ruler, Grid3x3 } from 'lucide-react';
+import { ChevronLeft, Palette, Ruler, Grid3x3, Download } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
 
@@ -50,11 +50,149 @@ const normalizeColorToHex = (value: string): string | null => {
   return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`.toUpperCase();
 };
 
+const escapeXml = (value: string): string => {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
+
+const getTextSvgFromCanvasState = (canvasState: CanvasState, sideId: string): string | null => {
+  const objects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
+  const textObjects = objects.filter((obj) => {
+    const type = typeof obj?.type === 'string' ? obj.type.toLowerCase() : '';
+    return type === 'i-text' || type === 'itext' || type === 'text' || type === 'textbox';
+  });
+
+  if (textObjects.length === 0) {
+    return null;
+  }
+
+  const canvasWidth = 800;
+  const canvasHeight = 600;
+
+  let svgContent = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n` +
+    `<svg xmlns=\"http://www.w3.org/2000/svg\"\n` +
+    `     xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n` +
+    `     width=\"${canvasWidth}\"\n` +
+    `     height=\"${canvasHeight}\"\n` +
+    `     viewBox=\"0 0 ${canvasWidth} ${canvasHeight}\">\n` +
+    `  <title>${escapeXml(sideId)} Text Objects</title>\n`;
+
+  svgContent += `  <metadata>\n` +
+    `    <description>Text objects exported for production - ${escapeXml(sideId)}</description>\n` +
+    `    <created>${new Date().toISOString()}</created>\n` +
+    `  </metadata>\n`;
+
+  svgContent += '  <g id="text-objects">\n';
+
+  textObjects.forEach((textObj, index) => {
+    const text = typeof textObj.text === 'string' ? textObj.text : '';
+    const fontFamily = typeof textObj.fontFamily === 'string' ? textObj.fontFamily : 'Arial';
+    const fontSize = typeof textObj.fontSize === 'number' ? textObj.fontSize : 16;
+    const fill = typeof textObj.fill === 'string' ? textObj.fill : '#000000';
+    const fontWeight = textObj.fontWeight ? String(textObj.fontWeight) : 'normal';
+    const fontStyle = typeof textObj.fontStyle === 'string' ? textObj.fontStyle : 'normal';
+    const textAlign = typeof textObj.textAlign === 'string' ? textObj.textAlign : 'left';
+
+    const left = typeof textObj.left === 'number' ? textObj.left : 0;
+    const top = typeof textObj.top === 'number' ? textObj.top : 0;
+    const angle = typeof textObj.angle === 'number' ? textObj.angle : 0;
+    const scaleX = typeof textObj.scaleX === 'number' ? textObj.scaleX : 1;
+    const scaleY = typeof textObj.scaleY === 'number' ? textObj.scaleY : 1;
+
+    let transform = `translate(${left}, ${top})`;
+    if (angle !== 0) {
+      transform += ` rotate(${angle})`;
+    }
+    if (scaleX !== 1 || scaleY !== 1) {
+      transform += ` scale(${scaleX}, ${scaleY})`;
+    }
+
+    let textAnchor = 'start';
+    if (textAlign === 'center') textAnchor = 'middle';
+    else if (textAlign === 'right') textAnchor = 'end';
+
+    const printMethod = textObj.data?.printMethod || '';
+    const dataAttrs = printMethod ? ` data-print-method=\"${escapeXml(printMethod)}\"` : '';
+
+    svgContent += `    <text\n` +
+      `      id=\"text-${escapeXml(sideId)}-${index}\"\n` +
+      `      x=\"0\"\n` +
+      `      y=\"0\"\n` +
+      `      font-family=\"${escapeXml(fontFamily)}\"\n` +
+      `      font-size=\"${fontSize}\"\n` +
+      `      fill=\"${escapeXml(fill)}\"\n` +
+      `      font-weight=\"${escapeXml(fontWeight)}\"\n` +
+      `      font-style=\"${escapeXml(fontStyle)}\"\n` +
+      `      text-anchor=\"${textAnchor}\"\n` +
+      `      transform=\"${transform}\"${dataAttrs}>`;
+
+    const lines = text.split('\n');
+    if (lines.length > 1) {
+      lines.forEach((line, lineIndex) => {
+        const dy = lineIndex === 0 ? 0 : fontSize * 1.2;
+        svgContent += `\n      <tspan x=\"0\" dy=\"${dy}\">${escapeXml(line)}</tspan>`;
+      });
+      svgContent += '\n    </text>\n';
+    } else {
+      svgContent += `${escapeXml(text)}</text>\n`;
+    }
+  });
+
+  svgContent += '  </g>\n</svg>';
+  return svgContent;
+};
+
+const getFileExtensionFromName = (name?: string | null) => {
+  if (!name) return null;
+  const sanitized = name.split('?')[0].split('#')[0];
+  const parts = sanitized.split('.');
+  if (parts.length < 2) return null;
+  const ext = parts.pop();
+  if (!ext) return null;
+  return ext.toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+const getFileExtensionFromUrl = (url?: string | null) => {
+  if (!url) return null;
+  const sanitized = url.split('?')[0].split('#')[0];
+  const lastSegment = sanitized.split('/').pop() || '';
+  return getFileExtensionFromName(lastSegment);
+};
+
+const getFileExtensionFromType = (fileType?: string | null) => {
+  if (!fileType) return null;
+  const normalized = fileType.toLowerCase();
+  if (normalized === 'image/jpeg') return 'jpg';
+  if (normalized === 'image/png') return 'png';
+  if (normalized === 'image/webp') return 'webp';
+  if (normalized === 'image/gif') return 'gif';
+  if (normalized === 'image/svg+xml') return 'svg';
+  if (normalized === 'image/bmp') return 'bmp';
+  if (normalized === 'image/tiff') return 'tiff';
+  if (normalized === 'application/postscript') return 'ai';
+  if (normalized === 'image/vnd.adobe.photoshop') return 'psd';
+  const parts = normalized.split('/');
+  if (parts.length === 2) {
+    return parts[1].replace(/[^a-z0-9]/g, '');
+  }
+  return null;
+};
+
+const buildFilename = (base: string, extension?: string | null) => {
+  if (!extension) return base;
+  return `${base}.${extension}`;
+};
+
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [dimensionsBySide, setDimensionsBySide] = useState<Record<string, ObjectDimensions[]>>({});
   const [productColors, setProductColors] = useState<Array<{ name: string; hex: string; color_code?: string }>>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const getItemColorHex = () => {
     const variants = orderItem.item_options?.variants;
@@ -478,6 +616,124 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
   }, [getAppliedProductColorHex, orderItem.canvas_state, orderItem.color_selections, product, productColors]);
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  };
+
+  const downloadUrl = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}`);
+      }
+      const blob = await response.blob();
+      downloadBlob(blob, filename);
+    } catch (error) {
+      console.error('Falling back to direct download link:', error);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+    }
+  };
+
+  const handleDownloadDesignFiles = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+      const files: Array<{ type: 'blob'; blob: Blob; filename: string } | { type: 'url'; url: string; filename: string }> = [];
+      const seenUrls = new Set<string>();
+
+      const canvasStates = orderItem.canvas_state || {};
+      Object.entries(canvasStates).forEach(([sideId, canvasStateRaw]) => {
+        const parsedState = parseCanvasState(canvasStateRaw) as CanvasState | null;
+        if (!parsedState || !Array.isArray(parsedState.objects)) return;
+
+        const textSvg = getTextSvgFromCanvasState(parsedState, sideId);
+        if (textSvg) {
+          const svgName = `order-${orderItem.id}-${sideId}-text.svg`;
+          files.push({
+            type: 'blob',
+            blob: new Blob([textSvg], { type: 'image/svg+xml' }),
+            filename: svgName,
+          });
+        }
+
+        let imageIndex = 0;
+        parsedState.objects.forEach((obj) => {
+          if (!obj || typeof obj !== 'object') return;
+          if (obj.data?.id === 'background-product-image') return;
+
+          const objectType = typeof obj.type === 'string' ? obj.type.toLowerCase() : '';
+          if (objectType !== 'image') return;
+
+          imageIndex += 1;
+          const fileIndex = imageIndex;
+
+          const data = obj.data as {
+            originalFileUrl?: string;
+            supabaseUrl?: string;
+            originalFileName?: string;
+            fileType?: string;
+            isConverted?: boolean;
+          } | undefined;
+
+          const originalUrl = typeof data?.originalFileUrl === 'string'
+            ? data.originalFileUrl
+            : typeof data?.supabaseUrl === 'string'
+            ? data.supabaseUrl
+            : typeof (obj as { src?: string }).src === 'string'
+            ? (obj as { src: string }).src
+            : null;
+
+          const displayUrl = typeof data?.supabaseUrl === 'string' ? data.supabaseUrl : null;
+
+          if (originalUrl && !seenUrls.has(originalUrl)) {
+            seenUrls.add(originalUrl);
+            const extension = getFileExtensionFromName(data?.originalFileName)
+              || getFileExtensionFromUrl(originalUrl)
+              || getFileExtensionFromType(data?.fileType)
+              || 'png';
+            const filename = buildFilename(`order-${orderItem.id}-${sideId}-image-${fileIndex}`, extension);
+            files.push({ type: 'url', url: originalUrl, filename });
+          }
+
+          if (displayUrl && displayUrl !== originalUrl && !seenUrls.has(displayUrl)) {
+            seenUrls.add(displayUrl);
+            const extension = getFileExtensionFromUrl(displayUrl) || 'png';
+            const filename = buildFilename(`order-${orderItem.id}-${sideId}-image-${fileIndex}-preview`, extension);
+            files.push({ type: 'url', url: displayUrl, filename });
+          }
+        });
+      });
+
+      if (files.length === 0) {
+        alert('다운로드할 파일이 없습니다.');
+        return;
+      }
+
+      for (const file of files) {
+        if (file.type === 'blob') {
+          downloadBlob(file.blob, file.filename);
+        } else {
+          await downloadUrl(file.url, file.filename);
+        }
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -517,9 +773,20 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
-          <Grid3x3 className="w-4 h-4" />
-          전체 캔버스 보기
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+            <Grid3x3 className="w-4 h-4" />
+            전체 캔버스 보기
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadDesignFiles}
+            disabled={isDownloading}
+            className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" />
+            {isDownloading ? '다운로드 중...' : '파일 다운로드'}
+          </button>
         </div>
       </div>
 
