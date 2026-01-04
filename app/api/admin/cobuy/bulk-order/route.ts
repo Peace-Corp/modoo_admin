@@ -205,6 +205,8 @@ export async function POST(request: Request) {
     const orderPayload = {
       id: orderId,
       user_id: session.user_id,
+      order_category: 'cobuy',
+      cobuy_session_id: sessionId,
       customer_name: creatorProfile?.email || `CoBuy ${session.title || session.id}`,
       customer_email: creatorProfile?.email || 'unknown@cobuy.local',
       customer_phone: creatorProfile?.phone_number || null,

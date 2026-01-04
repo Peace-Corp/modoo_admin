@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import type { Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon } from 'lucide-react';
+import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download } from 'lucide-react';
 import OrderItemCanvas from './OrderItemCanvas';
 
 interface OrderDetailProps {
@@ -31,9 +31,16 @@ export default function OrderDetail({
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_factory_id || '');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [cobuySession, setCobuySession] = useState<{ id: string; title: string } | null>(null);
+  const [cobuyError, setCobuyError] = useState<string | null>(null);
+  const [downloadingCobuyExcel, setDownloadingCobuyExcel] = useState(false);
 
   useEffect(() => {
     fetchOrderItems();
+  }, [order.id]);
+
+  useEffect(() => {
+    fetchCobuySession();
   }, [order.id]);
 
   useEffect(() => {
@@ -56,6 +63,58 @@ export default function OrderDetail({
       console.error('Error fetching order items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCobuySession = async () => {
+    setCobuyError(null);
+    try {
+      const response = await fetch(`/api/admin/orders/cobuy-session?orderId=${order.id}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '공동구매 정보를 불러오지 못했습니다.');
+      }
+
+      const payload = await response.json();
+      setCobuySession(payload?.data || null);
+    } catch (error) {
+      console.error('Error fetching cobuy session:', error);
+      setCobuySession(null);
+      setCobuyError(error instanceof Error ? error.message : '공동구매 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  const handleDownloadCobuyExcel = async () => {
+    setDownloadingCobuyExcel(true);
+    setCobuyError(null);
+
+    try {
+      const response = await fetch(`/api/admin/orders/cobuy-excel?orderId=${order.id}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '엑셀 다운로드에 실패했습니다.');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `cobuy-order-${order.id}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading cobuy excel:', error);
+      setCobuyError(error instanceof Error ? error.message : '엑셀 다운로드에 실패했습니다.');
+    } finally {
+      setDownloadingCobuyExcel(false);
     }
   };
 
@@ -135,17 +194,31 @@ export default function OrderDetail({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">주문 상세</h2>
-          <p className="text-gray-500 mt-1">주문 ID: {order.id}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">주문 상세</h2>
+            <p className="text-gray-500 mt-1">주문 ID: {order.id}</p>
+          </div>
         </div>
+
+        {cobuySession && (
+          <button
+            onClick={handleDownloadCobuyExcel}
+            disabled={downloadingCobuyExcel}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+            title={`공동구매 참여자 엑셀 다운로드 (${cobuySession.title})`}
+          >
+            <Download className="w-4 h-4" />
+            {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -374,7 +447,12 @@ export default function OrderDetail({
             </div>
           </div>
 
-          
+          {cobuyError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+              {cobuyError}
+            </div>
+          )}
+
         </div>
       </div>
     </div>

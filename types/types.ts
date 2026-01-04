@@ -62,6 +62,9 @@ export interface Order {
   customer_email: string;
   customer_phone: string | null;
 
+  order_category?: 'cobuy' | 'regular' | null;
+  cobuy_session_id?: string | null;
+
   shipping_method: 'domestic' | 'international' | 'pickup';
   country_code: string | null;
   state: string | null;
