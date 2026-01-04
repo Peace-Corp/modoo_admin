@@ -141,19 +141,19 @@ export default function ProductsTab() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">제품 관리</h2>
-          <p className="text-gray-500 mt-1">총 {products.length}개의 제품</p>
+          <h2 className="text-xl font-semibold text-gray-900">제품 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">총 {products.length}개의 제품</p>
         </div>
         <button
           onClick={() => {
             setIsCreatingNew(true);
             setSelectedProduct(null);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
         >
           <Plus className="w-5 h-5" />
           새 제품 추가
@@ -161,27 +161,27 @@ export default function ProductsTab() {
       </div>
 
       {/* Products List */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   제품명
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   카테고리
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   기본 가격
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   면 개수
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   상태
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
               </tr>
@@ -189,20 +189,20 @@ export default function ProductsTab() {
             <tbody className="bg-white divide-y divide-gray-200">
               {products.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{product.title}</div>
                     <div className="text-xs text-gray-500">ID: {product.id.slice(0, 8)}...</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{product.category || '-'}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{product.base_price.toLocaleString()}원</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{product.configuration?.length || 0}개</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <button
                       onClick={() => toggleProductStatus(product.id, product.is_active)}
                       className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -224,14 +224,14 @@ export default function ProductsTab() {
                       )}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => {
                           setSelectedProduct(product);
                           setEditorMode('full-edit');
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                         편집
@@ -241,7 +241,7 @@ export default function ProductsTab() {
                           setSelectedProduct(product);
                           setEditorMode('print-area');
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                       >
                         <Edit className="w-4 h-4" />
                         인쇄 영역
@@ -249,7 +249,7 @@ export default function ProductsTab() {
                       <button
                         onClick={() => handleDeleteProduct(product.id, product.title)}
                         disabled={deletingProductId === product.id}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />
                         {deletingProductId === product.id ? '삭제 중...' : '삭제'}

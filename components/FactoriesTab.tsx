@@ -249,25 +249,25 @@ export default function FactoriesTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">공장 관리</h2>
-          <p className="text-gray-500 mt-1">총 {factories.length}개의 공장</p>
+          <h2 className="text-xl font-semibold text-gray-900">공장 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">총 {factories.length}개의 공장</p>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
           <p className="text-red-800">{error}</p>
         </div>
       )}
 
-      <div className="bg-white rounded-lg p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
         <div className="flex items-center gap-2">
           <FactoryIcon className="w-5 h-5 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">새 공장 등록</h3>
+          <h3 className="text-base font-semibold text-gray-900">새 공장 등록</h3>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-2 text-sm text-gray-700">
@@ -276,7 +276,7 @@ export default function FactoriesTab() {
               type="text"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
             />
           </label>
           <label className="space-y-2 text-sm text-gray-700">
@@ -285,7 +285,7 @@ export default function FactoriesTab() {
               type="email"
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
             />
           </label>
           <label className="space-y-2 text-sm text-gray-700">
@@ -296,7 +296,7 @@ export default function FactoriesTab() {
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, phone_number: event.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
             />
           </label>
         </div>
@@ -313,7 +313,7 @@ export default function FactoriesTab() {
           <button
             onClick={createFactory}
             disabled={creating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm font-medium"
           >
             <Plus className="w-4 h-4" />
             {creating ? '등록 중...' : '등록'}
@@ -321,27 +321,27 @@ export default function FactoriesTab() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   공장명
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   이메일
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   전화번호
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   소속 사용자
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   상태
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
               </tr>
@@ -356,7 +356,7 @@ export default function FactoriesTab() {
                 return (
                   <Fragment key={factory.id}>
                     <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {isEditing ? (
                           <input
                             type="text"
@@ -366,13 +366,13 @@ export default function FactoriesTab() {
                                 prev ? { ...prev, name: event.target.value } : prev
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
                         ) : (
                           <span className="text-sm font-medium text-gray-900">{factory.name}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {isEditing ? (
                           <input
                             type="email"
@@ -382,13 +382,13 @@ export default function FactoriesTab() {
                                 prev ? { ...prev, email: event.target.value } : prev
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
                         ) : (
                           <span className="text-sm text-gray-900">{factory.email || '-'}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {isEditing ? (
                           <input
                             type="text"
@@ -398,7 +398,7 @@ export default function FactoriesTab() {
                                 prev ? { ...prev, phone_number: event.target.value } : prev
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
                         ) : (
                           <span className="text-sm text-gray-900">
@@ -406,7 +406,7 @@ export default function FactoriesTab() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <button
                           onClick={() =>
                             setExpandedFactoryId((prev) => (prev === factory.id ? null : factory.id))
@@ -417,7 +417,7 @@ export default function FactoriesTab() {
                           {members.length}명
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <button
                           onClick={() => handleToggleActive(factory)}
                           disabled={isUpdating}
@@ -440,14 +440,14 @@ export default function FactoriesTab() {
                           )}
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
                           {isEditing ? (
                             <>
                               <button
                                 onClick={() => handleEditSave(factory.id)}
                                 disabled={isUpdating}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                               >
                                 <Save className="w-4 h-4" />
                                 {isUpdating ? '저장 중...' : '저장'}
@@ -455,7 +455,7 @@ export default function FactoriesTab() {
                               <button
                                 onClick={handleEditCancel}
                                 disabled={isUpdating}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50"
                               >
                                 취소
                               </button>
@@ -464,7 +464,7 @@ export default function FactoriesTab() {
                             <>
                               <button
                                 onClick={() => handleEditStart(factory)}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                               >
                                 편집
                               </button>
@@ -474,7 +474,7 @@ export default function FactoriesTab() {
                                     prev === factory.id ? null : factory.id
                                   )
                                 }
-                                className="inline-flex items-center gap-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                               >
                                 사용자 관리
                               </button>
@@ -485,7 +485,7 @@ export default function FactoriesTab() {
                     </tr>
                     {isExpanded && (
                       <tr className="bg-gray-50">
-                        <td colSpan={6} className="px-6 py-4">
+                        <td colSpan={6} className="px-4 py-3">
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -508,7 +508,7 @@ export default function FactoriesTab() {
                                 members.map((member) => (
                                   <div
                                     key={member.id}
-                                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
+                                    className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2"
                                   >
                                     <div>
                                       <p className="text-sm font-medium text-gray-900">
@@ -528,7 +528,7 @@ export default function FactoriesTab() {
                               )}
                             </div>
 
-                            <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+                            <div className="rounded-md border border-gray-200 bg-white p-3 space-y-3">
                               <p className="text-sm font-medium text-gray-700">
                                 공장 사용자 배정
                               </p>
@@ -542,7 +542,7 @@ export default function FactoriesTab() {
                                     }))
                                   }
                                   disabled={loadingUsers || unassignedFactoryUsers.length === 0}
-                                  className="min-w-[220px] px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white disabled:opacity-50"
+                                  className="min-w-[220px] px-3 py-2 text-sm border border-gray-300 rounded-md bg-white disabled:opacity-50"
                                 >
                                   <option value="">
                                     {unassignedFactoryUsers.length === 0
@@ -562,7 +562,7 @@ export default function FactoriesTab() {
                                     loadingUsers ||
                                     updatingUserId !== null
                                   }
-                                  className="inline-flex items-center gap-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center gap-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
                                 >
                                   <Plus className="w-4 h-4" />
                                   배정

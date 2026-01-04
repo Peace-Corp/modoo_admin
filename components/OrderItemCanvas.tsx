@@ -753,7 +753,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         <p className="text-gray-500">제품 정보를 불러올 수 없습니다.</p>
         <button
           onClick={onBack}
-          className="mt-4 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          className="mt-4 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
         >
           돌아가기
         </button>
@@ -762,24 +762,24 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">디자인 미리보기</h2>
-            <p className="text-gray-500 mt-1">{orderItem.product_title}</p>
+            <h2 className="text-xl font-semibold text-gray-900">디자인 미리보기</h2>
+            <p className="text-sm text-gray-500 mt-1">{orderItem.product_title}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md">
             <Grid3x3 className="w-4 h-4" />
             전체 캔버스 보기
           </div>
@@ -787,7 +787,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
             type="button"
             onClick={handleDownloadDesignFiles}
             disabled={isDownloading}
-            className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
             {isDownloading ? '다운로드 중...' : '파일 다운로드'}
@@ -795,13 +795,13 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Canvas Preview */}
-        <div className="lg:col-span-2 bg-white rounded-lg p-6 shadow-sm">
+        <div className="lg:col-span-2 bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
           <div className="mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">주문 옵션</h3>
             {sizeOptions.length > 0 ? (
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div className="overflow-hidden rounded-md border border-gray-200">
                 <table className="w-full text-sm border-collapse">
                   <thead className="bg-gray-50 text-black">
                     <tr>
@@ -841,7 +841,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
               return (
                 <div key={side.id} className="space-y-3">
                   <h3 className="text-sm font-semibold text-gray-700">{side.name}</h3>
-                  <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-125">
+                  <div className="flex justify-center items-center bg-gray-50 rounded-md p-3 min-h-125">
                     <SingleSideCanvas
                       side={side}
                       canvasState={canvasState}
@@ -859,19 +859,19 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         </div>
 
         {/* Right Panel - Colors and Dimensions */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Design Color Information */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
               <Palette className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">디자인 색상</h3>
+              <h3 className="text-base font-semibold text-gray-900">디자인 색상</h3>
             </div>
             {getMockupColorInfo.length > 0 ? (
               <div className="space-y-2">
                 {getMockupColorInfo.map((color, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-3 p-2 border border-gray-200 rounded-lg"
+                    className="flex items-center gap-3 p-2 border border-gray-200 rounded-md"
                   >
                     <div
                       className="w-10 h-10 rounded border border-gray-300 flex-shrink-0"
@@ -894,21 +894,21 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
               </div>
             ) : (
               <p className="text-sm text-gray-500">제품 색상 정보가 없습니다.</p>
-            )}
+          )}
           </div>
 
           {/* Object Information */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
               <Ruler className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">객체 정보</h3>
+              <h3 className="text-base font-semibold text-gray-900">객체 정보</h3>
             </div>
             {objectDimensions.length > 0 ? (
               <div className="space-y-3">
                 {objectDimensions.map((dimension, index) => (
                   <div
                     key={index}
-                    className="p-3 border border-gray-200 rounded-lg bg-gray-50"
+                    className="p-3 border border-gray-200 rounded-md bg-gray-50"
                   >
                     <div className="flex items-start gap-3">
                       <div className="w-16 h-16 rounded border border-gray-200 bg-white flex items-center justify-center shrink-0 overflow-hidden">

@@ -235,33 +235,33 @@ export default function CoBuyTab() {
 
   if (selectedSession) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSelectedSession(null)}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">공동구매 상세</h2>
-            <p className="text-gray-500 mt-1">세션 ID: {selectedSession.id}</p>
+            <h2 className="text-xl font-semibold text-gray-900">공동구매 상세</h2>
+            <p className="text-sm text-gray-500 mt-1">세션 ID: {selectedSession.id}</p>
           </div>
         </div>
 
         {detailError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <p className="text-red-800">{detailError}</p>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{selectedSession.title}</h3>
+                  <h3 className="text-base font-semibold text-gray-900">{selectedSession.title}</h3>
                   {selectedSession.description && (
                     <p className="text-sm text-gray-600 mt-1">{selectedSession.description}</p>
                   )}
@@ -277,12 +277,12 @@ export default function CoBuyTab() {
               </div>
 
               {selectedSession.status === 'cancelled' && (
-                <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
                   취소 요청 또는 취소 처리된 세션입니다. 필요 시 상태를 조정하세요.
                 </div>
               )}
               {selectedSession.cancellation_requested_at && (
-                <div className="rounded-lg border border-yellow-100 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                <div className="rounded-md border border-yellow-100 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
                   취소 요청 접수: {formatDate(selectedSession.cancellation_requested_at)}
                 </div>
               )}
@@ -305,12 +305,12 @@ export default function CoBuyTab() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">참여자 목록</h3>
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-gray-900">참여자 목록</h3>
                 <button
                   onClick={() => fetchParticipants(selectedSession.id)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                   disabled={detailLoading}
                 >
                   <RefreshCw className={`w-4 h-4 ${detailLoading ? 'animate-spin' : ''}`} />
@@ -395,9 +395,9 @@ export default function CoBuyTab() {
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">결제 현황</h3>
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">결제 현황</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">총 참여</span>
@@ -428,8 +428,8 @@ export default function CoBuyTab() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">관리 액션</h3>
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
+              <h3 className="text-base font-semibold text-gray-900">관리 액션</h3>
 
               <div className="space-y-2">
                 <label className="text-sm text-gray-600">세션 상태 변경</label>
@@ -437,7 +437,7 @@ export default function CoBuyTab() {
                   <select
                     value={statusUpdate}
                     onChange={(event) => setStatusUpdate(event.target.value as CoBuyStatus)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
                   >
                     {Object.keys(statusLabels).map((status) => (
                       <option key={status} value={status}>
@@ -448,7 +448,7 @@ export default function CoBuyTab() {
                   <button
                     onClick={handleUpdateStatus}
                     disabled={actionLoading === 'status'}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
                     {actionLoading === 'status' ? '처리중...' : '업데이트'}
                   </button>
@@ -460,7 +460,7 @@ export default function CoBuyTab() {
                 <button
                   onClick={handleCreateBulkOrder}
                   disabled={actionLoading === 'bulk' || !!selectedSession.bulk_order_id || selectedSession.status !== 'finalized'}
-                  className="w-full px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {selectedSession.bulk_order_id
                     ? '주문 생성 완료'
@@ -480,15 +480,15 @@ export default function CoBuyTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">공동구매 관리</h2>
-          <p className="text-gray-500 mt-1">총 {sessions.length}개의 세션</p>
+          <h2 className="text-xl font-semibold text-gray-900">공동구매 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">총 {sessions.length}개의 세션</p>
         </div>
         <button
           onClick={fetchSessions}
-          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           새로고침
@@ -496,13 +496,13 @@ export default function CoBuyTab() {
       </div>
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
           <p className="text-red-800">{errorMessage}</p>
         </div>
       )}
 
-      <div className="bg-white rounded-lg p-4 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
@@ -514,7 +514,7 @@ export default function CoBuyTab() {
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value as 'all' | CoBuyStatus)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 filterStatus === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -526,24 +526,24 @@ export default function CoBuyTab() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   세션
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   상태
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   참여자
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   기간
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 ID
                 </th>
               </tr>
@@ -555,27 +555,27 @@ export default function CoBuyTab() {
                   onClick={() => handleSelectSession(session)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{session.title}</div>
                     <div className="text-xs text-gray-500">
                       {session.profiles?.email || 'creator@unknown'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[session.status]}`}
                     >
                       {statusLabels[session.status]}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                     {session.current_participant_count || 0}
                     {session.max_participants !== null ? ` / ${session.max_participants}` : ' / 무제한'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                     {formatDate(session.start_date)} - {formatDate(session.end_date)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {session.bulk_order_id || '-'}
                   </td>
                 </tr>

@@ -15,7 +15,7 @@ export default function LoadingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-2xl bg-white px-6 py-5 text-center shadow-xl">
+      <div className="w-full max-w-sm rounded-xl bg-white px-5 py-4 text-center shadow-lg border border-gray-200/60">
         <div className="mx-auto mb-3 h-10 w-10 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
         <p className="text-sm font-semibold text-gray-900">{message}</p>
         {submessage && (

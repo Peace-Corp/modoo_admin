@@ -175,25 +175,25 @@ export default function UsersTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">사용자 관리</h2>
-          <p className="text-gray-500 mt-1">총 {users.length}명의 사용자</p>
+          <h2 className="text-xl font-semibold text-gray-900">사용자 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">총 {users.length}명의 사용자</p>
         </div>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
           <p className="text-red-800">{error}</p>
         </div>
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
@@ -204,7 +204,7 @@ export default function UsersTab() {
             <button
               key={filter.value}
               onClick={() => setFilterRole(filter.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 filterRole === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -217,30 +217,30 @@ export default function UsersTab() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   사용자 ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   이메일
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   전화번호
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   권한
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   공장
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   가입일
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
               </tr>
@@ -251,21 +251,21 @@ export default function UsersTab() {
                   key={user.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <UserIcon className="w-4 h-4 text-gray-400" />
                       <div className="text-sm font-mono text-gray-600">{user.id.slice(0, 8)}...</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{user.email}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
                       {user.phone_number || '-'}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(
                         user.role
@@ -276,7 +276,7 @@ export default function UsersTab() {
                       {getRoleLabel(user.role)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {user.role === 'factory' ? (
                       <div className="flex items-center gap-2">
                         <select
@@ -285,7 +285,7 @@ export default function UsersTab() {
                             updateUserFactory(user.id, event.target.value || null)
                           }
                           disabled={loadingFactories || updatingFactoryId === user.id}
-                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 disabled:opacity-50"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
                         >
                           <option value="">공장 선택</option>
                           {factories.map((factory) => (
@@ -309,20 +309,20 @@ export default function UsersTab() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-sm text-gray-900">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       {formatDate(user.created_at)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2">
                         <select
                           value={user.role}
                           onChange={(event) => updateUserRole(user.id, event.target.value as 'customer' | 'admin' | 'factory')}
                           disabled={updatingUserId === user.id}
-                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-700 disabled:opacity-50"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
                         >
                           <option value="customer">일반 사용자</option>
                           <option value="factory">공장</option>

@@ -192,19 +192,19 @@ export default function OrderDetail({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">주문 상세</h2>
-            <p className="text-gray-500 mt-1">주문 ID: {order.id}</p>
+            <h2 className="text-xl font-semibold text-gray-900">주문 상세</h2>
+            <p className="text-sm text-gray-500 mt-1">주문 ID: {order.id}</p>
           </div>
         </div>
 
@@ -212,7 +212,7 @@ export default function OrderDetail({
           <button
             onClick={handleDownloadCobuyExcel}
             disabled={downloadingCobuyExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
             title={`공동구매 참여자 엑셀 다운로드 (${cobuySession.title})`}
           >
             <Download className="w-4 h-4" />
@@ -221,12 +221,12 @@ export default function OrderDetail({
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column - Order Info */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4">
           {/* Order Items */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">주문 상품</h3>
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <h3 className="text-base font-semibold text-gray-900 mb-3">주문 상품</h3>
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -237,7 +237,7 @@ export default function OrderDetail({
                   <div
                     key={item.id}
                     onClick={() => setSelectedItem(item)}
-                    className="flex gap-4 p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all"
+                    className="flex gap-4 p-3 border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all"
                   >
                     <div className="w-20 h-20 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
                       {item.thumbnail_url ? (
@@ -289,8 +289,8 @@ export default function OrderDetail({
           </div>
 
           {/* Order Summary */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">주문 요약</h3>
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">소계</span>
@@ -303,8 +303,8 @@ export default function OrderDetail({
                 </span>
               </div>
               <div className="border-t pt-3 flex justify-between">
-                <span className="text-lg font-semibold text-gray-900">총 금액</span>
-                <span className="text-lg font-bold text-blue-600">
+                <span className="text-base font-semibold text-gray-900">총 금액</span>
+                <span className="text-base font-bold text-blue-600">
                   {order.total_amount.toLocaleString()}원
                 </span>
               </div>
@@ -312,10 +312,10 @@ export default function OrderDetail({
           </div>
 
           {/* Factory Assignment */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
               <FactoryIcon className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">공장 배정</h3>
+              <h3 className="text-base font-semibold text-gray-900">공장 배정</h3>
             </div>
             <div className="space-y-3 text-sm">
               <div>
@@ -331,7 +331,7 @@ export default function OrderDetail({
                       value={selectedFactoryId}
                       onChange={(event) => setSelectedFactoryId(event.target.value)}
                       disabled={loadingFactories || assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
                     >
                       <option value="">미배정</option>
                       {factories.map((factory) => (
@@ -344,7 +344,7 @@ export default function OrderDetail({
                   <button
                     onClick={handleAssignFactory}
                     disabled={assigning || loadingFactories}
-                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                    className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
                     {assigning ? '배정 중...' : '배정 저장'}
                   </button>
@@ -352,7 +352,7 @@ export default function OrderDetail({
               )}
 
               {assignError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
                   {assignError}
                 </div>
               )}
@@ -361,10 +361,10 @@ export default function OrderDetail({
         </div>
 
         {/* Right Column - Customer & Shipping Info */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Customer Information */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">고객 정보</h3>
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
             <div className="space-y-3">
               <div>
                 <p className="text-sm text-gray-500">이름</p>
@@ -385,10 +385,10 @@ export default function OrderDetail({
 
           {/* Shipping Information */}
           {order.shipping_method !== 'pickup' && (
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
                 <MapPin className="w-5 h-5 text-gray-600" />
-                <h3 className="text-lg font-semibold text-gray-900">배송 정보</h3>
+                <h3 className="text-base font-semibold text-gray-900">배송 정보</h3>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">
@@ -416,10 +416,10 @@ export default function OrderDetail({
           )}
 
           {/* Payment Information */}
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
               <CreditCard className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">결제 정보</h3>
+              <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
             </div>
             <div className="space-y-3">
               <div>
@@ -448,7 +448,7 @@ export default function OrderDetail({
           </div>
 
           {cobuyError && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+            <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
               {cobuyError}
             </div>
           )}
