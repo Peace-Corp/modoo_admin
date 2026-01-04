@@ -495,14 +495,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-xl font-semibold text-gray-900">
             {isNewProduct ? '새 제품 추가' : '제품 편집'}
           </h2>
-          <p className="text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             {isNewProduct ? '제품 정보를 입력하고 면을 추가하세요.' : `${product.title} 편집 중`}
           </p>
         </div>
@@ -510,7 +510,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           <button
             onClick={onCancel}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
             취소
@@ -518,7 +518,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           <button
             onClick={handleSave}
             disabled={saving || uploading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             <Save className="w-5 h-5" />
             {saving ? '저장 중...' : '저장'}
@@ -526,11 +526,11 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Panel - Basic Info */}
         <div className="space-y-4">
           {/* Basic Information */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">기본 정보</h3>
             <div className="space-y-3">
               <div>
@@ -541,7 +541,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   placeholder="예: 베이직 티셔츠"
                 />
               </div>
@@ -553,7 +553,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   type="number"
                   value={basePrice}
                   onChange={(e) => setBasePrice(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   placeholder="0"
                 />
               </div>
@@ -563,7 +563,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   type="text"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   placeholder="예: 의류"
                 />
               </div>
@@ -583,7 +583,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           </div>
 
           {/* Size Options */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">사이즈 옵션</h3>
               <button
@@ -635,12 +635,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
         {/* Middle Panel - Sides List */}
         <div className="space-y-4">
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">제품 면 ({sides.length})</h3>
               <button
                 onClick={handleAddSide}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 면 추가
@@ -655,7 +655,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 return (
                   <div
                     key={`${side.id}-${index}`}
-                    className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                    className={`border rounded-md p-3 cursor-pointer transition-all ${
                       currentSideIndex === index
                         ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
@@ -740,12 +740,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           {currentSide ? (
             <>
               {/* Side Navigation */}
-              <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setCurrentSideIndex(Math.max(0, currentSideIndex - 1))}
                     disabled={currentSideIndex === 0}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -760,7 +760,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   <button
                     onClick={() => setCurrentSideIndex(Math.min(sides.length - 1, currentSideIndex + 1))}
                     disabled={currentSideIndex === sides.length - 1}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -768,7 +768,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
 
               {/* Side Settings */}
-              <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">면 설정</h3>
                 <div className="space-y-3">
                   <div>
@@ -777,7 +777,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="text"
                       value={currentSide.id}
                       onChange={(e) => updateSideField(currentSideIndex, 'id', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                       placeholder="예: front"
                     />
                   </div>
@@ -786,7 +786,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     <select
                       value={isCurrentSideLayered ? 'layered' : 'single'}
                       onChange={(e) => setSideMode(currentSideIndex, e.target.value as 'single' | 'layered')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     >
                       <option value="single">단일 이미지</option>
                       <option value="layered">레이어</option>
@@ -799,13 +799,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                         type="text"
                         value={currentSide.imageUrl}
                         onChange={(e) => updateSideField(currentSideIndex, 'imageUrl', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                         placeholder="https://..."
                       />
                       <button
                         onClick={() => triggerFileInput(currentSideIndex)}
                         disabled={uploading}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                       >
                         <Upload className="w-4 h-4" />
                         이미지 업로드
@@ -819,7 +819,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
 
               {/* Print Area Configuration */}
-              <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">인쇄 영역 (픽셀)</h3>
                 <div className="space-y-3">
                   <div>
@@ -828,7 +828,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.printArea.x}
                       onChange={(e) => updatePrintArea(currentSideIndex, 'x', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -837,16 +837,16 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.printArea.y}
                       onChange={(e) => updatePrintArea(currentSideIndex, 'y', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">너비</label>
-                    <input
+                  <input
                       type="number"
                       value={currentSide.printArea.width}
                       onChange={(e) => updatePrintArea(currentSideIndex, 'width', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -855,14 +855,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.printArea.height}
                       onChange={(e) => updatePrintArea(currentSideIndex, 'height', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Real Life Dimensions */}
-              <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">실제 치수 (mm)</h3>
                 <div className="space-y-3">
                   <div>
@@ -871,7 +871,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.realLifeDimensions?.productWidthMm || 0}
                       onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'productWidthMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -880,7 +880,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.realLifeDimensions?.printAreaWidthMm || 0}
                       onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaWidthMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -889,14 +889,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       type="number"
                       value={currentSide.realLifeDimensions?.printAreaHeightMm || 0}
                       onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaHeightMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Zoom Scale */}
-              <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">줌 배율</h3>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -909,7 +909,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     max="5.0"
                     value={currentSide.zoomScale || 1.0}
                     onChange={(e) => updateSideField(currentSideIndex, 'zoomScale', parseFloat(e.target.value) || 1.0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     현재: {((currentSide.zoomScale || 1.0) * 100).toFixed(0)}%
@@ -919,7 +919,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
               {/* Layer Configuration */}
               {isCurrentSideLayered && (
-                <div className="bg-white rounded-lg p-4 shadow-sm space-y-4">
+                <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-gray-900">레이어 설정</h3>
                     <button
@@ -932,7 +932,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   </div>
 
                   {currentSideLayers.map((layer, layerIndex) => (
-                    <div key={`${layer.id}-${layerIndex}`} className="border border-gray-200 rounded-lg p-3 space-y-3">
+                    <div key={`${layer.id}-${layerIndex}`} className="border border-gray-200 rounded-md p-3 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
@@ -1038,7 +1038,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </>
           ) : (
-            <div className="bg-white rounded-lg p-8 text-center">
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center">
               <p className="text-gray-500">면을 선택하거나 추가해주세요.</p>
             </div>
           )}

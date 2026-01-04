@@ -548,21 +548,21 @@ export default function ContentManagementTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">콘텐츠 관리</h2>
-          <p className="text-gray-500 mt-1">리뷰, 제작 사례, 문의를 한 곳에서 관리합니다.</p>
+          <h2 className="text-xl font-semibold text-gray-900">콘텐츠 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">리뷰, 제작 사례, 문의를 한 곳에서 관리합니다.</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg p-4 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {sectionTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveSection(tab.key as SectionKey)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 activeSection === tab.key
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -577,7 +577,7 @@ export default function ContentManagementTab() {
       {activeSection === 'reviews' && (
         <div className="space-y-4">
           {errors.reviews && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
               {errors.reviews}
             </div>
           )}
@@ -586,13 +586,13 @@ export default function ContentManagementTab() {
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : reviews.length === 0 ? (
-            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center text-gray-500">
               등록된 리뷰가 없습니다.
             </div>
           ) : (
             <div className="grid gap-4">
               {reviews.map((review) => (
-                <div key={review.id} className="bg-white rounded-lg shadow-sm p-5 space-y-3">
+                <div key={review.id} className="bg-white border border-gray-200/60 rounded-md shadow-sm p-4 space-y-3">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs text-gray-500">제품</p>
@@ -620,7 +620,7 @@ export default function ContentManagementTab() {
                   <div className="flex justify-end">
                     <button
                       onClick={() => handleDeleteReview(review.id)}
-                      className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       삭제
@@ -636,20 +636,20 @@ export default function ContentManagementTab() {
       {activeSection === 'examples' && (
         <div className="space-y-4">
           {errors.examples && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
               {errors.examples}
             </div>
           )}
 
-          <div className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">제작 사례 관리</h3>
+                <h3 className="text-base font-semibold text-gray-900">제작 사례 관리</h3>
                 <p className="text-sm text-gray-500">홈페이지에 노출할 사례를 등록하세요.</p>
               </div>
               <button
                 onClick={handleExampleFormToggle}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
               >
                 <Plus className="w-4 h-4" />
                 {exampleFormOpen ? '입력 닫기' : '새 사례 추가'}
@@ -657,7 +657,7 @@ export default function ContentManagementTab() {
             </div>
 
             {exampleFormOpen && (
-              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+              <div className="bg-gray-50 rounded-md p-4 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm text-gray-700">
                     제품 선택
@@ -666,7 +666,7 @@ export default function ContentManagementTab() {
                       onChange={(event) =>
                         setExampleForm((prev) => ({ ...prev, product_id: event.target.value }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
                     >
                       <option value="">제품 선택</option>
                       {products.map((product) => (
@@ -684,7 +684,7 @@ export default function ContentManagementTab() {
                       onChange={(event) =>
                         setExampleForm((prev) => ({ ...prev, title: event.target.value }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </label>
                 </div>
@@ -695,7 +695,7 @@ export default function ContentManagementTab() {
                     onChange={(event) =>
                       setExampleForm((prev) => ({ ...prev, description: event.target.value }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     rows={3}
                   />
                 </label>
@@ -709,7 +709,7 @@ export default function ContentManagementTab() {
                         onChange={(event) =>
                           setExampleForm((prev) => ({ ...prev, image_url: event.target.value }))
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       />
                     </label>
                     <label className="space-y-2 text-sm text-gray-700">
@@ -719,7 +719,7 @@ export default function ContentManagementTab() {
                         accept="image/*"
                         onChange={handleExampleImageInputChange}
                         disabled={uploadingExampleImage}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
                       />
                       {uploadingExampleImage && (
                         <span className="text-xs text-gray-500">업로드 중...</span>
@@ -737,7 +737,7 @@ export default function ContentManagementTab() {
                           sort_order: Number(event.target.value) || 0,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </label>
                 </div>
@@ -764,14 +764,14 @@ export default function ContentManagementTab() {
                       setExampleFormOpen(false);
                       setExampleFormError(null);
                     }}
-                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleExampleSave}
                     disabled={savingExample || uploadingExampleImage}
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     {savingExample
                       ? '저장 중...'
@@ -789,31 +789,31 @@ export default function ContentManagementTab() {
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : productionExamples.length === 0 ? (
-            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center text-gray-500">
               등록된 제작 사례가 없습니다.
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         이미지
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         제목
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         제품
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         정렬
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         상태
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         작업
                       </th>
                     </tr>
@@ -821,28 +821,28 @@ export default function ContentManagementTab() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {productionExamples.map((example) => (
                       <tr key={example.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <img
                             src={example.image_url}
                             alt={example.title}
-                            className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                            className="w-16 h-16 object-cover rounded-md border border-gray-200"
                           />
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">
                           <div className="text-sm font-medium text-gray-900">{example.title}</div>
                           <div className="text-xs text-gray-500 max-w-xs truncate">
                             {example.description}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className="text-sm text-gray-900">
                             {example.product?.title || example.product_id}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <span className="text-sm text-gray-900">{example.sort_order}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <button
                             onClick={() => handleExampleToggle(example)}
                             className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -864,18 +864,18 @@ export default function ContentManagementTab() {
                             )}
                           </button>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleExampleEdit(example)}
-                              className="inline-flex items-center gap-1 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                               편집
                             </button>
                             <button
                               onClick={() => handleExampleDelete(example.id)}
-                              className="inline-flex items-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                               삭제
@@ -895,7 +895,7 @@ export default function ContentManagementTab() {
       {activeSection === 'inquiries' && (
         <div className="space-y-4">
           {errors.inquiries && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
               {errors.inquiries}
             </div>
           )}
@@ -904,7 +904,7 @@ export default function ContentManagementTab() {
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : inquiries.length === 0 ? (
-            <div className="bg-white rounded-lg p-8 text-center text-gray-500">
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center text-gray-500">
               등록된 문의가 없습니다.
             </div>
           ) : (
@@ -921,7 +921,7 @@ export default function ContentManagementTab() {
                 const detailsId = `inquiry-details-${inquiry.id}`;
 
                 return (
-                  <div key={inquiry.id} className="bg-white rounded-lg shadow-sm">
+                  <div key={inquiry.id} className="bg-white border border-gray-200/60 rounded-md shadow-sm">
                     <button
                       type="button"
                       onClick={() =>
@@ -929,7 +929,7 @@ export default function ContentManagementTab() {
                       }
                       aria-expanded={isExpanded}
                       aria-controls={detailsId}
-                      className="w-full px-5 py-4 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full px-4 py-3 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
                     >
                       <div>
                         <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
@@ -952,7 +952,7 @@ export default function ContentManagementTab() {
                     </button>
 
                     {isExpanded && (
-                      <div id={detailsId} className="px-5 pb-5 space-y-4">
+                      <div id={detailsId} className="px-4 pb-4 space-y-4">
                         <div className="space-y-2">
                           <p className="text-sm font-medium text-gray-700">문의 내용</p>
                           <p className="text-sm text-gray-700 whitespace-pre-wrap">
@@ -986,7 +986,7 @@ export default function ContentManagementTab() {
                               handleStatusChange(inquiry.id, event.target.value as InquiryStatus)
                             }
                             disabled={updatingStatusId === inquiry.id}
-                            className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white disabled:opacity-50"
+                            className="px-3 py-2 text-sm border border-gray-300 rounded-md bg-white disabled:opacity-50"
                           >
                             <option value="pending">대기중</option>
                             <option value="ongoing">진행중</option>
@@ -1030,7 +1030,7 @@ export default function ContentManagementTab() {
                                 [inquiry.id]: event.target.value,
                               }))
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             rows={3}
                           />
                           <div className="flex justify-end">
@@ -1040,7 +1040,7 @@ export default function ContentManagementTab() {
                                 submittingReplyId === inquiry.id ||
                                 !(replyDrafts[inquiry.id] || '').trim()
                               }
-                              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
                             >
                               {submittingReplyId === inquiry.id ? '전송 중...' : '답변 전송'}
                             </button>

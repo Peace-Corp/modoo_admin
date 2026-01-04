@@ -161,17 +161,17 @@ export default function OrdersTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">주문 관리</h2>
-          <p className="text-gray-500 mt-1">총 {orders.length}개의 주문</p>
+          <h2 className="text-xl font-semibold text-gray-900">주문 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">총 {orders.length}개의 주문</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
@@ -184,7 +184,7 @@ export default function OrdersTab() {
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 filterStatus === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -197,9 +197,9 @@ export default function OrdersTab() {
       </div>
 
       {/* Orders List */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         {errorMessage && (
-          <div className="px-6 py-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+          <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">
             {errorMessage}
           </div>
         )}
@@ -207,28 +207,28 @@ export default function OrdersTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   고객 정보
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 일시
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   금액
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 상태
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   결제 상태
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   공장 배정
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   배송 방법
                 </th>
               </tr>
@@ -240,25 +240,25 @@ export default function OrdersTab() {
                   onClick={() => setSelectedOrder(order)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-mono text-blue-600">{order.id}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
                     <div className="text-xs text-gray-500">{order.customer_email}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-sm text-gray-900">
                       <Calendar className="w-4 h-4 text-gray-400" />
                       {formatDate(order.created_at)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm font-semibold text-gray-900">
                       {order.total_amount.toLocaleString()}원
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
                         order.order_status
@@ -267,7 +267,7 @@ export default function OrdersTab() {
                       {order.order_status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(
                         order.payment_status
@@ -276,12 +276,12 @@ export default function OrdersTab() {
                       {order.payment_status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
                       {getFactoryLabel(order.assigned_factory_id)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
                       {order.shipping_method === 'domestic'
                         ? '국내배송'

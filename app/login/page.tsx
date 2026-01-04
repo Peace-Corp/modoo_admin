@@ -35,13 +35,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">관리자 로그인</h1>
+      <div className="w-full max-w-md bg-white shadow-md rounded-xl p-6 border border-gray-200/60">
+        <div className="text-center mb-6">
+          <h1 className="text-xl font-semibold text-gray-900">관리자 로그인</h1>
           <p className="text-sm text-gray-500 mt-2">관리자/공장 계정으로 로그인하세요.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="email">
               이메일
@@ -53,7 +53,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
               placeholder="admin@example.com"
             />
           </div>
@@ -69,13 +69,13 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
               placeholder="비밀번호를 입력하세요"
             />
           </div>
 
           {errorMessage && (
-            <div className="rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
+            <div className="rounded-md bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-600">
               {errorMessage}
             </div>
           )}
@@ -83,7 +83,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-lg bg-blue-600 px-4 py-3 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full rounded-md bg-blue-600 px-3 py-2 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSubmitting ? '로그인 중...' : '로그인'}
           </button>

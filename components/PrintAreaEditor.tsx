@@ -353,18 +353,18 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">인쇄 영역 편집</h2>
-          <p className="text-gray-500 mt-1">{product.title}</p>
+          <h2 className="text-xl font-semibold text-gray-900">인쇄 영역 편집</h2>
+          <p className="text-sm text-gray-500 mt-1">{product.title}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={onCancel}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
             취소
@@ -372,7 +372,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             <Save className="w-5 h-5" />
             {saving ? '저장 중...' : '저장'}
@@ -380,16 +380,16 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Canvas Area */}
         <div className="lg:col-span-2 space-y-4">
           {/* Side Navigation */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setCurrentSideIndex(Math.max(0, currentSideIndex - 1))}
                 disabled={currentSideIndex === 0}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -404,7 +404,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
               <button
                 onClick={() => setCurrentSideIndex(Math.min(sides.length - 1, currentSideIndex + 1))}
                 disabled={currentSideIndex === sides.length - 1}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -412,7 +412,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
           </div>
 
           {/* Canvas */}
-          <div ref={containerRef} className="bg-white rounded-lg p-4 shadow-sm">
+          <div ref={containerRef} className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <canvas
               ref={canvasRef}
               onMouseDown={handleMouseDown}
@@ -431,7 +431,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
         {/* Controls Panel */}
         <div className="space-y-4">
           {/* Print Area Coordinates */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">인쇄 영역 (픽셀)</h3>
             <div className="space-y-3">
               <div>
@@ -440,7 +440,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.printArea.x || 0}
                   onChange={(e) => updatePrintAreaField('x', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -449,7 +449,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.printArea.y || 0}
                   onChange={(e) => updatePrintAreaField('y', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -458,7 +458,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.printArea.width || 0}
                   onChange={(e) => updatePrintAreaField('width', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -467,14 +467,14 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.printArea.height || 0}
                   onChange={(e) => updatePrintAreaField('height', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
             </div>
           </div>
 
           {/* Real Life Dimensions */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-2">실제 치수 (mm)</h3>
             <p className="text-xs text-gray-500 mb-4">
               인쇄 영역은 자동 계산됩니다. 제품 너비를 먼저 설정하세요.
@@ -486,7 +486,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.realLifeDimensions?.productWidthMm || 0}
                   onChange={(e) => updateRealLifeDimensions('productWidthMm', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
               <div>
@@ -497,7 +497,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.realLifeDimensions?.printAreaWidthMm || 0}
                   readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
                 />
               </div>
               <div>
@@ -508,14 +508,14 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   type="number"
                   value={currentSide?.realLifeDimensions?.printAreaHeightMm || 0}
                   readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
                 />
               </div>
             </div>
           </div>
 
           {/* Zoom Scale */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">줌 배율</h3>
             <div className="space-y-3">
               <div>
@@ -529,7 +529,7 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
                   max="5.0"
                   value={currentSide?.zoomScale || 1.0}
                   onChange={(e) => updateZoomScale(parseFloat(e.target.value) || 1.0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   현재: {((currentSide?.zoomScale || 1.0) * 100).toFixed(0)}%
@@ -539,13 +539,13 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
           </div>
 
           {/* Info */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">💡 사용 방법</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• 파란 영역을 드래그하여 이동</li>
-              <li>• 모서리 핸들을 드래그하여 크기 조절</li>
-              <li>• 숫자 입력으로 정밀한 조정</li>
-              <li>• 제품 너비(mm)를 설정하면 인쇄 영역 치수가 자동 계산됩니다</li>
+          <div className="bg-blue-50 rounded-md p-4">
+            <h4 className="font-medium text-blue-900 mb-2">사용 방법</h4>
+            <ul className="list-disc pl-5 text-sm text-blue-800 space-y-1">
+              <li>파란 영역을 드래그하여 이동</li>
+              <li>모서리 핸들을 드래그하여 크기 조절</li>
+              <li>숫자 입력으로 정밀한 조정</li>
+              <li>제품 너비(mm)를 설정하면 인쇄 영역 치수가 자동 계산됩니다</li>
             </ul>
           </div>
         </div>
