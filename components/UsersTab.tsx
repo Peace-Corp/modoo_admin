@@ -1,10 +1,12 @@
 'use client';
 
+import { useAuthStore } from '@/store/useAuthStore';
 import { useMemo, useState, useEffect } from 'react';
 import { Factory, Profile } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon } from 'lucide-react';
 
 export default function UsersTab() {
+  const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('all');
@@ -15,8 +17,10 @@ export default function UsersTab() {
   const [loadingFactories, setLoadingFactories] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
-  }, [filterRole]);
+    if (currentUser) {
+      fetchUsers();
+    }
+  }, [filterRole, currentUser]);
 
   useEffect(() => {
     fetchFactories();
@@ -26,7 +30,11 @@ export default function UsersTab() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/users?role=${filterRole}`, {
+      let url = `/api/admin/users?role=${filterRole}`;
+      if (currentUser?.role === 'factory' && currentUser.factory_id) {
+        url += `&factoryId=${currentUser.factory_id}`;
+      }
+      const response = await fetch(url, {
         method: 'GET',
       });
 
@@ -193,28 +201,30 @@ export default function UsersTab() {
       )}
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { value: 'all', label: '전체' },
-            { value: 'customer', label: '일반 사용자' },
-            { value: 'factory', label: '공장' },
-            { value: 'admin', label: '관리자' },
-          ].map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setFilterRole(filter.value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                filterRole === filter.value
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
+      {currentUser?.role === 'admin' && (
+        <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { value: 'all', label: '전체' },
+              { value: 'customer', label: '일반 사용자' },
+              { value: 'factory', label: '공장' },
+              { value: 'admin', label: '관리자' },
+            ].map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setFilterRole(filter.value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  filterRole === filter.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Users Table */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
@@ -240,9 +250,11 @@ export default function UsersTab() {
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   가입일
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  작업
-                </th>
+                {currentUser?.role === 'admin' && (
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    작업
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -277,7 +289,7 @@ export default function UsersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {user.role === 'factory' ? (
+                    {currentUser?.role === 'admin' && user.role === 'factory' ? (
                       <div className="flex items-center gap-2">
                         <select
                           value={user.factory_id || ''}
@@ -315,28 +327,35 @@ export default function UsersTab() {
                       {formatDate(user.created_at)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
+                  {currentUser?.role === 'admin' && (
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <select
-                          value={user.role}
-                          onChange={(event) => updateUserRole(user.id, event.target.value as 'customer' | 'admin' | 'factory')}
-                          disabled={updatingUserId === user.id}
-                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
-                        >
-                          <option value="customer">일반 사용자</option>
-                          <option value="factory">공장</option>
-                          <option value="admin">관리자</option>
-                        </select>
-                        {updatingUserId === user.id && (
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
-                            처리중...
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={user.role}
+                            onChange={(event) =>
+                              updateUserRole(
+                                user.id,
+                                event.target.value as 'customer' | 'admin' | 'factory'
+                              )
+                            }
+                            disabled={updatingUserId === user.id}
+                            className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
+                          >
+                            <option value="customer">일반 사용자</option>
+                            <option value="factory">공장</option>
+                            <option value="admin">관리자</option>
+                          </select>
+                          {updatingUserId === user.id && (
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                              처리중...
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
