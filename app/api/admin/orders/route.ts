@@ -34,6 +34,7 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const status = url.searchParams.get('status') || 'all';
+    const factoryId = url.searchParams.get('factoryId');
 
     const adminClient = createAdminClient();
     let query = adminClient.from('orders').select('*').order('created_at', { ascending: false });
@@ -43,6 +44,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ data: [] });
       }
       query = query.eq('assigned_factory_id', profile.factory_id);
+    } else if (profile.role === 'admin' && factoryId) {
+      query = query.eq('assigned_factory_id', factoryId);
     }
 
     if (status !== 'all') {

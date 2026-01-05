@@ -17,8 +17,10 @@ export default function OrdersTab() {
   const [loadingFactories, setLoadingFactories] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
-  }, [filterStatus]);
+    if (user) {
+      fetchOrders();
+    }
+  }, [filterStatus, user]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -50,7 +52,11 @@ export default function OrdersTab() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const response = await fetch(`/api/admin/orders?status=${filterStatus}`, {
+      let url = `/api/admin/orders?status=${filterStatus}`;
+      if (user?.role === 'factory' && user.factory_id) {
+        url += `&factoryId=${user.factory_id}`;
+      }
+      const response = await fetch(url, {
         method: 'GET',
       });
 
@@ -277,7 +283,7 @@ export default function OrdersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">
+                    <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_factory_id) === '미배정' && 'text-red-500'}`}>
                       {getFactoryLabel(order.assigned_factory_id)}
                     </span>
                   </td>

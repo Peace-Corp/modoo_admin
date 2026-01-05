@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
 import type { Factory, Order, OrderItem } from '@/types/types';
 import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download } from 'lucide-react';
 import OrderItemCanvas from './OrderItemCanvas';
@@ -50,17 +49,20 @@ export default function OrderDetail({
   const fetchOrderItems = async () => {
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', order.id);
+      const response = await fetch(`/api/admin/orders/items?orderId=${order.id}`, {
+        method: 'GET',
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '주문 상품을 불러오지 못했습니다.');
+      }
 
-      setOrderItems(data || []);
+      const payload = await response.json();
+      setOrderItems(payload?.data || []);
     } catch (error) {
       console.error('Error fetching order items:', error);
+      setOrderItems([]);
     } finally {
       setLoading(false);
     }

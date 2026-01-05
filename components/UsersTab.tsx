@@ -23,8 +23,12 @@ export default function UsersTab() {
   }, [filterRole, currentUser]);
 
   useEffect(() => {
-    fetchFactories();
-  }, []);
+    if (currentUser?.role === 'admin') {
+      fetchFactories();
+    } else {
+      setFactories([]);
+    }
+  }, [currentUser?.role]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -163,6 +167,16 @@ export default function UsersTab() {
     factories.forEach((factory) => map.set(factory.id, factory));
     return map;
   }, [factories]);
+
+  const getFactoryName = (factoryId?: string | null) => {
+    if (!factoryId) return '-';
+    const factory = factoryMap.get(factoryId);
+    if (factory?.name) return factory.name;
+    if (currentUser?.role === 'factory' && currentUser.factory_id === factoryId) {
+      return currentUser.factory_name || '-';
+    }
+    return '-';
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ko-KR', {
@@ -315,9 +329,7 @@ export default function UsersTab() {
                       </div>
                     ) : (
                       <span className="text-sm text-gray-500">
-                        {user.factory_id && factoryMap.get(user.factory_id)?.name
-                          ? factoryMap.get(user.factory_id)?.name
-                          : '-'}
+                        {getFactoryName(user.factory_id)}
                       </span>
                     )}
                   </td>
