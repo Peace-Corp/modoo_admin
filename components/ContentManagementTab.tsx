@@ -2315,7 +2315,7 @@ export default function ContentManagementTab() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {faqs.map((faq) => (
                       <tr key={faq.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 max-w-50">
                           <div className="text-sm font-medium text-gray-900">{faq.question}</div>
                           <div className="text-xs text-gray-500 max-w-xl truncate">
                             {faq.answer}
