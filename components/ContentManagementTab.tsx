@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { ChevronDown, ChevronUp, Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 
-type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'inquiries';
+type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'faqs' | 'inquiries';
 
 type ProductSummary = {
   id: string;
@@ -56,6 +56,18 @@ type AnnouncementRecord = {
   content: string;
   is_published: boolean | null;
   image_links: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type FaqRecord = {
+  id: string;
+  question: string;
+  answer: string;
+  category: string | null;
+  tags: string[] | null;
+  sort_order: number;
+  is_published: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -115,6 +127,16 @@ type HeroBannerFormState = {
   is_active: boolean;
 };
 
+type FaqFormState = {
+  id?: string | null;
+  question: string;
+  answer: string;
+  category: string;
+  tags: string;
+  sort_order: number;
+  is_published: boolean;
+};
+
 const emptyExampleForm: ExampleFormState = {
   product_id: '',
   title: '',
@@ -138,6 +160,15 @@ const emptyAnnouncementForm: AnnouncementFormState = {
   content: '',
   is_published: true,
   image_links: [],
+};
+
+const emptyFaqForm: FaqFormState = {
+  question: '',
+  answer: '',
+  category: '',
+  tags: '',
+  sort_order: 0,
+  is_published: true,
 };
 
 const EXAMPLE_IMAGE_BUCKET = 'products';
@@ -180,12 +211,21 @@ const sortAnnouncements = (announcements: AnnouncementRecord[]) => {
   });
 };
 
+const sortFaqs = (faqs: FaqRecord[]) => {
+  return [...faqs].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
 export default function ContentManagementTab() {
   const [activeSection, setActiveSection] = useState<SectionKey>('reviews');
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [productionExamples, setProductionExamples] = useState<ProductionExampleRecord[]>([]);
   const [heroBanners, setHeroBanners] = useState<HeroBannerRecord[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
+  const [faqs, setFaqs] = useState<FaqRecord[]>([]);
   const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState<Record<SectionKey, boolean>>({
@@ -193,6 +233,7 @@ export default function ContentManagementTab() {
     examples: true,
     heroBanners: true,
     announcements: true,
+    faqs: true,
     inquiries: true,
   });
   const [errors, setErrors] = useState<Record<SectionKey, string | null>>({
@@ -200,6 +241,7 @@ export default function ContentManagementTab() {
     examples: null,
     heroBanners: null,
     announcements: null,
+    faqs: null,
     inquiries: null,
   });
   const [exampleForm, setExampleForm] = useState<ExampleFormState>(emptyExampleForm);
@@ -217,6 +259,10 @@ export default function ContentManagementTab() {
   const [announcementFormError, setAnnouncementFormError] = useState<string | null>(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
   const [uploadingAnnouncementImages, setUploadingAnnouncementImages] = useState(0);
+  const [faqForm, setFaqForm] = useState<FaqFormState>(emptyFaqForm);
+  const [faqFormOpen, setFaqFormOpen] = useState(false);
+  const [faqFormError, setFaqFormError] = useState<string | null>(null);
+  const [savingFaq, setSavingFaq] = useState(false);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
@@ -227,6 +273,7 @@ export default function ContentManagementTab() {
     fetchProductionExamples();
     fetchHeroBanners();
     fetchAnnouncements();
+    fetchFaqs();
     fetchInquiries();
     fetchProducts();
   }, []);
@@ -325,6 +372,29 @@ export default function ContentManagementTab() {
     }
   };
 
+  const fetchFaqs = async () => {
+    setLoading((prev) => ({ ...prev, faqs: true }));
+    setErrors((prev) => ({ ...prev, faqs: null }));
+    try {
+      const response = await fetch('/api/admin/faqs');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || 'FAQ 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setFaqs(sortFaqs(payload?.data || []));
+    } catch (error) {
+      console.error('Error fetching faqs:', error);
+      setFaqs([]);
+      setErrors((prev) => ({
+        ...prev,
+        faqs: error instanceof Error ? error.message : 'FAQ 데이터를 불러오지 못했습니다.',
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, faqs: false }));
+    }
+  };
+
   const fetchInquiries = async () => {
     setLoading((prev) => ({ ...prev, inquiries: true }));
     setErrors((prev) => ({ ...prev, inquiries: null }));
@@ -370,9 +440,17 @@ export default function ContentManagementTab() {
       { key: 'examples', label: '제작 사례', count: productionExamples.length },
       { key: 'heroBanners', label: '히어로 배너', count: heroBanners.length },
       { key: 'announcements', label: '공지', count: announcements.length },
+      { key: 'faqs', label: 'FAQ', count: faqs.length },
       { key: 'inquiries', label: '문의', count: inquiries.length },
     ],
-    [reviews.length, productionExamples.length, heroBanners.length, announcements.length, inquiries.length]
+    [
+      reviews.length,
+      productionExamples.length,
+      heroBanners.length,
+      announcements.length,
+      faqs.length,
+      inquiries.length,
+    ]
   );
 
   const handleDeleteReview = async (reviewId: string) => {
@@ -974,6 +1052,154 @@ export default function ContentManagementTab() {
     }
   };
 
+  const parseFaqTags = (value: string) => {
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+  };
+
+  const handleFaqFormToggle = () => {
+    setFaqFormOpen((prev) => !prev);
+    setFaqFormError(null);
+    if (faqFormOpen) {
+      setFaqForm(emptyFaqForm);
+    }
+  };
+
+  const handleFaqEdit = (faq: FaqRecord) => {
+    setFaqForm({
+      id: faq.id,
+      question: faq.question ?? '',
+      answer: faq.answer ?? '',
+      category: faq.category ?? '',
+      tags: (faq.tags ?? []).join(', '),
+      sort_order: faq.sort_order ?? 0,
+      is_published: Boolean(faq.is_published),
+    });
+    setFaqFormOpen(true);
+    setFaqFormError(null);
+  };
+
+  const handleFaqSave = async () => {
+    setFaqFormError(null);
+
+    if (!faqForm.question.trim()) {
+      setFaqFormError('질문을 입력해주세요.');
+      return;
+    }
+
+    if (!faqForm.answer.trim()) {
+      setFaqFormError('답변을 입력해주세요.');
+      return;
+    }
+
+    setSavingFaq(true);
+    setErrors((prev) => ({ ...prev, faqs: null }));
+
+    const payload = {
+      id: faqForm.id ?? undefined,
+      question: faqForm.question.trim(),
+      answer: faqForm.answer.trim(),
+      category: faqForm.category.trim() || null,
+      tags: parseFaqTags(faqForm.tags),
+      sort_order: faqForm.sort_order,
+      is_published: faqForm.is_published,
+    };
+
+    try {
+      const response = await fetch('/api/admin/faqs', {
+        method: faqForm.id ? 'PATCH' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || 'FAQ 저장에 실패했습니다.');
+      }
+
+      const responsePayload = await response.json();
+      const savedFaq = responsePayload?.data as FaqRecord;
+
+      setFaqs((prev) => {
+        const updated = faqForm.id
+          ? prev.map((item) => (item.id === savedFaq.id ? savedFaq : item))
+          : [savedFaq, ...prev];
+        return sortFaqs(updated);
+      });
+
+      setFaqForm(emptyFaqForm);
+      setFaqFormOpen(false);
+    } catch (error) {
+      console.error('Error saving faq:', error);
+      setErrors((prev) => ({
+        ...prev,
+        faqs: error instanceof Error ? error.message : 'FAQ 저장에 실패했습니다.',
+      }));
+    } finally {
+      setSavingFaq(false);
+    }
+  };
+
+  const handleFaqDelete = async (faqId: string) => {
+    const confirmed = window.confirm('이 FAQ를 삭제할까요?');
+    if (!confirmed) return;
+
+    setErrors((prev) => ({ ...prev, faqs: null }));
+    try {
+      const response = await fetch(`/api/admin/faqs?id=${faqId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || 'FAQ 삭제에 실패했습니다.');
+      }
+
+      setFaqs((prev) => prev.filter((item) => item.id !== faqId));
+    } catch (error) {
+      console.error('Error deleting faq:', error);
+      setErrors((prev) => ({
+        ...prev,
+        faqs: error instanceof Error ? error.message : 'FAQ 삭제에 실패했습니다.',
+      }));
+    }
+  };
+
+  const handleFaqToggle = async (faq: FaqRecord) => {
+    setErrors((prev) => ({ ...prev, faqs: null }));
+    try {
+      const response = await fetch('/api/admin/faqs', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: faq.id,
+          is_published: !faq.is_published,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공개 상태 변경에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const updatedFaq = payload?.data as FaqRecord;
+      setFaqs((prev) => sortFaqs(prev.map((item) => (item.id === updatedFaq.id ? updatedFaq : item))));
+    } catch (error) {
+      console.error('Error toggling faq:', error);
+      setErrors((prev) => ({
+        ...prev,
+        faqs: error instanceof Error ? error.message : '공개 상태 변경에 실패했습니다.',
+      }));
+    }
+  };
+
   const handleReplySubmit = async (inquiryId: string) => {
     const content = replyDrafts[inquiryId]?.trim();
     if (!content) return;
@@ -1078,7 +1304,9 @@ export default function ContentManagementTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">콘텐츠 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">리뷰, 제작 사례, 문의를 한 곳에서 관리합니다.</p>
+          <p className="text-sm text-gray-500 mt-1">
+            리뷰, 제작 사례, 배너, 공지, FAQ, 문의를 한 곳에서 관리합니다.
+          </p>
         </div>
       </div>
 
@@ -1907,6 +2135,237 @@ export default function ContentManagementTab() {
                             </button>
                             <button
                               onClick={() => handleAnnouncementDelete(announcement.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              삭제
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeSection === 'faqs' && (
+        <div className="space-y-4">
+          {errors.faqs && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
+              {errors.faqs}
+            </div>
+          )}
+
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">FAQ 관리</h3>
+                <p className="text-sm text-gray-500">자주 묻는 질문을 등록/수정하세요.</p>
+              </div>
+              <button
+                onClick={handleFaqFormToggle}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                {faqFormOpen ? '입력 닫기' : '새 FAQ 추가'}
+              </button>
+            </div>
+
+            {faqFormOpen && (
+              <div className="bg-gray-50 rounded-md p-4 space-y-4">
+                <label className="space-y-2 text-sm text-gray-700">
+                  질문
+                  <input
+                    type="text"
+                    value={faqForm.question}
+                    onChange={(event) =>
+                      setFaqForm((prev) => ({ ...prev, question: event.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-gray-700">
+                  답변
+                  <textarea
+                    value={faqForm.answer}
+                    onChange={(event) =>
+                      setFaqForm((prev) => ({ ...prev, answer: event.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    rows={4}
+                  />
+                </label>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <label className="space-y-2 text-sm text-gray-700">
+                    카테고리
+                    <input
+                      type="text"
+                      value={faqForm.category}
+                      onChange={(event) =>
+                        setFaqForm((prev) => ({ ...prev, category: event.target.value }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm text-gray-700 md:col-span-2">
+                    태그 (쉼표로 구분)
+                    <input
+                      type="text"
+                      value={faqForm.tags}
+                      onChange={(event) => setFaqForm((prev) => ({ ...prev, tags: event.target.value }))}
+                      placeholder="예: 결제, 배송, 디자인"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 items-end">
+                  <label className="space-y-2 text-sm text-gray-700">
+                    정렬 순서
+                    <input
+                      type="number"
+                      value={faqForm.sort_order}
+                      onChange={(event) =>
+                        setFaqForm((prev) => ({
+                          ...prev,
+                          sort_order: Number(event.target.value) || 0,
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={faqForm.is_published}
+                      onChange={(event) =>
+                        setFaqForm((prev) => ({ ...prev, is_published: event.target.checked }))
+                      }
+                      className="rounded border-gray-300"
+                    />
+                    공개 상태로 노출
+                  </label>
+                </div>
+
+                {faqFormError && <p className="text-sm text-red-600">{faqFormError}</p>}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setFaqForm(emptyFaqForm);
+                      setFaqFormOpen(false);
+                      setFaqFormError(null);
+                    }}
+                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleFaqSave}
+                    disabled={savingFaq}
+                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {savingFaq ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {loading.faqs ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : faqs.length === 0 ? (
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center text-gray-500">
+              등록된 FAQ가 없습니다.
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        질문/답변
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        카테고리
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        태그
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        정렬
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        상태
+                      </th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        업데이트
+                      </th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        작업
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {faqs.map((faq) => (
+                      <tr key={faq.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900">{faq.question}</div>
+                          <div className="text-xs text-gray-500 max-w-xl truncate">
+                            {faq.answer}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {faq.category || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {faq.tags && faq.tags.length > 0 ? faq.tags.join(', ') : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {faq.sort_order}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            onClick={() => handleFaqToggle(faq)}
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                              faq.is_published
+                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                            }`}
+                          >
+                            {faq.is_published ? (
+                              <>
+                                <Eye className="w-3 h-3" />
+                                공개
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="w-3 h-3" />
+                                비공개
+                              </>
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(faq.updated_at)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleFaqEdit(faq)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              편집
+                            </button>
+                            <button
+                              onClick={() => handleFaqDelete(faq.id)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
