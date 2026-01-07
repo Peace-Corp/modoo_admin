@@ -10,6 +10,20 @@ export interface Product {
   updated_at: string;
 }
 
+export interface ProductColor {
+  id: string;
+  product_id: string;
+  color_id: string;
+  name: string;
+  hex: string;
+  label: string | null;
+  is_active: boolean | null;
+  sort_order: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  color_code: string | null;
+}
+
 export interface ProductConfig {
   id?: string;
   title?: string;
