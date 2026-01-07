@@ -317,7 +317,7 @@ export default function OrdersTab() {
                   고객 정보
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  공동구매 참여자
+                  주문 구분
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 일시
@@ -353,61 +353,10 @@ export default function OrdersTab() {
                     <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
                     <div className="text-xs text-gray-500">{order.customer_email}</div>
                   </td>
-                  <td
-                    className="px-4 py-3"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {order.order_category !== 'cobuy' ? (
-                      <span className="text-sm text-gray-400">-</span>
-                    ) : (
-                      <details
-                        className="text-xs text-gray-700"
-                        onToggle={(event) => {
-                          if (!(event.currentTarget as HTMLDetailsElement).open) return;
-                          void fetchCobuyParticipants(order.id);
-                        }}
-                      >
-                        <summary className="cursor-pointer text-blue-600 hover:underline">
-                          {cobuyParticipants[order.id]?.loading
-                            ? '불러오는 중...'
-                            : cobuyParticipants[order.id]?.error
-                            ? '불러오기 실패'
-                            : cobuyParticipants[order.id]?.fetched
-                            ? `참여자 ${(cobuyParticipants[order.id]?.participants || []).length}명`
-                            : '참여자 보기'}
-                        </summary>
-                        <div className="mt-2 space-y-2">
-                          {cobuyParticipants[order.id]?.error && (
-                            <div className="text-xs text-red-600">{cobuyParticipants[order.id].error}</div>
-                          )}
-                          {cobuyParticipants[order.id]?.loading && (
-                            <div className="text-xs text-gray-500">불러오는 중...</div>
-                          )}
-                          {!cobuyParticipants[order.id]?.loading &&
-                            !cobuyParticipants[order.id]?.error &&
-                            (cobuyParticipants[order.id]?.participants || []).length === 0 && (
-                              <div className="text-xs text-gray-500">
-                                {cobuyParticipants[order.id]?.sessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
-                              </div>
-                            )}
-                          {(cobuyParticipants[order.id]?.participants || []).map((participant) => (
-                            <div key={participant.id} className="border border-gray-200 rounded-md p-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="font-medium text-gray-900">{participant.name}</div>
-                                <div className="text-[11px] text-gray-600">
-                                  {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
-                                </div>
-                              </div>
-                              <div className="mt-1 space-y-0.5 text-[11px] text-gray-600">
-                                <div>{participant.email}</div>
-                                <div>{participant.phone || '-'}</div>
-                                <div>사이즈: {participant.selected_size || '-'}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
+                  <td className='px-4 py-3 whitespace-nowrap text-xs'>
+                    {
+                      order.order_category == 'cobuy' ? '공동구매' : '일반'
+                    }
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-sm text-gray-900">

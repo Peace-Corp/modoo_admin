@@ -277,17 +277,7 @@ export default function OrderDetail({
           </div>
         </div>
 
-        {cobuySession && (
-          <button
-            onClick={handleDownloadCobuyExcel}
-            disabled={downloadingCobuyExcel}
-            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
-            title={`공동구매 참여자 엑셀 다운로드 (${cobuySession.title})`}
-          >
-            <Download className="w-4 h-4" />
-            {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
-          </button>
-        )}
+        
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -356,6 +346,76 @@ export default function OrderDetail({
               </div>
             )}
           </div>
+
+
+          {/* CoBuy participant information */}
+          {order.order_category === 'cobuy' && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">공동구매 참여자</h3>
+                  {cobuySession && (
+                    <p className="text-xs text-gray-500 mt-1">{cobuySession.title}</p>
+                  )}
+                </div>
+                <div className='flex gap-2'>
+                  <button
+                    onClick={fetchCobuyParticipants}
+                    disabled={loadingCobuyParticipants}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    {loadingCobuyParticipants ? '불러오는 중...' : '새로고침'}
+                  </button>
+                  <button
+                    onClick={handleDownloadCobuyExcel}
+                    disabled={downloadingCobuyExcel}
+                    className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
+                    title={`공동구매 참여자 엑셀 다운로드 (${cobuySession?.title})`}
+                  >
+                    <Download className="w-4 h-4" />
+                    {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
+                  </button>
+                </div>
+              </div>
+
+              {cobuyParticipantsError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
+                  {cobuyParticipantsError}
+                </div>
+              )}
+
+              {loadingCobuyParticipants ? (
+                <div className="text-sm text-gray-500">불러오는 중...</div>
+              ) : cobuyParticipants.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  {cobuyParticipantSessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-500">총 {cobuyParticipants.length}명</div>
+                  <div className="space-y-2">
+                    {cobuyParticipants.map((participant) => (
+                      <div key={participant.id} className="border border-gray-200 rounded-md p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                            <div className="mt-1 text-xs text-gray-600">{participant.email}</div>
+                            <div className="text-xs text-gray-600">{participant.phone || '-'}</div>
+                          </div>
+                          <div className="text-right text-xs text-gray-600">
+                            <div>
+                              {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
+                            </div>
+                            <div className="mt-1">사이즈: {participant.selected_size || '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Order Summary */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
@@ -427,6 +487,7 @@ export default function OrderDetail({
               )}
             </div>
           </div>
+
         </div>
 
         {/* Right Column - Customer & Shipping Info */}
@@ -516,62 +577,7 @@ export default function OrderDetail({
             </div>
           </div>
 
-          {order.order_category === 'cobuy' && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">공동구매 참여자</h3>
-                  {cobuySession && (
-                    <p className="text-xs text-gray-500 mt-1">{cobuySession.title}</p>
-                  )}
-                </div>
-                <button
-                  onClick={fetchCobuyParticipants}
-                  disabled={loadingCobuyParticipants}
-                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  {loadingCobuyParticipants ? '불러오는 중...' : '새로고침'}
-                </button>
-              </div>
-
-              {cobuyParticipantsError && (
-                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-                  {cobuyParticipantsError}
-                </div>
-              )}
-
-              {loadingCobuyParticipants ? (
-                <div className="text-sm text-gray-500">불러오는 중...</div>
-              ) : cobuyParticipants.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                  {cobuyParticipantSessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-xs text-gray-500">총 {cobuyParticipants.length}명</div>
-                  <div className="space-y-2">
-                    {cobuyParticipants.map((participant) => (
-                      <div key={participant.id} className="border border-gray-200 rounded-md p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                            <div className="mt-1 text-xs text-gray-600">{participant.email}</div>
-                            <div className="text-xs text-gray-600">{participant.phone || '-'}</div>
-                          </div>
-                          <div className="text-right text-xs text-gray-600">
-                            <div>
-                              {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
-                            </div>
-                            <div className="mt-1">사이즈: {participant.selected_size || '-'}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          
 
           {cobuyError && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
