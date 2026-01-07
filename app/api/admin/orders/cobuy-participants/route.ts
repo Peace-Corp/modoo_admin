@@ -70,16 +70,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: { sessionId: null, participants: [] } });
     }
 
-    const sessionId =
-      order.cobuy_session_id ||
-      (
-        await adminClient
-          .from('cobuy_sessions')
-          .select('id')
-          .eq('bulk_order_id', orderId)
-          .maybeSingle()
-      ).data?.id ||
-      null;
+    let sessionId: string | null = order.cobuy_session_id || null;
+
+    if (!sessionId) {
+      const { data: session, error: sessionError } = await adminClient
+        .from('cobuy_sessions')
+        .select('id')
+        .eq('bulk_order_id', orderId)
+        .maybeSingle();
+
+      if (sessionError) {
+        return NextResponse.json({ error: sessionError.message }, { status: 500 });
+      }
+
+      sessionId = session?.id || null;
+    }
 
     if (!sessionId) {
       return NextResponse.json({ data: { sessionId: null, participants: [] } });
@@ -89,7 +94,6 @@ export async function GET(request: Request) {
       .from('cobuy_participants')
       .select('id, cobuy_session_id, name, email, phone, selected_size, payment_status, payment_amount, paid_at, joined_at')
       .eq('cobuy_session_id', sessionId)
-      .eq('payment_status', 'completed')
       .order('joined_at', { ascending: true });
 
     if (participantError) {
@@ -102,4 +106,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
