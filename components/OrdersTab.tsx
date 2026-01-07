@@ -1,10 +1,32 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Factory, Order } from '@/types/types';
+import { CoBuyParticipant, Factory, Order } from '@/types/types';
 import { Package, Calendar } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from './OrderDetail';
+
+type CoBuyParticipantSummary = Pick<
+  CoBuyParticipant,
+  | 'id'
+  | 'cobuy_session_id'
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'selected_size'
+  | 'payment_status'
+  | 'payment_amount'
+  | 'paid_at'
+  | 'joined_at'
+>;
+
+type CobuyParticipantsEntry = {
+  sessionId: string | null;
+  participants: CoBuyParticipantSummary[];
+  loading: boolean;
+  error: string | null;
+  fetched: boolean;
+};
 
 export default function OrdersTab() {
   const { user } = useAuthStore();
@@ -15,10 +37,13 @@ export default function OrdersTab() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
   const [loadingFactories, setLoadingFactories] = useState(false);
+  const [cobuyParticipants, setCobuyParticipants] = useState<Record<string, CobuyParticipantsEntry>>({});
 
   useEffect(() => {
-    fetchOrders();
-  }, [filterStatus]);
+    if (user) {
+      fetchOrders();
+    }
+  }, [filterStatus, user]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -46,11 +71,28 @@ export default function OrdersTab() {
     }
   }, [user?.role, user?.factory_id, user?.factory_name, user?.email, user?.phone]);
 
+  useEffect(() => {
+    setCobuyParticipants((prev) => {
+      const next: Record<string, CobuyParticipantsEntry> = {};
+      orders.forEach((order) => {
+        const entry = prev[order.id];
+        if (entry) {
+          next[order.id] = entry;
+        }
+      });
+      return next;
+    });
+  }, [orders]);
+
   const fetchOrders = async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const response = await fetch(`/api/admin/orders?status=${filterStatus}`, {
+      let url = `/api/admin/orders?status=${filterStatus}`;
+      if (user?.role === 'factory' && user.factory_id) {
+        url += `&factoryId=${user.factory_id}`;
+      }
+      const response = await fetch(url, {
         method: 'GET',
       });
 
@@ -85,6 +127,60 @@ export default function OrdersTab() {
       setFactories([]);
     } finally {
       setLoadingFactories(false);
+    }
+  };
+
+  const fetchCobuyParticipants = async (orderId: string) => {
+    const existing = cobuyParticipants[orderId];
+    if (existing?.loading) return;
+    if (existing?.fetched) return;
+
+    setCobuyParticipants((prev) => ({
+      ...prev,
+      [orderId]: {
+        sessionId: prev[orderId]?.sessionId ?? null,
+        participants: prev[orderId]?.participants ?? [],
+        loading: true,
+        error: null,
+        fetched: prev[orderId]?.fetched ?? false,
+      },
+    }));
+
+    try {
+      const response = await fetch(`/api/admin/orders/cobuy-participants?orderId=${orderId}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공동구매 참여자 정보를 불러오지 못했습니다.');
+      }
+
+      const payload = await response.json();
+      const data = payload?.data as { sessionId: string | null; participants: CoBuyParticipantSummary[] } | undefined;
+
+      setCobuyParticipants((prev) => ({
+        ...prev,
+        [orderId]: {
+          sessionId: data?.sessionId ?? null,
+          participants: data?.participants || [],
+          loading: false,
+          error: null,
+          fetched: true,
+        },
+      }));
+    } catch (error) {
+      console.error('Error fetching cobuy participants:', error);
+      setCobuyParticipants((prev) => ({
+        ...prev,
+        [orderId]: {
+          sessionId: prev[orderId]?.sessionId ?? null,
+          participants: prev[orderId]?.participants ?? [],
+          loading: false,
+          error: error instanceof Error ? error.message : '공동구매 참여자 정보를 불러오지 못했습니다.',
+          fetched: false,
+        },
+      }));
     }
   };
 
@@ -160,6 +256,13 @@ export default function OrdersTab() {
     );
   }
 
+  const cobuyPaymentStatusLabel: Record<CoBuyParticipant['payment_status'], string> = {
+    pending: '대기',
+    completed: '완료',
+    failed: '실패',
+    refunded: '환불',
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -214,6 +317,9 @@ export default function OrdersTab() {
                   고객 정보
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  주문 구분
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   주문 일시
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -247,6 +353,11 @@ export default function OrdersTab() {
                     <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
                     <div className="text-xs text-gray-500">{order.customer_email}</div>
                   </td>
+                  <td className='px-4 py-3 whitespace-nowrap text-xs'>
+                    {
+                      order.order_category == 'cobuy' ? '공동구매' : '일반'
+                    }
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-sm text-gray-900">
                       <Calendar className="w-4 h-4 text-gray-400" />
@@ -277,7 +388,7 @@ export default function OrdersTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">
+                    <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_factory_id) === '미배정' && 'text-red-500'}`}>
                       {getFactoryLabel(order.assigned_factory_id)}
                     </span>
                   </td>

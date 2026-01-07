@@ -15,24 +15,24 @@ const navItems: Array<{
   icon: React.ComponentType<{ className?: string }>;
   roles: AdminRole[];
 }> = [
-  { href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin', 'factory'] },
+  { href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
   { href: '/content', label: '콘텐츠 관리', icon: MessageSquare, roles: ['admin'] },
   { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
   { href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
   { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
-  { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin'] },
+  { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
   { href: '/settings', label: '설정', icon: Settings, roles: ['admin'] },
 ];
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
   admin: ['/dashboard', '/products', '/content', '/orders', '/factories', '/cobuy', '/users', '/settings'],
-  factory: ['/dashboard', '/orders'],
+  factory: ['/orders', '/users'],
 };
 
 const defaultRouteByRole: Record<AdminRole, string> = {
   admin: '/dashboard',
-  factory: '/dashboard',
+  factory: '/orders',
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

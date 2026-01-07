@@ -1,10 +1,23 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase-client';
-import type { Factory, Order, OrderItem } from '@/types/types';
+import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
 import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download } from 'lucide-react';
 import OrderItemCanvas from './OrderItemCanvas';
+
+type CoBuyParticipantSummary = Pick<
+  CoBuyParticipant,
+  | 'id'
+  | 'cobuy_session_id'
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'selected_size'
+  | 'payment_status'
+  | 'payment_amount'
+  | 'paid_at'
+  | 'joined_at'
+>;
 
 interface OrderDetailProps {
   order: Order;
@@ -34,6 +47,10 @@ export default function OrderDetail({
   const [cobuySession, setCobuySession] = useState<{ id: string; title: string } | null>(null);
   const [cobuyError, setCobuyError] = useState<string | null>(null);
   const [downloadingCobuyExcel, setDownloadingCobuyExcel] = useState(false);
+  const [cobuyParticipantSessionId, setCobuyParticipantSessionId] = useState<string | null>(null);
+  const [cobuyParticipants, setCobuyParticipants] = useState<CoBuyParticipantSummary[]>([]);
+  const [loadingCobuyParticipants, setLoadingCobuyParticipants] = useState(false);
+  const [cobuyParticipantsError, setCobuyParticipantsError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrderItems();
@@ -44,23 +61,39 @@ export default function OrderDetail({
   }, [order.id]);
 
   useEffect(() => {
+    if (order.order_category !== 'cobuy') {
+      setCobuyParticipantSessionId(null);
+      setCobuyParticipants([]);
+      setCobuyParticipantsError(null);
+      setLoadingCobuyParticipants(false);
+      return;
+    }
+
+    fetchCobuyParticipants();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.id, order.order_category]);
+
+  useEffect(() => {
     setSelectedFactoryId(order.assigned_factory_id || '');
   }, [order.assigned_factory_id]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', order.id);
+      const response = await fetch(`/api/admin/orders/items?orderId=${order.id}`, {
+        method: 'GET',
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '주문 상품을 불러오지 못했습니다.');
+      }
 
-      setOrderItems(data || []);
+      const payload = await response.json();
+      setOrderItems(payload?.data || []);
     } catch (error) {
       console.error('Error fetching order items:', error);
+      setOrderItems([]);
     } finally {
       setLoading(false);
     }
@@ -84,6 +117,35 @@ export default function OrderDetail({
       console.error('Error fetching cobuy session:', error);
       setCobuySession(null);
       setCobuyError(error instanceof Error ? error.message : '공동구매 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  const fetchCobuyParticipants = async () => {
+    setLoadingCobuyParticipants(true);
+    setCobuyParticipantsError(null);
+
+    try {
+      const response = await fetch(`/api/admin/orders/cobuy-participants?orderId=${order.id}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '공동구매 참여자 정보를 불러오지 못했습니다.');
+      }
+
+      const payload = await response.json();
+      setCobuyParticipantSessionId(payload?.data?.sessionId ?? null);
+      setCobuyParticipants(payload?.data?.participants || []);
+    } catch (error) {
+      console.error('Error fetching cobuy participants:', error);
+      setCobuyParticipantSessionId(null);
+      setCobuyParticipants([]);
+      setCobuyParticipantsError(
+        error instanceof Error ? error.message : '공동구매 참여자 정보를 불러오지 못했습니다.'
+      );
+    } finally {
+      setLoadingCobuyParticipants(false);
     }
   };
 
@@ -126,6 +188,13 @@ export default function OrderDetail({
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const cobuyPaymentStatusLabel: Record<CoBuyParticipant['payment_status'], string> = {
+    pending: '대기',
+    completed: '완료',
+    failed: '실패',
+    refunded: '환불',
   };
 
   const subtotal = orderItems.reduce(
@@ -208,17 +277,7 @@ export default function OrderDetail({
           </div>
         </div>
 
-        {cobuySession && (
-          <button
-            onClick={handleDownloadCobuyExcel}
-            disabled={downloadingCobuyExcel}
-            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
-            title={`공동구매 참여자 엑셀 다운로드 (${cobuySession.title})`}
-          >
-            <Download className="w-4 h-4" />
-            {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
-          </button>
-        )}
+        
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -287,6 +346,76 @@ export default function OrderDetail({
               </div>
             )}
           </div>
+
+
+          {/* CoBuy participant information */}
+          {order.order_category === 'cobuy' && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">공동구매 참여자</h3>
+                  {cobuySession && (
+                    <p className="text-xs text-gray-500 mt-1">{cobuySession.title}</p>
+                  )}
+                </div>
+                <div className='flex gap-2'>
+                  <button
+                    onClick={fetchCobuyParticipants}
+                    disabled={loadingCobuyParticipants}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    {loadingCobuyParticipants ? '불러오는 중...' : '새로고침'}
+                  </button>
+                  <button
+                    onClick={handleDownloadCobuyExcel}
+                    disabled={downloadingCobuyExcel}
+                    className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
+                    title={`공동구매 참여자 엑셀 다운로드 (${cobuySession?.title})`}
+                  >
+                    <Download className="w-4 h-4" />
+                    {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
+                  </button>
+                </div>
+              </div>
+
+              {cobuyParticipantsError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
+                  {cobuyParticipantsError}
+                </div>
+              )}
+
+              {loadingCobuyParticipants ? (
+                <div className="text-sm text-gray-500">불러오는 중...</div>
+              ) : cobuyParticipants.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  {cobuyParticipantSessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-500">총 {cobuyParticipants.length}명</div>
+                  <div className="space-y-2">
+                    {cobuyParticipants.map((participant) => (
+                      <div key={participant.id} className="border border-gray-200 rounded-md p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                            <div className="mt-1 text-xs text-gray-600">{participant.email}</div>
+                            <div className="text-xs text-gray-600">{participant.phone || '-'}</div>
+                          </div>
+                          <div className="text-right text-xs text-gray-600">
+                            <div>
+                              {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
+                            </div>
+                            <div className="mt-1">사이즈: {participant.selected_size || '-'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Order Summary */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
@@ -358,6 +487,7 @@ export default function OrderDetail({
               )}
             </div>
           </div>
+
         </div>
 
         {/* Right Column - Customer & Shipping Info */}
@@ -446,6 +576,8 @@ export default function OrderDetail({
               </div>
             </div>
           </div>
+
+          
 
           {cobuyError && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">

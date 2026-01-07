@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Product, ProductLayer, ProductSide, SizeOption } from '@/types/types';
+import { useEffect, useState, useRef } from 'react';
+import { Product, ProductColor, ProductLayer, ProductSide, SizeOption } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
@@ -77,6 +77,21 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // Size options
   const [sizeOptions, setSizeOptions] = useState<SizeOption[]>(product?.size_options || []);
 
+  // Product colors (single image products)
+  const [productColors, setProductColors] = useState<ProductColor[]>([]);
+  const [colorsLoading, setColorsLoading] = useState(false);
+  const [addingColor, setAddingColor] = useState(false);
+  const [deletingColorId, setDeletingColorId] = useState<string | null>(null);
+  const [colorDraft, setColorDraft] = useState({
+    color_id: '',
+    name: '',
+    hex: '#FFFFFF',
+    label: '',
+    color_code: '',
+    sort_order: 0,
+    is_active: true,
+  });
+
   // UI state
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -87,6 +102,116 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const currentSide = sides[currentSideIndex];
   const isCurrentSideLayered = currentSide ? isLayeredSide(currentSide) : false;
   const currentSideLayers = currentSide?.layers ?? [];
+  const hasLayeredItem = sides.some((side) => isLayeredSide(side));
+
+  const fetchProductColors = async (productId: string) => {
+    setColorsLoading(true);
+    try {
+      const response = await fetch(`/api/admin/product-colors?productId=${productId}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '색상 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setProductColors(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching product colors:', error);
+    } finally {
+      setColorsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!product?.id) return;
+    if (hasLayeredItem) return;
+    void fetchProductColors(product.id);
+  }, [product?.id, hasLayeredItem]);
+
+  const handleAddProductColor = async () => {
+    if (!product?.id) {
+      alert('제품을 먼저 저장해주세요.');
+      return;
+    }
+
+    const colorId = colorDraft.color_id.trim();
+    const name = colorDraft.name.trim();
+    const hex = colorDraft.hex.trim();
+    const isValidHex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex);
+
+    if (!colorId) {
+      alert('color_id가 필요합니다.');
+      return;
+    }
+    if (!name) {
+      alert('이름이 필요합니다.');
+      return;
+    }
+    if (!isValidHex) {
+      alert('HEX 형식이 올바르지 않습니다. (예: #FFFFFF)');
+      return;
+    }
+
+    setAddingColor(true);
+    try {
+      const response = await fetch('/api/admin/product-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.id,
+          color_id: colorId,
+          name,
+          hex,
+          label: colorDraft.label.trim() || null,
+          color_code: colorDraft.color_code.trim() || null,
+          sort_order: Number.isFinite(colorDraft.sort_order) ? colorDraft.sort_order : 0,
+          is_active: colorDraft.is_active,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '색상 추가에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const created = payload?.data as ProductColor;
+      setProductColors((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+      setColorDraft({
+        color_id: '',
+        name: '',
+        hex: '#FFFFFF',
+        label: '',
+        color_code: '',
+        sort_order: 0,
+        is_active: true,
+      });
+    } catch (error) {
+      console.error('Error adding product color:', error);
+      alert(error instanceof Error ? error.message : '색상 추가에 실패했습니다.');
+    } finally {
+      setAddingColor(false);
+    }
+  };
+
+  const handleDeleteProductColor = async (id: string) => {
+    const confirmed = window.confirm('이 색상을 삭제할까요?');
+    if (!confirmed) return;
+
+    setDeletingColorId(id);
+    try {
+      const response = await fetch(`/api/admin/product-colors?id=${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '색상 삭제에 실패했습니다.');
+      }
+      setProductColors((prev) => prev.filter((color) => color.id !== id));
+    } catch (error) {
+      console.error('Error deleting product color:', error);
+      alert(error instanceof Error ? error.message : '색상 삭제에 실패했습니다.');
+    } finally {
+      setDeletingColorId(null);
+    }
+  };
 
   // Add new side
   const handleAddSide = () => {
@@ -631,6 +756,155 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           </div>
+
+          {/* Product Colors (Single Image Products Only) */}
+          {!hasLayeredItem && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">색상 옵션</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">단일 이미지 제품만 해당됩니다. (product_colors)</p>
+                </div>
+              </div>
+
+              {!product?.id ? (
+                <p className="text-sm text-gray-600">제품을 저장한 후 색상을 추가할 수 있습니다.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">color_id *</label>
+                      <input
+                        type="text"
+                        value={colorDraft.color_id}
+                        onChange={(e) => setColorDraft((prev) => ({ ...prev, color_id: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="예: white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">이름 *</label>
+                      <input
+                        type="text"
+                        value={colorDraft.name}
+                        onChange={(e) => setColorDraft((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="예: 화이트"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">HEX *</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={colorDraft.hex}
+                          onChange={(e) => setColorDraft((prev) => ({ ...prev, hex: e.target.value }))}
+                          className="h-9 w-10 border border-gray-300 rounded"
+                        />
+                        <input
+                          type="text"
+                          value={colorDraft.hex}
+                          onChange={(e) => setColorDraft((prev) => ({ ...prev, hex: e.target.value }))}
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                          placeholder="#FFFFFF"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">sort_order</label>
+                      <input
+                        type="number"
+                        value={colorDraft.sort_order}
+                        onChange={(e) => setColorDraft((prev) => ({ ...prev, sort_order: parseInt(e.target.value) || 0 }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">label</label>
+                      <input
+                        type="text"
+                        value={colorDraft.label}
+                        onChange={(e) => setColorDraft((prev) => ({ ...prev, label: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="옵션 설명 (선택)"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">color_code</label>
+                      <input
+                        type="text"
+                        value={colorDraft.color_code}
+                        onChange={(e) => setColorDraft((prev) => ({ ...prev, color_code: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="코드 (선택)"
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center justify-between">
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={colorDraft.is_active}
+                          onChange={(e) => setColorDraft((prev) => ({ ...prev, is_active: e.target.checked }))}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                        />
+                        활성
+                      </label>
+                      <button
+                        onClick={handleAddProductColor}
+                        disabled={addingColor}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      >
+                        <Plus className="w-4 h-4" />
+                        {addingColor ? '추가 중...' : '추가'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900">등록된 색상</p>
+                      {colorsLoading && <p className="text-xs text-gray-500">불러오는 중...</p>}
+                    </div>
+                    {productColors.length === 0 && !colorsLoading && (
+                      <p className="text-sm text-gray-500">등록된 색상이 없습니다.</p>
+                    )}
+                    {productColors.map((color) => (
+                      <div
+                        key={color.id}
+                        className="flex items-center justify-between gap-2 border border-gray-200 rounded-md px-2 py-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-5 h-5 rounded border border-gray-300 shrink-0"
+                            style={{ backgroundColor: color.hex }}
+                            title={color.hex}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-900 truncate">
+                              {color.name} <span className="text-xs text-gray-500">({color.color_id})</span>
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {color.hex}
+                              {color.label ? ` · ${color.label}` : ''}
+                              {color.color_code ? ` · ${color.color_code}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteProductColor(color.id)}
+                          disabled={deletingColorId === color.id}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Middle Panel - Sides List */}

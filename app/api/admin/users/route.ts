@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, factory_id')
       .eq('id', user.id)
       .single();
 
@@ -30,12 +30,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    if (!profile || !['admin', 'factory'].includes(profile.role)) {
+      return NextResponse.json({ error: '관리자 또는 공장 권한이 필요합니다.' }, { status: 403 });
     }
-
     const url = new URL(request.url);
     const role = url.searchParams.get('role') || 'all';
+    let factoryId = url.searchParams.get('factoryId');
+
+    // Factory users can only see users from their own factory
+    if (profile.role === 'factory') {
+      factoryId = profile.factory_id;
+      if (!factoryId) {
+        // A factory user must have a factory_id assigned
+        return NextResponse.json({ data: [] });
+      }
+    }
 
     const adminClient = createAdminClient();
     let query = adminClient
@@ -49,7 +58,11 @@ export async function GET(request: Request) {
       }
       query = query.eq('role', role);
     }
-
+    
+    if (factoryId) {
+      query = query.eq('factory_id', factoryId);
+    }
+    
     const { data, error } = await query;
 
     if (error) {
