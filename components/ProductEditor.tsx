@@ -721,26 +721,26 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
             <div className="space-y-2">
               {sizeOptions.map((size, index) => (
-                <div key={`size-${index}`} className="flex gap-2">
+                <div key={`size-${index}`} className="flex gap-2 w-full">
                   <input
                     type="text"
                     value={size.id}
                     onChange={(e) => updateSizeOption(index, 'id', e.target.value)}
-                    className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                     placeholder="ID"
                   />
                   <input
                     type="text"
                     value={size.name}
                     onChange={(e) => updateSizeOption(index, 'name', e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                     placeholder="코드 (예: S)"
                   />
                   <input
                     type="text"
                     value={size.label}
                     onChange={(e) => updateSizeOption(index, 'label', e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
                     placeholder="라벨 (예: Small)"
                   />
                   <button
