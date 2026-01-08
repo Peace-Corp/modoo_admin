@@ -74,6 +74,8 @@ export async function POST(request: Request) {
     const isActive = payload?.is_active ?? true;
     const configuration = payload?.configuration;
     const sizeOptions = payload?.size_options ?? null;
+    const thumbnailImageLink = payload?.thumbnail_image_link ?? null;
+    const descriptionImage = payload?.description_image ?? null;
 
     if (!title || typeof title !== 'string') {
       return NextResponse.json({ error: '제품명이 필요합니다.' }, { status: 400 });
@@ -99,6 +101,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '활성 상태 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
+    if (thumbnailImageLink !== null && typeof thumbnailImageLink !== 'string') {
+      return NextResponse.json({ error: '썸네일 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    if (descriptionImage !== null && typeof descriptionImage !== 'string') {
+      return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
@@ -109,6 +119,8 @@ export async function POST(request: Request) {
         is_active: isActive,
         configuration,
         size_options: sizeOptions,
+        thumbnail_image_link: thumbnailImageLink,
+        description_image: descriptionImage,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -180,6 +192,20 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '사이즈 옵션 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.size_options = payload.size_options ?? null;
+    }
+
+    if (payload?.thumbnail_image_link !== undefined) {
+      if (payload.thumbnail_image_link !== null && typeof payload.thumbnail_image_link !== 'string') {
+        return NextResponse.json({ error: '썸네일 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.thumbnail_image_link = payload.thumbnail_image_link ?? null;
+    }
+
+    if (payload?.description_image !== undefined) {
+      if (payload.description_image !== null && typeof payload.description_image !== 'string') {
+        return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.description_image = payload.description_image ?? null;
     }
 
     if (Object.keys(updateData).length === 1) {

@@ -69,6 +69,8 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [basePrice, setBasePrice] = useState(product?.base_price || 0);
   const [category, setCategory] = useState(product?.category || '');
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
+  const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
+  const [descriptionImage, setDescriptionImage] = useState(product?.description_image ?? '');
 
   // Product sides
   const [sides, setSides] = useState<ProductSide[]>(() => normalizeSides(product?.configuration || []));
@@ -95,7 +97,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // UI state
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadTarget, setUploadTarget] = useState<{ sideIndex: number; layerIndex?: number } | null>(null);
+  type UploadTarget =
+    | { kind: 'side'; sideIndex: number; layerIndex?: number }
+    | { kind: 'product'; field: 'thumbnail_image_link' | 'description_image' };
+  const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -425,8 +430,30 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     setSides(newSides);
   };
 
+  const persistProductImageField = async (
+    field: 'thumbnail_image_link' | 'description_image',
+    value: string | null
+  ) => {
+    if (!product?.id) return;
+    try {
+      const response = await fetch('/api/admin/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, [field]: value }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '이미지 링크 저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Error persisting product image:', error);
+      alert(error instanceof Error ? error.message : '이미지 링크 저장 중 오류가 발생했습니다.');
+    }
+  };
+
   // Handle image upload
-  const handleImageUpload = async (target: { sideIndex: number; layerIndex?: number }, file: File) => {
+  const handleImageUpload = async (target: UploadTarget, file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('이미지 파일만 업로드 가능합니다.');
       return;
@@ -437,9 +464,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       const supabase = createClient();
 
       // Create unique file name
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || 'png';
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `product-images/${fileName}`;
+      const filePath =
+        target.kind === 'product'
+          ? `product-images/product-meta/${product?.id ?? 'new'}/${target.field}/${fileName}`
+          : `product-images/${fileName}`;
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -459,10 +489,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         .from('products')
         .getPublicUrl(filePath);
 
-      if (typeof target.layerIndex === 'number') {
-        updateLayerField(target.sideIndex, target.layerIndex, 'imageUrl', publicUrl);
+      if (target.kind === 'side') {
+        if (typeof target.layerIndex === 'number') {
+          updateLayerField(target.sideIndex, target.layerIndex, 'imageUrl', publicUrl);
+        } else {
+          updateSideField(target.sideIndex, 'imageUrl', publicUrl);
+        }
+      } else if (target.field === 'thumbnail_image_link') {
+        setThumbnailImageLink(publicUrl);
+        await persistProductImageField('thumbnail_image_link', publicUrl);
       } else {
-        updateSideField(target.sideIndex, 'imageUrl', publicUrl);
+        setDescriptionImage(publicUrl);
+        await persistProductImageField('description_image', publicUrl);
       }
 
       alert('이미지가 업로드되었습니다.');
@@ -476,8 +514,22 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Trigger file input
   const triggerFileInput = (sideIndex: number, layerIndex?: number) => {
-    setUploadTarget({ sideIndex, layerIndex });
+    setUploadTarget({ kind: 'side', sideIndex, layerIndex });
     fileInputRef.current?.click();
+  };
+
+  const triggerProductFileInput = (field: 'thumbnail_image_link' | 'description_image') => {
+    setUploadTarget({ kind: 'product', field });
+    fileInputRef.current?.click();
+  };
+
+  const clearProductImage = (field: 'thumbnail_image_link' | 'description_image') => {
+    if (field === 'thumbnail_image_link') {
+      setThumbnailImageLink('');
+    } else {
+      setDescriptionImage('');
+    }
+    void persistProductImageField(field, null);
   };
 
   // Handle file input change
@@ -486,7 +538,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     if (file && uploadTarget) {
       const target = uploadTarget;
       setUploadTarget(null);
-      handleImageUpload(target, file);
+      void handleImageUpload(target, file);
     }
     e.target.value = ''; // Reset input
   };
@@ -587,6 +639,8 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         is_active: isActive,
         configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
+        thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
+        description_image: descriptionImage.trim() ? descriptionImage.trim() : null,
       };
 
       if (!isNewProduct && !product?.id) {
@@ -703,6 +757,110 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 <label htmlFor="is-active" className="text-sm font-medium text-gray-700">
                   활성 상태
                 </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Product Images */}
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <h3 className="font-semibold text-gray-900 mb-4">제품 이미지</h3>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">제품 썸네일 (thumbnail_image_link)</label>
+                <div className="flex items-start gap-3">
+                  {thumbnailImageLink ? (
+                    <img
+                      src={thumbnailImageLink}
+                      alt="제품 썸네일"
+                      className="w-20 h-20 object-cover rounded border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="text"
+                      value={thumbnailImageLink}
+                      onChange={(e) => setThumbnailImageLink(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="https://..."
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => triggerProductFileInput('thumbnail_image_link')}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" />
+                        업로드
+                      </button>
+                      {!!thumbnailImageLink && (
+                        <button
+                          onClick={() => clearProductImage('thumbnail_image_link')}
+                          disabled={uploading}
+                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          지우기
+                        </button>
+                      )}
+                    </div>
+                    {!product?.id && (
+                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">상세 이미지 (description_image)</label>
+                <div className="flex items-start gap-3">
+                  {descriptionImage ? (
+                    <img
+                      src={descriptionImage}
+                      alt="상세 이미지"
+                      className="w-20 h-20 object-cover rounded border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="text"
+                      value={descriptionImage}
+                      onChange={(e) => setDescriptionImage(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="https://..."
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => triggerProductFileInput('description_image')}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" />
+                        업로드
+                      </button>
+                      {!!descriptionImage && (
+                        <button
+                          onClick={() => clearProductImage('description_image')}
+                          disabled={uploading}
+                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          지우기
+                        </button>
+                      )}
+                    </div>
+                    {!product?.id && (
+                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
