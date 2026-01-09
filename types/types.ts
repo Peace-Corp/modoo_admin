@@ -130,6 +130,10 @@ export interface OrderItem {
   };
   thumbnail_url: string | null;
 
+  // Order file downloads (JSONB)
+  image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
+  text_svg_exports?: Record<string, unknown> | string | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -177,6 +181,8 @@ export interface ExtractedColor {
 
 export interface ObjectDimensions {
   objectId?: string;
+  sideId?: string;
+  rawType?: string;
   objectType: string;
   widthMm: number;
   heightMm: number;

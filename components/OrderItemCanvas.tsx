@@ -12,6 +12,10 @@ interface OrderItemCanvasProps {
   onBack: () => void;
 }
 
+type ImageUrlEntry = { url: string; path?: string; uploadedAt?: string };
+type ImageUrlsBySide = Record<string, ImageUrlEntry[]>;
+type TextSvgObjectUrlsBySide = Record<string, Record<string, string>>;
+
 const parseCanvasState = (value: unknown): CanvasState | null => {
   if (!value) return null;
   if (typeof value === 'string') {
@@ -187,12 +191,106 @@ const buildFilename = (base: string, extension?: string | null) => {
   return `${base}.${extension}`;
 };
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const parseJsonValue = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.error('Error parsing JSON value:', error);
+    return null;
+  }
+};
+
+const coerceImageUrlsBySide = (value: unknown): ImageUrlsBySide => {
+  const parsed = parseJsonValue(value);
+  if (!isPlainRecord(parsed)) return {};
+
+  const result: ImageUrlsBySide = {};
+  Object.entries(parsed).forEach(([sideId, rawImages]) => {
+    if (!Array.isArray(rawImages)) return;
+    const images: ImageUrlEntry[] = [];
+    rawImages.forEach((raw) => {
+      if (!isPlainRecord(raw)) return;
+      const url = typeof raw.url === 'string' ? raw.url : '';
+      if (!url) return;
+      images.push({
+        url,
+        path: typeof raw.path === 'string' ? raw.path : undefined,
+        uploadedAt: typeof raw.uploadedAt === 'string' ? raw.uploadedAt : undefined,
+      });
+    });
+    if (images.length > 0) {
+      result[sideId] = images;
+    }
+  });
+
+  return result;
+};
+
+const coerceTextSvgExports = (value: unknown): Record<string, unknown> => {
+  const parsed = parseJsonValue(value);
+  if (!isPlainRecord(parsed)) return {};
+  return parsed;
+};
+
+const coerceTextSvgObjectUrlsBySide = (value: unknown): TextSvgObjectUrlsBySide => {
+  const parsed = parseJsonValue(value);
+  if (!isPlainRecord(parsed)) return {};
+
+  const result: TextSvgObjectUrlsBySide = {};
+  Object.entries(parsed).forEach(([sideId, rawSideObjects]) => {
+    if (!isPlainRecord(rawSideObjects)) return;
+    const objectMap: Record<string, string> = {};
+    Object.entries(rawSideObjects).forEach(([objectId, url]) => {
+      if (typeof url !== 'string' || !url) return;
+      objectMap[objectId] = url;
+    });
+    if (Object.keys(objectMap).length > 0) {
+      result[sideId] = objectMap;
+    }
+  });
+
+  return result;
+};
+
+const sanitizeFilenameSegment = (value: string) => value.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [dimensionsBySide, setDimensionsBySide] = useState<Record<string, ObjectDimensions[]>>({});
   const [productColors, setProductColors] = useState<Array<{ name: string; hex: string; color_code?: string }>>([]);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
+
+  const textSvgExports = useMemo(() => coerceTextSvgExports(orderItem.text_svg_exports), [orderItem.text_svg_exports]);
+  const textSvgSideUrls = useMemo(() => {
+    const result: Record<string, string> = {};
+    Object.entries(textSvgExports).forEach(([sideId, value]) => {
+      if (sideId === '__objects') return;
+      if (typeof value !== 'string' || !value) return;
+      result[sideId] = value;
+    });
+    return result;
+  }, [textSvgExports]);
+  const textSvgObjectUrlsBySide = useMemo(() => {
+    return coerceTextSvgObjectUrlsBySide(textSvgExports.__objects);
+  }, [textSvgExports]);
+
+  const sideNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    product?.configuration?.forEach((side) => {
+      map.set(side.id, side.name);
+    });
+    return map;
+  }, [product]);
 
   const getItemColorHex = () => {
     const variants = orderItem.item_options?.variants;
@@ -431,6 +529,8 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
       const dimension: ObjectDimensions = {
         objectId,
+        sideId,
+        rawType: obj.type,
         objectType,
         widthMm: resolvedWidthMm,
         heightMm: resolvedHeightMm,
@@ -632,6 +732,12 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }, 1000);
   };
 
+  const downloadDataUrl = async (dataUrl: string, filename: string) => {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    downloadBlob(blob, filename);
+  };
+
   const downloadUrl = async (url: string, filename: string) => {
     try {
       const response = await fetch(url, { mode: 'cors' });
@@ -651,6 +757,166 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
   };
 
+  const isTextObjectType = (rawType?: string | null) => {
+    const normalized = (rawType || '').toLowerCase();
+    return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox';
+  };
+
+  const findTextSvgUrlForObject = (objectId: string, preferredSideId?: string | null) => {
+    if (preferredSideId && textSvgObjectUrlsBySide[preferredSideId]?.[objectId]) {
+      return { sideId: preferredSideId, url: textSvgObjectUrlsBySide[preferredSideId][objectId] };
+    }
+
+    for (const [sideId, objectMap] of Object.entries(textSvgObjectUrlsBySide)) {
+      const url = objectMap?.[objectId];
+      if (url) return { sideId, url };
+    }
+
+    return null;
+  };
+
+  const findCanvasObjectByObjectId = (objectId: string) => {
+    const canvasStates = orderItem.canvas_state || {};
+    for (const [sideId, sideStateRaw] of Object.entries(canvasStates)) {
+      const canvasState = parseCanvasState(sideStateRaw);
+      const objects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
+      for (const rawObject of objects) {
+        if (!rawObject || typeof rawObject !== 'object') continue;
+        const typed = rawObject as {
+          objectId?: string;
+          src?: string;
+          type?: string;
+          data?: {
+            objectId?: string;
+            originalFileUrl?: string;
+            supabaseUrl?: string;
+            supabasePath?: string;
+            originalFileName?: string;
+            fileType?: string;
+          };
+        };
+        const id = typed.data?.objectId || typed.objectId;
+        if (id !== objectId) continue;
+        return {
+          sideId,
+          src: typeof typed.src === 'string' ? typed.src : undefined,
+          type: typed.type,
+          data: typed.data,
+        };
+      }
+    }
+    return null;
+  };
+
+  const handleDownloadObjectAsset = async (dimension: ObjectDimensions, index: number) => {
+    const objectId = dimension.objectId;
+    const safeObjectId = objectId ? sanitizeFilenameSegment(objectId) : String(index + 1);
+    const resolvedSideId = dimension.sideId;
+    const rawType = (dimension.rawType || dimension.objectType || '').toLowerCase();
+    const basePrefix = `order-${orderItem.id}`;
+
+    try {
+      if (objectId && isTextObjectType(rawType)) {
+        const svgAsset = findTextSvgUrlForObject(objectId, resolvedSideId);
+        if (svgAsset?.url) {
+          const filename = `${basePrefix}-${svgAsset.sideId}-text-${safeObjectId}.svg`;
+          await downloadUrl(svgAsset.url, filename);
+          return;
+        }
+
+        if (resolvedSideId && textSvgSideUrls[resolvedSideId]) {
+          const filename = `${basePrefix}-${resolvedSideId}-text.svg`;
+          await downloadUrl(textSvgSideUrls[resolvedSideId], filename);
+          return;
+        }
+
+        if (resolvedSideId) {
+          const canvasState = parseCanvasState(orderItem.canvas_state?.[resolvedSideId]);
+          if (canvasState?.objects?.length) {
+            const filteredTextObject = canvasState.objects.find((obj) => {
+              if (!obj || typeof obj !== 'object') return false;
+              const type = typeof obj.type === 'string' ? obj.type.toLowerCase() : '';
+              if (!isTextObjectType(type)) return false;
+              const id = (obj as { objectId?: string; data?: { objectId?: string } }).data?.objectId
+                || (obj as { objectId?: string }).objectId;
+              return id === objectId;
+            });
+            if (filteredTextObject) {
+              const svg = getTextSvgFromCanvasState({ ...canvasState, objects: [filteredTextObject] }, resolvedSideId);
+              if (svg) {
+                downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `${basePrefix}-${resolvedSideId}-text-${safeObjectId}.svg`);
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      if (objectId && rawType === 'image') {
+        const canvasObject = findCanvasObjectByObjectId(objectId);
+        const sideId = resolvedSideId || canvasObject?.sideId;
+        const data = canvasObject?.data;
+        const trackedSideImages = sideId ? imageUrlsBySide[sideId] : undefined;
+
+        const supabaseUrl = typeof data?.supabaseUrl === 'string' ? data.supabaseUrl : undefined;
+        const supabasePath = typeof data?.supabasePath === 'string' ? data.supabasePath : undefined;
+        const originalFileUrl = typeof data?.originalFileUrl === 'string' ? data.originalFileUrl : undefined;
+        const src = typeof canvasObject?.src === 'string' ? canvasObject.src : undefined;
+
+        let urlToDownload = supabaseUrl || originalFileUrl || src;
+        let trackedIndex = -1;
+        if (trackedSideImages?.length) {
+          trackedIndex = trackedSideImages.findIndex((img) => {
+            if (supabaseUrl && img.url === supabaseUrl) return true;
+            if (supabasePath && img.path === supabasePath) return true;
+            return false;
+          });
+          if (trackedIndex >= 0) {
+            urlToDownload = trackedSideImages[trackedIndex].url;
+          } else if (trackedSideImages.length === 1 && !supabaseUrl && !supabasePath) {
+            urlToDownload = trackedSideImages[0].url;
+            trackedIndex = 0;
+          }
+        }
+
+        if (urlToDownload) {
+          const ext = getFileExtensionFromName(data?.originalFileName)
+            || getFileExtensionFromUrl(urlToDownload)
+            || getFileExtensionFromType(data?.fileType)
+            || 'png';
+          const fileIndexSuffix = trackedIndex >= 0 ? String(trackedIndex + 1) : safeObjectId;
+          const filename = buildFilename(`${basePrefix}-${sideId || 'image'}-image-${fileIndexSuffix}`, ext);
+          if (urlToDownload.startsWith('data:')) {
+            await downloadDataUrl(urlToDownload, filename);
+          } else {
+            await downloadUrl(urlToDownload, filename);
+          }
+          return;
+        }
+      }
+
+      if (dimension.preview && dimension.preview.startsWith('data:')) {
+        await downloadDataUrl(dimension.preview, buildFilename(`${basePrefix}-object-${safeObjectId}`, 'png'));
+        return;
+      }
+
+      if (objectId) {
+        const asset = findCanvasObjectByObjectId(objectId);
+        const url = asset?.src;
+        if (url) {
+          const ext = getFileExtensionFromUrl(url) || getFileExtensionFromType(asset?.type) || 'png';
+          await downloadUrl(url, buildFilename(`${basePrefix}-object-${safeObjectId}`, ext));
+          return;
+        }
+      }
+
+      alert('다운로드 가능한 에셋을 찾지 못했습니다.');
+    } catch (error) {
+      console.error('Error downloading object asset:', error);
+      alert('다운로드 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleDownloadDesignFiles = async () => {
     if (isDownloading) return;
     setIsDownloading(true);
@@ -658,69 +924,104 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     try {
       const files: Array<{ type: 'blob'; blob: Blob; filename: string } | { type: 'url'; url: string; filename: string }> = [];
       const seenUrls = new Set<string>();
+      const prefix = `order-${orderItem.id}`;
+
+      Object.entries(imageUrlsBySide).forEach(([sideId, images]) => {
+        images.forEach((image, index) => {
+          if (!image?.url) return;
+          if (seenUrls.has(image.url)) return;
+          seenUrls.add(image.url);
+          const ext = getFileExtensionFromName(image.path?.split('/').pop())
+            || getFileExtensionFromUrl(image.url)
+            || 'jpg';
+          files.push({
+            type: 'url',
+            url: image.url,
+            filename: buildFilename(`${prefix}-${sideId}-image-${index + 1}`, ext),
+          });
+        });
+      });
+
+      Object.entries(textSvgSideUrls).forEach(([sideId, url]) => {
+        if (!url || seenUrls.has(url)) return;
+        seenUrls.add(url);
+        files.push({ type: 'url', url, filename: `${prefix}-${sideId}-text.svg` });
+      });
+
+      Object.entries(textSvgObjectUrlsBySide).forEach(([sideId, objectMap]) => {
+        Object.entries(objectMap).forEach(([objectId, url]) => {
+          if (!url || seenUrls.has(url)) return;
+          seenUrls.add(url);
+          files.push({
+            type: 'url',
+            url,
+            filename: `${prefix}-${sideId}-text-${sanitizeFilenameSegment(objectId)}.svg`,
+          });
+        });
+      });
+
+      const hasAnyTrackedSvgs = Object.keys(textSvgSideUrls).length > 0 || Object.keys(textSvgObjectUrlsBySide).length > 0;
+      const hasAnyTrackedImages = Object.keys(imageUrlsBySide).length > 0;
 
       const canvasStates = orderItem.canvas_state || {};
-      Object.entries(canvasStates).forEach(([sideId, canvasStateRaw]) => {
-        const parsedState = parseCanvasState(canvasStateRaw) as CanvasState | null;
-        if (!parsedState || !Array.isArray(parsedState.objects)) return;
 
-        const textSvg = getTextSvgFromCanvasState(parsedState, sideId);
-        if (textSvg) {
-          const svgName = `order-${orderItem.id}-${sideId}-text.svg`;
+      if (!hasAnyTrackedSvgs) {
+        Object.entries(canvasStates).forEach(([sideId, canvasStateRaw]) => {
+          const parsedState = parseCanvasState(canvasStateRaw) as CanvasState | null;
+          if (!parsedState || !Array.isArray(parsedState.objects)) return;
+          const textSvg = getTextSvgFromCanvasState(parsedState, sideId);
+          if (!textSvg) return;
           files.push({
             type: 'blob',
             blob: new Blob([textSvg], { type: 'image/svg+xml' }),
-            filename: svgName,
+            filename: `${prefix}-${sideId}-text.svg`,
           });
-        }
-
-        let imageIndex = 0;
-        parsedState.objects.forEach((obj) => {
-          if (!obj || typeof obj !== 'object') return;
-          if (obj.data?.id === 'background-product-image') return;
-
-          const objectType = typeof obj.type === 'string' ? obj.type.toLowerCase() : '';
-          if (objectType !== 'image') return;
-
-          imageIndex += 1;
-          const fileIndex = imageIndex;
-
-          const data = obj.data as {
-            originalFileUrl?: string;
-            supabaseUrl?: string;
-            originalFileName?: string;
-            fileType?: string;
-            isConverted?: boolean;
-          } | undefined;
-
-          const originalUrl = typeof data?.originalFileUrl === 'string'
-            ? data.originalFileUrl
-            : typeof data?.supabaseUrl === 'string'
-            ? data.supabaseUrl
-            : typeof (obj as { src?: string }).src === 'string'
-            ? (obj as { src: string }).src
-            : null;
-
-          const displayUrl = typeof data?.supabaseUrl === 'string' ? data.supabaseUrl : null;
-
-          if (originalUrl && !seenUrls.has(originalUrl)) {
-            seenUrls.add(originalUrl);
-            const extension = getFileExtensionFromName(data?.originalFileName)
-              || getFileExtensionFromUrl(originalUrl)
-              || getFileExtensionFromType(data?.fileType)
-              || 'png';
-            const filename = buildFilename(`order-${orderItem.id}-${sideId}-image-${fileIndex}`, extension);
-            files.push({ type: 'url', url: originalUrl, filename });
-          }
-
-          if (displayUrl && displayUrl !== originalUrl && !seenUrls.has(displayUrl)) {
-            seenUrls.add(displayUrl);
-            const extension = getFileExtensionFromUrl(displayUrl) || 'png';
-            const filename = buildFilename(`order-${orderItem.id}-${sideId}-image-${fileIndex}-preview`, extension);
-            files.push({ type: 'url', url: displayUrl, filename });
-          }
         });
-      });
+      }
+
+      if (!hasAnyTrackedImages) {
+        Object.entries(canvasStates).forEach(([sideId, canvasStateRaw]) => {
+          const parsedState = parseCanvasState(canvasStateRaw) as CanvasState | null;
+          if (!parsedState || !Array.isArray(parsedState.objects)) return;
+
+          let imageIndex = 0;
+          parsedState.objects.forEach((obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (obj.data?.id === 'background-product-image') return;
+
+            const objectType = typeof obj.type === 'string' ? obj.type.toLowerCase() : '';
+            if (objectType !== 'image') return;
+
+            imageIndex += 1;
+            const fileIndex = imageIndex;
+
+            const data = obj.data as {
+              originalFileUrl?: string;
+              supabaseUrl?: string;
+              originalFileName?: string;
+              fileType?: string;
+            } | undefined;
+
+            const originalUrl = typeof data?.supabaseUrl === 'string'
+              ? data.supabaseUrl
+              : typeof data?.originalFileUrl === 'string'
+              ? data.originalFileUrl
+              : typeof (obj as { src?: string }).src === 'string'
+              ? (obj as { src: string }).src
+              : null;
+
+            if (originalUrl && !seenUrls.has(originalUrl)) {
+              seenUrls.add(originalUrl);
+              const extension = getFileExtensionFromName(data?.originalFileName)
+                || getFileExtensionFromUrl(originalUrl)
+                || getFileExtensionFromType(data?.fileType)
+                || 'png';
+              const filename = buildFilename(`${prefix}-${sideId}-image-${fileIndex}`, extension);
+              files.push({ type: 'url', url: originalUrl, filename });
+            }
+          });
+        });
+      }
 
       if (files.length === 0) {
         alert('다운로드할 파일이 없습니다.');
@@ -733,6 +1034,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         } else {
           await downloadUrl(file.url, file.filename);
         }
+        await sleep(120);
       }
     } finally {
       setIsDownloading(false);
@@ -790,7 +1092,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
             className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
-            {isDownloading ? '다운로드 중...' : '파일 다운로드'}
+            {isDownloading ? '다운로드 중...' : '전체 에셋 다운로드'}
           </button>
         </div>
       </div>
@@ -929,13 +1231,29 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-900">
                             {dimension.objectType}
+                            {dimension.sideId && (
+                              <span className="ml-2 text-xs font-normal text-gray-500">
+                                {sideNameById.get(dimension.sideId) || dimension.sideId}
+                              </span>
+                            )}
                           </span>
-                          {dimension.colors?.[0] && (
-                            <div
-                              className="w-4 h-4 rounded-full border border-gray-300"
-                              style={{ backgroundColor: dimension.colors[0] }}
-                            />
-                          )}
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleDownloadObjectAsset(dimension, index)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                              title="객체 에셋 다운로드"
+                            >
+                              <Download className="w-3 h-3" />
+                              다운로드
+                            </button>
+                            {dimension.colors?.[0] && (
+                              <div
+                                className="w-4 h-4 rounded-full border border-gray-300"
+                                style={{ backgroundColor: dimension.colors[0] }}
+                              />
+                            )}
+                          </div>
                         </div>
                         {dimension.text && (
                           <p className="text-xs text-gray-600 mb-1 italic">&quot;{dimension.text}&quot;</p>
