@@ -71,6 +71,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
   const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
   const [descriptionImage, setDescriptionImage] = useState(product?.description_image ?? '');
+  const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
 
   // Product sides
   const [sides, setSides] = useState<ProductSide[]>(() => normalizeSides(product?.configuration || []));
@@ -99,7 +100,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [uploading, setUploading] = useState(false);
   type UploadTarget =
     | { kind: 'side'; sideIndex: number; layerIndex?: number }
-    | { kind: 'product'; field: 'thumbnail_image_link' | 'description_image' };
+    | { kind: 'product'; field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image' };
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -431,7 +432,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   };
 
   const persistProductImageField = async (
-    field: 'thumbnail_image_link' | 'description_image',
+    field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image',
     value: string | null
   ) => {
     if (!product?.id) return;
@@ -498,9 +499,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       } else if (target.field === 'thumbnail_image_link') {
         setThumbnailImageLink(publicUrl);
         await persistProductImageField('thumbnail_image_link', publicUrl);
-      } else {
+      } else if (target.field === 'description_image') {
         setDescriptionImage(publicUrl);
         await persistProductImageField('description_image', publicUrl);
+      } else {
+        setSizingChartImage(publicUrl);
+        await persistProductImageField('sizing_chart_image', publicUrl);
       }
 
       alert('이미지가 업로드되었습니다.');
@@ -523,11 +527,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     fileInputRef.current?.click();
   };
 
-  const clearProductImage = (field: 'thumbnail_image_link' | 'description_image') => {
+  const clearProductImage = (field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image') => {
     if (field === 'thumbnail_image_link') {
       setThumbnailImageLink('');
-    } else {
+    } else if (field === 'description_image') {
       setDescriptionImage('');
+    } else {
+      setSizingChartImage('');
     }
     void persistProductImageField(field, null);
   };
@@ -641,6 +647,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
         thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
         description_image: descriptionImage.trim() ? descriptionImage.trim() : null,
+        sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
       };
 
       if (!isNewProduct && !product?.id) {
@@ -848,6 +855,55 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       {!!descriptionImage && (
                         <button
                           onClick={() => clearProductImage('description_image')}
+                          disabled={uploading}
+                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          지우기
+                        </button>
+                      )}
+                    </div>
+                    {!product?.id && (
+                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">사이즈 차트 이미지 (sizing_chart_image)</label>
+                <div className="flex items-start gap-3">
+                  {sizingChartImage ? (
+                    <img
+                      src={sizingChartImage}
+                      alt="사이즈 차트"
+                      className="w-20 h-20 object-cover rounded border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="text"
+                      value={sizingChartImage}
+                      onChange={(e) => setSizingChartImage(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="https://..."
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => triggerProductFileInput('sizing_chart_image')}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" />
+                        업로드
+                      </button>
+                      {!!sizingChartImage && (
+                        <button
+                          onClick={() => clearProductImage('sizing_chart_image')}
                           disabled={uploading}
                           className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
                         >

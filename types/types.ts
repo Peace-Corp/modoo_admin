@@ -7,6 +7,7 @@ export interface Product {
   category: string | null;
   thumbnail_image_link?: string | null;
   description_image?: string | null;
+  sizing_chart_image?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
