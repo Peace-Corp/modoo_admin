@@ -110,12 +110,24 @@ export async function PATCH(request: Request) {
     const orderId = payload?.orderId;
     const factoryId = payload?.factoryId ?? null;
 
+    // Factory-specific fields
+    const deadlineInput = payload?.deadline ?? null;
+    const factoryAmountInput = payload?.factoryAmount ?? null;
+    const factoryPaymentDateInput = payload?.factoryPaymentDate ?? null;
+    const factoryPaymentStatusInput = payload?.factoryPaymentStatus ?? null;
+
     if (!orderId || typeof orderId !== 'string') {
       return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
     }
 
     if (factoryId !== null && typeof factoryId !== 'string') {
       return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    // Validate factory payment status
+    const validPaymentStatuses = ['pending', 'completed', 'cancelled'];
+    if (factoryPaymentStatusInput !== null && !validPaymentStatuses.includes(factoryPaymentStatusInput)) {
+      return NextResponse.json({ error: '유효하지 않은 결제 상태입니다.' }, { status: 400 });
     }
 
     const adminClient = createAdminClient();
@@ -130,12 +142,30 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '공장을 찾을 수 없습니다.' }, { status: 400 });
       }
     }
+
+    // Build update object
+    const updateData: Record<string, unknown> = {
+      assigned_factory_id: factoryId,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Add factory-specific fields if provided
+    if (deadlineInput !== undefined) {
+      updateData.deadline = deadlineInput ? new Date(deadlineInput).toISOString() : null;
+    }
+    if (factoryAmountInput !== undefined) {
+      updateData.factory_amount = factoryAmountInput;
+    }
+    if (factoryPaymentDateInput !== undefined) {
+      updateData.factory_payment_date = factoryPaymentDateInput ? new Date(factoryPaymentDateInput).toISOString() : null;
+    }
+    if (factoryPaymentStatusInput !== undefined) {
+      updateData.factory_payment_status = factoryPaymentStatusInput;
+    }
+
     const { data, error } = await adminClient
       .from('orders')
-      .update({
-        assigned_factory_id: factoryId,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', orderId)
       .select()
       .single();

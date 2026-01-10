@@ -46,6 +46,12 @@ export default function OrderDetail({
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_factory_id || '');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Factory-specific fields (admin can set these)
+  const [deadline, setDeadline] = useState<string>(order.deadline ? order.deadline.split('T')[0] : '');
+  const [factoryAmount, setFactoryAmount] = useState<string>(order.factory_amount?.toString() || '');
+  const [factoryPaymentDate, setFactoryPaymentDate] = useState<string>(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
+  const [factoryPaymentStatus, setFactoryPaymentStatus] = useState<string>(order.factory_payment_status || 'pending');
   const [cobuySession, setCobuySession] = useState<{ id: string; title: string } | null>(null);
   const [cobuyError, setCobuyError] = useState<string | null>(null);
   const [downloadingCobuyExcel, setDownloadingCobuyExcel] = useState(false);
@@ -78,6 +84,14 @@ export default function OrderDetail({
   useEffect(() => {
     setSelectedFactoryId(order.assigned_factory_id || '');
   }, [order.assigned_factory_id]);
+
+  // Sync factory fields when order changes
+  useEffect(() => {
+    setDeadline(order.deadline ? order.deadline.split('T')[0] : '');
+    setFactoryAmount(order.factory_amount?.toString() || '');
+    setFactoryPaymentDate(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
+    setFactoryPaymentStatus(order.factory_payment_status || 'pending');
+  }, [order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -232,6 +246,10 @@ export default function OrderDetail({
         body: JSON.stringify({
           orderId: order.id,
           factoryId: selectedFactoryId || null,
+          deadline: deadline || null,
+          factoryAmount: factoryAmount ? parseFloat(factoryAmount) : null,
+          factoryPaymentDate: factoryPaymentDate || null,
+          factoryPaymentStatus: factoryPaymentStatus || null,
         }),
       });
 
@@ -477,12 +495,61 @@ export default function OrderDetail({
                       ))}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">마감일</label>
+                    <input
+                      type="date"
+                      value={deadline}
+                      onChange={(event) => setDeadline(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">금액 (공장 배정 금액)</label>
+                    <input
+                      type="number"
+                      value={factoryAmount}
+                      onChange={(event) => setFactoryAmount(event.target.value)}
+                      disabled={assigning}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">결제 예정일</label>
+                    <input
+                      type="date"
+                      value={factoryPaymentDate}
+                      onChange={(event) => setFactoryPaymentDate(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">결제 상태</label>
+                    <select
+                      value={factoryPaymentStatus}
+                      onChange={(event) => setFactoryPaymentStatus(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    >
+                      <option value="pending">대기</option>
+                      <option value="completed">완료</option>
+                      <option value="cancelled">취소</option>
+                    </select>
+                  </div>
+
                   <button
                     onClick={handleAssignFactory}
                     disabled={assigning || loadingFactories}
                     className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
-                    {assigning ? '배정 중...' : '배정 저장'}
+                    {assigning ? '저장 중...' : '저장'}
                   </button>
                 </>
               )}
