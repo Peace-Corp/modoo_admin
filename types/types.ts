@@ -9,7 +9,7 @@ export interface Product {
   description_image?: string | null;
   sizing_chart_image?: string | null;
   product_code?: string | null;
-  discount_rates?: Array<{ minQuantity: number; discountPercent: number }> | null;
+  discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

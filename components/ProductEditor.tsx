@@ -73,7 +73,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [descriptionImage, setDescriptionImage] = useState(product?.description_image ?? '');
   const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
   const [productCode, setProductCode] = useState(product?.product_code ?? '');
-  const [discountRates, setDiscountRates] = useState<Array<{ minQuantity: number; discountPercent: number }>>(
+  const [discountRates, setDiscountRates] = useState<Array<{ min_quantity: number; discount_rate: number }>>(
     Array.isArray(product?.discount_rates) ? product.discount_rates : []
   );
 
@@ -792,7 +792,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 <p className="text-xs text-gray-500 mt-0.5">discount_rates (주문 수량에 따른 할인율)</p>
               </div>
               <button
-                onClick={() => setDiscountRates([...discountRates, { minQuantity: 0, discountPercent: 0 }])}
+                onClick={() => setDiscountRates([...discountRates, { min_quantity: 0, discount_rate: 0 }])}
                 className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
@@ -806,10 +806,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     <label className="block text-xs text-gray-500 mb-1">최소 수량</label>
                     <input
                       type="number"
-                      value={rate.minQuantity}
+                      value={rate.min_quantity}
                       onChange={(e) => {
                         const newRates = [...discountRates];
-                        newRates[index] = { ...newRates[index], minQuantity: parseInt(e.target.value) || 0 };
+                        newRates[index] = { ...newRates[index], min_quantity: parseInt(e.target.value) || 0 };
                         setDiscountRates(newRates);
                       }}
                       className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
@@ -821,10 +821,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     <label className="block text-xs text-gray-500 mb-1">할인율 (%)</label>
                     <input
                       type="number"
-                      value={rate.discountPercent}
+                      value={rate.discount_rate}
                       onChange={(e) => {
                         const newRates = [...discountRates];
-                        newRates[index] = { ...newRates[index], discountPercent: parseFloat(e.target.value) || 0 };
+                        newRates[index] = { ...newRates[index], discount_rate: parseFloat(e.target.value) || 0 };
                         setDiscountRates(newRates);
                       }}
                       className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
