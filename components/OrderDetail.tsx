@@ -331,9 +331,12 @@ export default function OrderDetail({
                       )}
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-sm text-gray-600">수량: {item.quantity}</span>
-                        <span className="font-semibold text-gray-900">
-                          {(item.price_per_item * item.quantity).toLocaleString()}원
-                        </span>
+                        {/* Hide price from factory users */}
+                        {!isFactoryUser && (
+                          <span className="font-semibold text-gray-900">
+                            {(item.price_per_item * item.quantity).toLocaleString()}원
+                          </span>
+                        )}
                       </div>
                       {item.canvas_state && Object.keys(item.canvas_state).length > 0 && (
                         <div className="mt-2">
@@ -419,28 +422,30 @@ export default function OrderDetail({
             </div>
           )}
 
-          {/* Order Summary */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">소계</span>
-                <span className="font-medium text-gray-900">{subtotal.toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">배송비</span>
-                <span className="font-medium text-gray-900">
-                  {order.delivery_fee.toLocaleString()}원
-                </span>
-              </div>
-              <div className="border-t pt-3 flex justify-between">
-                <span className="text-base font-semibold text-gray-900">총 금액</span>
-                <span className="text-base font-bold text-blue-600">
-                  {order.total_amount.toLocaleString()}원
-                </span>
+          {/* Order Summary - hidden for factory users (contains actual prices) */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">소계</span>
+                  <span className="font-medium text-gray-900">{subtotal.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">배송비</span>
+                  <span className="font-medium text-gray-900">
+                    {order.delivery_fee.toLocaleString()}원
+                  </span>
+                </div>
+                <div className="border-t pt-3 flex justify-between">
+                  <span className="text-base font-semibold text-gray-900">총 금액</span>
+                  <span className="text-base font-bold text-blue-600">
+                    {order.total_amount.toLocaleString()}원
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Factory Assignment */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
