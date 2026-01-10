@@ -1116,6 +1116,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                           </th>
                         );
                       })}
+                      <th className="px-3 py-2 text-center font-medium border border-gray-200 bg-gray-100">
+                        합계
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-black">
@@ -1128,6 +1131,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                           </td>
                         );
                       })}
+                      <td className="px-3 py-2 text-center border border-gray-200 bg-gray-100 font-semibold">
+                        {Array.from(sizeQuantities.values()).reduce((sum, qty) => sum + qty, 0) || '-'}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
