@@ -338,20 +338,6 @@ export default function OrderDetail({
                           상품코드: {item.products.product_code}
                         </p>
                       )}
-                      {item.item_options && (
-                        <div className="text-sm  mt-1">
-                          {(item.item_options.color_name || item.item_options.variants?.[0]?.color_name) && (
-                            <span>
-                              색상: {item.item_options.color_name || item.item_options.variants?.[0]?.color_name}
-                            </span>
-                          )}
-                          {(item.item_options.size_name || item.item_options.variants?.[0]?.size_name) && (
-                            <span className="ml-3">
-                              사이즈: {item.item_options.size_name || item.item_options.variants?.[0]?.size_name}
-                            </span>
-                          )}
-                        </div>
-                      )}
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-sm text-gray-600">수량: {item.quantity}</span>
                         {/* Hide price from factory users */}
@@ -361,13 +347,6 @@ export default function OrderDetail({
                           </span>
                         )}
                       </div>
-                      {item.canvas_state && Object.keys(item.canvas_state).length > 0 && (
-                        <div className="mt-2">
-                          <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                            커스텀 디자인 포함
-                          </span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
