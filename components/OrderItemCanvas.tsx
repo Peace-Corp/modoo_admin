@@ -1101,6 +1101,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           {/* Canvas Preview */}
         <div className="lg:col-span-2 bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
           <div className="mb-6">
+            {/* Options Quantity Table */}
             <h3 className="text-sm font-semibold text-gray-700 mb-3">주문 옵션</h3>
             {sizeOptions.length > 0 ? (
               <div className="overflow-hidden rounded-md border border-gray-200">
