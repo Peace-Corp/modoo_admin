@@ -333,6 +333,11 @@ export default function OrderDetail({
                     </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-black">{item.product_title}</h4>
+                      {item.products?.product_code && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          상품코드: {item.products.product_code}
+                        </p>
+                      )}
                       {item.item_options && (
                         <div className="text-sm  mt-1">
                           {(item.item_options.color_name || item.item_options.variants?.[0]?.color_name) && (

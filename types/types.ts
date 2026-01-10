@@ -141,6 +141,9 @@ export interface OrderItem {
   image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
   text_svg_exports?: Record<string, unknown> | string | null;
 
+  // Joined from products table
+  products?: { product_code: string | null } | null;
+
   created_at: string;
   updated_at: string;
 }
