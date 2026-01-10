@@ -27,6 +27,7 @@ interface OrderDetailProps {
   factories: Factory[];
   canAssign: boolean;
   loadingFactories: boolean;
+  isFactoryUser?: boolean;
 }
 
 export default function OrderDetail({
@@ -37,6 +38,7 @@ export default function OrderDetail({
   factories,
   canAssign,
   loadingFactories,
+  isFactoryUser = false,
 }: OrderDetailProps) {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,12 @@ export default function OrderDetail({
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_factory_id || '');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Factory-specific fields (admin can set these)
+  const [deadline, setDeadline] = useState<string>(order.deadline ? order.deadline.split('T')[0] : '');
+  const [factoryAmount, setFactoryAmount] = useState<string>(order.factory_amount?.toString() || '');
+  const [factoryPaymentDate, setFactoryPaymentDate] = useState<string>(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
+  const [factoryPaymentStatus, setFactoryPaymentStatus] = useState<string>(order.factory_payment_status || 'pending');
   const [cobuySession, setCobuySession] = useState<{ id: string; title: string } | null>(null);
   const [cobuyError, setCobuyError] = useState<string | null>(null);
   const [downloadingCobuyExcel, setDownloadingCobuyExcel] = useState(false);
@@ -76,6 +84,14 @@ export default function OrderDetail({
   useEffect(() => {
     setSelectedFactoryId(order.assigned_factory_id || '');
   }, [order.assigned_factory_id]);
+
+  // Sync factory fields when order changes
+  useEffect(() => {
+    setDeadline(order.deadline ? order.deadline.split('T')[0] : '');
+    setFactoryAmount(order.factory_amount?.toString() || '');
+    setFactoryPaymentDate(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
+    setFactoryPaymentStatus(order.factory_payment_status || 'pending');
+  }, [order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -230,6 +246,10 @@ export default function OrderDetail({
         body: JSON.stringify({
           orderId: order.id,
           factoryId: selectedFactoryId || null,
+          deadline: deadline || null,
+          factoryAmount: factoryAmount ? parseFloat(factoryAmount) : null,
+          factoryPaymentDate: factoryPaymentDate || null,
+          factoryPaymentStatus: factoryPaymentStatus || null,
         }),
       });
 
@@ -313,33 +333,20 @@ export default function OrderDetail({
                     </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-black">{item.product_title}</h4>
-                      {item.item_options && (
-                        <div className="text-sm  mt-1">
-                          {(item.item_options.color_name || item.item_options.variants?.[0]?.color_name) && (
-                            <span>
-                              색상: {item.item_options.color_name || item.item_options.variants?.[0]?.color_name}
-                            </span>
-                          )}
-                          {(item.item_options.size_name || item.item_options.variants?.[0]?.size_name) && (
-                            <span className="ml-3">
-                              사이즈: {item.item_options.size_name || item.item_options.variants?.[0]?.size_name}
-                            </span>
-                          )}
-                        </div>
+                      {item.products?.product_code && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          상품코드: {item.products.product_code}
+                        </p>
                       )}
                       <div className="flex justify-between items-center mt-2">
                         <span className="text-sm text-gray-600">수량: {item.quantity}</span>
-                        <span className="font-semibold text-gray-900">
-                          {(item.price_per_item * item.quantity).toLocaleString()}원
-                        </span>
-                      </div>
-                      {item.canvas_state && Object.keys(item.canvas_state).length > 0 && (
-                        <div className="mt-2">
-                          <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                            커스텀 디자인 포함
+                        {/* Hide price from factory users */}
+                        {!isFactoryUser && (
+                          <span className="font-semibold text-gray-900">
+                            {(item.price_per_item * item.quantity).toLocaleString()}원
                           </span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -348,8 +355,8 @@ export default function OrderDetail({
           </div>
 
 
-          {/* CoBuy participant information */}
-          {order.order_category === 'cobuy' && (
+          {/* CoBuy participant information - hidden for factory users (contains personal info) */}
+          {order.order_category === 'cobuy' && !isFactoryUser && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
@@ -417,28 +424,30 @@ export default function OrderDetail({
             </div>
           )}
 
-          {/* Order Summary */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">소계</span>
-                <span className="font-medium text-gray-900">{subtotal.toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">배송비</span>
-                <span className="font-medium text-gray-900">
-                  {order.delivery_fee.toLocaleString()}원
-                </span>
-              </div>
-              <div className="border-t pt-3 flex justify-between">
-                <span className="text-base font-semibold text-gray-900">총 금액</span>
-                <span className="text-base font-bold text-blue-600">
-                  {order.total_amount.toLocaleString()}원
-                </span>
+          {/* Order Summary - hidden for factory users (contains actual prices) */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">소계</span>
+                  <span className="font-medium text-gray-900">{subtotal.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">배송비</span>
+                  <span className="font-medium text-gray-900">
+                    {order.delivery_fee.toLocaleString()}원
+                  </span>
+                </div>
+                <div className="border-t pt-3 flex justify-between">
+                  <span className="text-base font-semibold text-gray-900">총 금액</span>
+                  <span className="text-base font-bold text-blue-600">
+                    {order.total_amount.toLocaleString()}원
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Factory Assignment */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
@@ -470,12 +479,61 @@ export default function OrderDetail({
                       ))}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">마감일</label>
+                    <input
+                      type="date"
+                      value={deadline}
+                      onChange={(event) => setDeadline(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">금액 (공장 배정 금액)</label>
+                    <input
+                      type="number"
+                      value={factoryAmount}
+                      onChange={(event) => setFactoryAmount(event.target.value)}
+                      disabled={assigning}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">결제 예정일</label>
+                    <input
+                      type="date"
+                      value={factoryPaymentDate}
+                      onChange={(event) => setFactoryPaymentDate(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">결제 상태</label>
+                    <select
+                      value={factoryPaymentStatus}
+                      onChange={(event) => setFactoryPaymentStatus(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    >
+                      <option value="pending">대기</option>
+                      <option value="completed">완료</option>
+                      <option value="cancelled">취소</option>
+                    </select>
+                  </div>
+
                   <button
                     onClick={handleAssignFactory}
                     disabled={assigning || loadingFactories}
                     className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
-                    {assigning ? '배정 중...' : '배정 저장'}
+                    {assigning ? '저장 중...' : '저장'}
                   </button>
                 </>
               )}
@@ -490,31 +548,33 @@ export default function OrderDetail({
 
         </div>
 
-        {/* Right Column - Customer & Shipping Info */}
+        {/* Right Column - Customer & Shipping Info (hidden for factory users) */}
         <div className="space-y-4">
-          {/* Customer Information */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-500">이름</p>
-                <p className="font-medium text-gray-900">{order.customer_name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">이메일</p>
-                <p className="font-medium text-gray-900">{order.customer_email}</p>
-              </div>
-              {order.customer_phone && (
+          {/* Customer Information - hidden for factory users */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">전화번호</p>
-                  <p className="font-medium text-gray-900">{order.customer_phone}</p>
+                  <p className="text-sm text-gray-500">이름</p>
+                  <p className="font-medium text-gray-900">{order.customer_name}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-sm text-gray-500">이메일</p>
+                  <p className="font-medium text-gray-900">{order.customer_email}</p>
+                </div>
+                {order.customer_phone && (
+                  <div>
+                    <p className="text-sm text-gray-500">전화번호</p>
+                    <p className="font-medium text-gray-900">{order.customer_phone}</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Shipping Information */}
-          {order.shipping_method !== 'pickup' && (
+          {/* Shipping Information - hidden for factory users */}
+          {!isFactoryUser && order.shipping_method !== 'pickup' && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="w-5 h-5 text-gray-600" />
@@ -545,39 +605,93 @@ export default function OrderDetail({
             </div>
           )}
 
-          {/* Payment Information */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <CreditCard className="w-5 h-5 text-gray-600" />
-              <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
+          {/* Payment Information - hidden for factory users */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-gray-500">결제 수단</p>
+                  <p className="font-medium text-gray-900">
+                    {order.payment_method === 'toss'
+                      ? '토스페이'
+                      : order.payment_method === 'paypal'
+                      ? 'PayPal'
+                      : '카드'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 상태</p>
+                  <p className="font-medium text-gray-900">{order.payment_status}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 상태</p>
+                  <p className="font-medium text-gray-900">{order.order_status}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 일시</p>
+                  <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-500">결제 수단</p>
-                <p className="font-medium text-gray-900">
-                  {order.payment_method === 'toss'
-                    ? '토스페이'
-                    : order.payment_method === 'paypal'
-                    ? 'PayPal'
-                    : '카드'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">결제 상태</p>
-                <p className="font-medium text-gray-900">{order.payment_status}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">주문 상태</p>
-                <p className="font-medium text-gray-900">{order.order_status}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">주문 일시</p>
-                <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
-              </div>
-            </div>
-          </div>
+          )}
 
-          
+          {/* Factory Order Info - shown only for factory users */}
+          {isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900">주문 정보</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-gray-500">주문 구분</p>
+                  <p className="font-medium text-gray-900">
+                    {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 상태</p>
+                  <p className="font-medium text-gray-900">
+                    {order.order_status === 'pending' ? '대기중' :
+                     order.order_status === 'processing' ? '처리중' :
+                     order.order_status === 'completed' ? '완료' :
+                     order.order_status === 'cancelled' ? '취소' :
+                     order.order_status === 'refunded' ? '환불' : order.order_status}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">마감일</p>
+                  <p className="font-medium text-gray-900">
+                    {order.deadline ? formatDate(order.deadline) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">금액</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 예정일</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_payment_date ? formatDate(order.factory_payment_date) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 상태</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_payment_status === 'pending' ? '대기' :
+                     order.factory_payment_status === 'completed' ? '완료' :
+                     order.factory_payment_status === 'cancelled' ? '취소' : '-'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {cobuyError && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">

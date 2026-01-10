@@ -5,6 +5,11 @@ export interface Product {
   configuration: ProductSide[];
   size_options: SizeOption[] | null;
   category: string | null;
+  thumbnail_image_link?: string | null;
+  description_image?: string | null;
+  sizing_chart_image?: string | null;
+  product_code?: string | null;
+  discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -96,6 +101,12 @@ export interface Order {
   assigned_factory_id: string | null;
   total_amount: number;
 
+  // Factory-specific fields (set by admin)
+  deadline: string | null;
+  factory_amount: number | null;
+  factory_payment_date: string | null;
+  factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -127,6 +138,13 @@ export interface OrderItem {
     }>;
   };
   thumbnail_url: string | null;
+
+  // Order file downloads (JSONB)
+  image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
+  text_svg_exports?: Record<string, unknown> | string | null;
+
+  // Joined from products table
+  products?: { product_code: string | null } | null;
 
   created_at: string;
   updated_at: string;
@@ -175,6 +193,8 @@ export interface ExtractedColor {
 
 export interface ObjectDimensions {
   objectId?: string;
+  sideId?: string;
+  rawType?: string;
   objectType: string;
   widthMm: number;
   heightMm: number;

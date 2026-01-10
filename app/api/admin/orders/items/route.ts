@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await adminClient
       .from('order_items')
-      .select('*')
+      .select('*, products(product_code)')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true });
 

@@ -6,6 +6,7 @@
 export interface OrderItemFile {
   type: 'image' | 'svg';
   side: string;
+  objectId?: string;
   url: string;
   path?: string;
   uploadedAt?: string;
@@ -23,11 +24,12 @@ export interface OrderItemFiles {
  * @returns Organized file information
  */
 export function getOrderItemFiles(orderItem: {
-  text_svg_exports?: Record<string, string>;
+  text_svg_exports?: Record<string, unknown>;
   image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>>;
 }): OrderItemFiles {
   const images: OrderItemFile[] = [];
   const svgs: OrderItemFile[] = [];
+  const seenSvgUrls = new Set<string>();
 
   // Extract image files
   if (orderItem.image_urls) {
@@ -48,13 +50,36 @@ export function getOrderItemFiles(orderItem: {
 
   // Extract SVG files
   if (orderItem.text_svg_exports) {
-    Object.entries(orderItem.text_svg_exports).forEach(([side, url]) => {
+    Object.entries(orderItem.text_svg_exports).forEach(([side, value]) => {
+      if (side === '__objects') return;
+      if (typeof value !== 'string') return;
+      if (!value) return;
+      if (seenSvgUrls.has(value)) return;
+      seenSvgUrls.add(value);
       svgs.push({
         type: 'svg',
         side,
-        url,
+        url: value,
       });
     });
+
+    const objectExports = (orderItem.text_svg_exports as Record<string, unknown>)['__objects'];
+    if (objectExports && typeof objectExports === 'object') {
+      Object.entries(objectExports as Record<string, unknown>).forEach(([side, sideObjects]) => {
+        if (!sideObjects || typeof sideObjects !== 'object') return;
+        Object.entries(sideObjects as Record<string, unknown>).forEach(([objectId, url]) => {
+          if (typeof url !== 'string' || !url) return;
+          if (seenSvgUrls.has(url)) return;
+          seenSvgUrls.add(url);
+          svgs.push({
+            type: 'svg',
+            side,
+            objectId,
+            url,
+          });
+        });
+      });
+    }
   }
 
   return {
@@ -99,7 +124,7 @@ export async function downloadAllOrderItemFiles(
   orderItem: {
     id: string;
     product_title: string;
-    text_svg_exports?: Record<string, string>;
+    text_svg_exports?: Record<string, unknown>;
     image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>>;
   },
   filenamePrefix?: string
@@ -119,7 +144,10 @@ export async function downloadAllOrderItemFiles(
 
   // Download all SVGs
   for (const svg of files.svgs) {
-    const filename = `${prefix}-${svg.side}-text.svg`;
+    const sanitize = (value: string) => value.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+    const filename = svg.objectId
+      ? `${prefix}-${svg.side}-text-${sanitize(svg.objectId)}.svg`
+      : `${prefix}-${svg.side}-text.svg`;
     await downloadFile(svg.url, filename);
 
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -132,7 +160,7 @@ export async function downloadAllOrderItemFiles(
  * @returns File count summary
  */
 export function getOrderItemFileCount(orderItem: {
-  text_svg_exports?: Record<string, string>;
+  text_svg_exports?: Record<string, unknown>;
   image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>>;
 }): { images: number; svgs: number; total: number } {
   const files = getOrderItemFiles(orderItem);

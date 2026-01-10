@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { CoBuyParticipant, Factory, Order } from '@/types/types';
-import { Package, Calendar } from 'lucide-react';
+import { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
+import { Package, Calendar, Clock } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from './OrderDetail';
 
@@ -38,6 +38,9 @@ export default function OrdersTab() {
   const [factories, setFactories] = useState<Factory[]>([]);
   const [loadingFactories, setLoadingFactories] = useState(false);
   const [cobuyParticipants, setCobuyParticipants] = useState<Record<string, CobuyParticipantsEntry>>({});
+  const [orderItemCounts, setOrderItemCounts] = useState<Record<string, number>>({});
+
+  const isFactoryUser = user?.role === 'factory';
 
   useEffect(() => {
     if (user) {
@@ -215,6 +218,59 @@ export default function OrdersTab() {
     });
   };
 
+  const formatDateShort = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getFactoryPaymentStatusLabel = (status: string | null) => {
+    if (!status) return '-';
+    const labels: Record<string, string> = {
+      pending: '대기',
+      completed: '완료',
+      cancelled: '취소',
+    };
+    return labels[status] || status;
+  };
+
+  const getFactoryPaymentStatusColor = (status: string | null) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    const colors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      completed: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Fetch order item counts for factory users
+  useEffect(() => {
+    if (isFactoryUser && orders.length > 0) {
+      fetchOrderItemCounts();
+    }
+  }, [orders, isFactoryUser]);
+
+  const fetchOrderItemCounts = async () => {
+    const counts: Record<string, number> = {};
+    for (const order of orders) {
+      try {
+        const response = await fetch(`/api/admin/orders/items?orderId=${order.id}`);
+        if (response.ok) {
+          const payload = await response.json();
+          const items: OrderItem[] = payload?.data || [];
+          counts[order.id] = items.reduce((sum, item) => sum + item.quantity, 0);
+        }
+      } catch (error) {
+        console.error(`Error fetching items for order ${order.id}:`, error);
+      }
+    }
+    setOrderItemCounts(counts);
+  };
+
   const factoryMap = useMemo(() => {
     const map = new Map<string, Factory>();
     factories.forEach((factory) => map.set(factory.id, factory));
@@ -252,6 +308,7 @@ export default function OrdersTab() {
         factories={factories}
         canAssign={user?.role === 'admin'}
         loadingFactories={loadingFactories}
+        isFactoryUser={isFactoryUser}
       />
     );
   }
@@ -309,35 +366,66 @@ export default function OrdersTab() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  주문 ID
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  고객 정보
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  주문 구분
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  주문 일시
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  금액
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  주문 상태
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  결제 상태
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  공장 배정
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  배송 방법
-                </th>
-              </tr>
+              {isFactoryUser ? (
+                // Factory user table headers - limited info, no personal data
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    주문 ID
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    제품 종류
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    수량
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    구분
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    마감일
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    금액
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    결제 예정일
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    결제 상태
+                  </th>
+                </tr>
+              ) : (
+                // Admin table headers - full info
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    주문 ID
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    고객 정보
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    주문 구분
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    주문 일시
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    금액
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    주문 상태
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    결제 상태
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    공장 배정
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    배송 방법
+                  </th>
+                </tr>
+              )}
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {orders.map((order) => (
@@ -346,61 +434,119 @@ export default function OrdersTab() {
                   onClick={() => setSelectedOrder(order)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm font-mono text-blue-600">{order.id}</div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
-                    <div className="text-xs text-gray-500">{order.customer_email}</div>
-                  </td>
-                  <td className='px-4 py-3 whitespace-nowrap text-xs'>
-                    {
-                      order.order_category == 'cobuy' ? '공동구매' : '일반'
-                    }
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-900">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      {formatDate(order.created_at)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {order.total_amount.toLocaleString()}원
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                        order.order_status
-                      )}`}
-                    >
-                      {order.order_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(
-                        order.payment_status
-                      )}`}
-                    >
-                      {order.payment_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_factory_id) === '미배정' && 'text-red-500'}`}>
-                      {getFactoryLabel(order.assigned_factory_id)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">
-                      {order.shipping_method === 'domestic'
-                        ? '국내배송'
-                        : order.shipping_method === 'international'
-                        ? '해외배송'
-                        : '픽업'}
-                    </span>
-                  </td>
+                  {isFactoryUser ? (
+                    // Factory user row - limited info, no personal data
+                    <>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-mono text-blue-600">{order.id}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm text-gray-900">
+                          {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm text-gray-900">
+                          {orderItemCounts[order.id] ?? '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                            order.order_status
+                          )}`}
+                        >
+                          {order.order_status === 'pending' ? '대기중' :
+                           order.order_status === 'processing' ? '처리중' :
+                           order.order_status === 'completed' ? '완료' :
+                           order.order_status === 'cancelled' ? '취소' :
+                           order.order_status === 'refunded' ? '환불' : order.order_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1 text-sm text-gray-900">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          {formatDateShort(order.deadline)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm text-gray-900">
+                          {formatDateShort(order.factory_payment_date)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getFactoryPaymentStatusColor(
+                            order.factory_payment_status
+                          )}`}
+                        >
+                          {getFactoryPaymentStatusLabel(order.factory_payment_status)}
+                        </span>
+                      </td>
+                    </>
+                  ) : (
+                    // Admin row - full info
+                    <>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-mono text-blue-600">{order.id}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
+                        <div className="text-xs text-gray-500">{order.customer_email}</div>
+                      </td>
+                      <td className='px-4 py-3 whitespace-nowrap text-xs'>
+                        {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1 text-sm text-gray-900">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          {formatDate(order.created_at)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {order.total_amount.toLocaleString()}원
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                            order.order_status
+                          )}`}
+                        >
+                          {order.order_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(
+                            order.payment_status
+                          )}`}
+                        >
+                          {order.payment_status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_factory_id) === '미배정' && 'text-red-500'}`}>
+                          {getFactoryLabel(order.assigned_factory_id)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-sm text-gray-900">
+                          {order.shipping_method === 'domestic'
+                            ? '국내배송'
+                            : order.shipping_method === 'international'
+                            ? '해외배송'
+                            : '픽업'}
+                        </span>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
