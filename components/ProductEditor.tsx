@@ -72,6 +72,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
   const [descriptionImage, setDescriptionImage] = useState(product?.description_image ?? '');
   const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
+  const [productCode, setProductCode] = useState(product?.product_code ?? '');
+  const [discountRates, setDiscountRates] = useState<Array<{ minQuantity: number; discountPercent: number }>>(
+    Array.isArray(product?.discount_rates) ? product.discount_rates : []
+  );
 
   // Product sides
   const [sides, setSides] = useState<ProductSide[]>(() => normalizeSides(product?.configuration || []));
@@ -648,6 +652,8 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
         description_image: descriptionImage.trim() ? descriptionImage.trim() : null,
         sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
+        product_code: productCode.trim() ? productCode.trim() : null,
+        discount_rates: discountRates.length > 0 ? discountRates : null,
       };
 
       if (!isNewProduct && !product?.id) {
@@ -753,6 +759,16 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   placeholder="예: 의류"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">제품 코드 (product_code)</label>
+                <input
+                  type="text"
+                  value={productCode}
+                  onChange={(e) => setProductCode(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                  placeholder="예: TSHIRT-001"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -765,6 +781,75 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   활성 상태
                 </label>
               </div>
+            </div>
+          </div>
+
+          {/* Discount Rates */}
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-gray-900">수량별 할인율</h3>
+                <p className="text-xs text-gray-500 mt-0.5">discount_rates (주문 수량에 따른 할인율)</p>
+              </div>
+              <button
+                onClick={() => setDiscountRates([...discountRates, { minQuantity: 0, discountPercent: 0 }])}
+                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                추가
+              </button>
+            </div>
+            <div className="space-y-2">
+              {discountRates.map((rate, index) => (
+                <div key={`discount-rate-${index}`} className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">최소 수량</label>
+                    <input
+                      type="number"
+                      value={rate.minQuantity}
+                      onChange={(e) => {
+                        const newRates = [...discountRates];
+                        newRates[index] = { ...newRates[index], minQuantity: parseInt(e.target.value) || 0 };
+                        setDiscountRates(newRates);
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                      placeholder="예: 10"
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">할인율 (%)</label>
+                    <input
+                      type="number"
+                      value={rate.discountPercent}
+                      onChange={(e) => {
+                        const newRates = [...discountRates];
+                        newRates[index] = { ...newRates[index], discountPercent: parseFloat(e.target.value) || 0 };
+                        setDiscountRates(newRates);
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                      placeholder="예: 5"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setDiscountRates(discountRates.filter((_, i) => i !== index))}
+                    className="p-1 text-red-600 hover:bg-red-50 rounded mt-5"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {discountRates.length === 0 && (
+                <p className="text-sm text-gray-500">할인율이 없습니다.</p>
+              )}
+              {discountRates.length > 0 && (
+                <p className="text-xs text-gray-500 mt-2">
+                  예: 최소 수량 10, 할인율 5% → 10개 이상 주문 시 5% 할인
+                </p>
+              )}
             </div>
           </div>
 

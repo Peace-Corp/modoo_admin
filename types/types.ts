@@ -8,6 +8,8 @@ export interface Product {
   thumbnail_image_link?: string | null;
   description_image?: string | null;
   sizing_chart_image?: string | null;
+  product_code?: string | null;
+  discount_rates?: Array<{ minQuantity: number; discountPercent: number }> | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
