@@ -526,7 +526,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     fileInputRef.current?.click();
   };
 
-  const triggerProductFileInput = (field: 'thumbnail_image_link' | 'description_image') => {
+  const triggerProductFileInput = (field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image') => {
     setUploadTarget({ kind: 'product', field });
     fileInputRef.current?.click();
   };
