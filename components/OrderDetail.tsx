@@ -27,6 +27,7 @@ interface OrderDetailProps {
   factories: Factory[];
   canAssign: boolean;
   loadingFactories: boolean;
+  isFactoryUser?: boolean;
 }
 
 export default function OrderDetail({
@@ -37,6 +38,7 @@ export default function OrderDetail({
   factories,
   canAssign,
   loadingFactories,
+  isFactoryUser = false,
 }: OrderDetailProps) {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -348,8 +350,8 @@ export default function OrderDetail({
           </div>
 
 
-          {/* CoBuy participant information */}
-          {order.order_category === 'cobuy' && (
+          {/* CoBuy participant information - hidden for factory users (contains personal info) */}
+          {order.order_category === 'cobuy' && !isFactoryUser && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
@@ -490,31 +492,33 @@ export default function OrderDetail({
 
         </div>
 
-        {/* Right Column - Customer & Shipping Info */}
+        {/* Right Column - Customer & Shipping Info (hidden for factory users) */}
         <div className="space-y-4">
-          {/* Customer Information */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-500">이름</p>
-                <p className="font-medium text-gray-900">{order.customer_name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">이메일</p>
-                <p className="font-medium text-gray-900">{order.customer_email}</p>
-              </div>
-              {order.customer_phone && (
+          {/* Customer Information - hidden for factory users */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">전화번호</p>
-                  <p className="font-medium text-gray-900">{order.customer_phone}</p>
+                  <p className="text-sm text-gray-500">이름</p>
+                  <p className="font-medium text-gray-900">{order.customer_name}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-sm text-gray-500">이메일</p>
+                  <p className="font-medium text-gray-900">{order.customer_email}</p>
+                </div>
+                {order.customer_phone && (
+                  <div>
+                    <p className="text-sm text-gray-500">전화번호</p>
+                    <p className="font-medium text-gray-900">{order.customer_phone}</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Shipping Information */}
-          {order.shipping_method !== 'pickup' && (
+          {/* Shipping Information - hidden for factory users */}
+          {!isFactoryUser && order.shipping_method !== 'pickup' && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="w-5 h-5 text-gray-600" />
@@ -545,39 +549,93 @@ export default function OrderDetail({
             </div>
           )}
 
-          {/* Payment Information */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <CreditCard className="w-5 h-5 text-gray-600" />
-              <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
+          {/* Payment Information - hidden for factory users */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-gray-500">결제 수단</p>
+                  <p className="font-medium text-gray-900">
+                    {order.payment_method === 'toss'
+                      ? '토스페이'
+                      : order.payment_method === 'paypal'
+                      ? 'PayPal'
+                      : '카드'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 상태</p>
+                  <p className="font-medium text-gray-900">{order.payment_status}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 상태</p>
+                  <p className="font-medium text-gray-900">{order.order_status}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 일시</p>
+                  <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-gray-500">결제 수단</p>
-                <p className="font-medium text-gray-900">
-                  {order.payment_method === 'toss'
-                    ? '토스페이'
-                    : order.payment_method === 'paypal'
-                    ? 'PayPal'
-                    : '카드'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">결제 상태</p>
-                <p className="font-medium text-gray-900">{order.payment_status}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">주문 상태</p>
-                <p className="font-medium text-gray-900">{order.order_status}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">주문 일시</p>
-                <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
-              </div>
-            </div>
-          </div>
+          )}
 
-          
+          {/* Factory Order Info - shown only for factory users */}
+          {isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900">주문 정보</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-gray-500">주문 구분</p>
+                  <p className="font-medium text-gray-900">
+                    {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">주문 상태</p>
+                  <p className="font-medium text-gray-900">
+                    {order.order_status === 'pending' ? '대기중' :
+                     order.order_status === 'processing' ? '처리중' :
+                     order.order_status === 'completed' ? '완료' :
+                     order.order_status === 'cancelled' ? '취소' :
+                     order.order_status === 'refunded' ? '환불' : order.order_status}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">마감일</p>
+                  <p className="font-medium text-gray-900">
+                    {order.deadline ? formatDate(order.deadline) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">금액</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 예정일</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_payment_date ? formatDate(order.factory_payment_date) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">결제 상태</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_payment_status === 'pending' ? '대기' :
+                     order.factory_payment_status === 'completed' ? '완료' :
+                     order.factory_payment_status === 'cancelled' ? '취소' : '-'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {cobuyError && (
             <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">

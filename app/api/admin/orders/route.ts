@@ -37,9 +37,20 @@ export async function GET(request: Request) {
     const factoryId = url.searchParams.get('factoryId');
 
     const adminClient = createAdminClient();
-    let query = adminClient.from('orders').select('*').order('created_at', { ascending: false });
 
-    if (profile.role === 'factory') {
+    // Factory users: sort by deadline (마감일), Admin users: sort by created_at
+    const isFactoryUser = profile.role === 'factory';
+    let query = adminClient.from('orders').select('*');
+
+    if (isFactoryUser) {
+      // For factory users, sort by deadline (nulls last to show orders with deadlines first)
+      query = query.order('deadline', { ascending: true, nullsFirst: false });
+    } else {
+      // For admin users, sort by created_at (newest first)
+      query = query.order('created_at', { ascending: false });
+    }
+
+    if (isFactoryUser) {
       if (!profile.factory_id) {
         return NextResponse.json({ data: [] });
       }

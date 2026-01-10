@@ -99,6 +99,12 @@ export interface Order {
   assigned_factory_id: string | null;
   total_amount: number;
 
+  // Factory-specific fields (set by admin)
+  deadline: string | null;
+  factory_amount: number | null;
+  factory_payment_date: string | null;
+  factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
+
   created_at: string;
   updated_at: string;
 }
