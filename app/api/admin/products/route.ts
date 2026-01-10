@@ -76,6 +76,9 @@ export async function POST(request: Request) {
     const sizeOptions = payload?.size_options ?? null;
     const thumbnailImageLink = payload?.thumbnail_image_link ?? null;
     const descriptionImage = payload?.description_image ?? null;
+    const sizingChartImage = payload?.sizing_chart_image ?? null;
+    const productCode = payload?.product_code ?? null;
+    const discountRates = payload?.discount_rates ?? null;
 
     if (!title || typeof title !== 'string') {
       return NextResponse.json({ error: '제품명이 필요합니다.' }, { status: 400 });
@@ -109,6 +112,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
+    if (sizingChartImage !== null && typeof sizingChartImage !== 'string') {
+      return NextResponse.json({ error: '사이즈 차트 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    if (productCode !== null && typeof productCode !== 'string') {
+      return NextResponse.json({ error: '제품 코드 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    if (discountRates !== null && !Array.isArray(discountRates)) {
+      return NextResponse.json({ error: '할인율 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
@@ -121,6 +136,9 @@ export async function POST(request: Request) {
         size_options: sizeOptions,
         thumbnail_image_link: thumbnailImageLink,
         description_image: descriptionImage,
+        sizing_chart_image: sizingChartImage,
+        product_code: productCode,
+        discount_rates: discountRates,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -206,6 +224,27 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.description_image = payload.description_image ?? null;
+    }
+
+    if (payload?.sizing_chart_image !== undefined) {
+      if (payload.sizing_chart_image !== null && typeof payload.sizing_chart_image !== 'string') {
+        return NextResponse.json({ error: '사이즈 차트 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.sizing_chart_image = payload.sizing_chart_image ?? null;
+    }
+
+    if (payload?.product_code !== undefined) {
+      if (payload.product_code !== null && typeof payload.product_code !== 'string') {
+        return NextResponse.json({ error: '제품 코드 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.product_code = payload.product_code ?? null;
+    }
+
+    if (payload?.discount_rates !== undefined) {
+      if (payload.discount_rates !== null && !Array.isArray(payload.discount_rates)) {
+        return NextResponse.json({ error: '할인율 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.discount_rates = payload.discount_rates ?? null;
     }
 
     if (Object.keys(updateData).length === 1) {
