@@ -330,3 +330,17 @@ export interface CoBuyParticipant {
   paid_at: string | null;
   joined_at: string;
 }
+
+export interface DesignTemplate {
+  id: string;
+  product_id: string;
+  title: string;
+  description: string | null;
+  canvas_state: Record<string, CanvasState | string>;
+  preview_url: string | null;
+  layer_colors: Record<string, string> | null;
+  sort_order: number | null;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
