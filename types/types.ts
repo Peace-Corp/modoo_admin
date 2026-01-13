@@ -311,7 +311,29 @@ export interface InquiryReply {
   updated_at: string;
 }
 
-export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized';
+export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized' | 'gathering' | 'gather_complete' | 'order_complete' | 'manufacturing' | 'manufacture_complete' | 'delivering' | 'delivery_complete';
+
+// Pricing tier for quantity-based discounts
+export interface CoBuyPricingTier {
+  minQuantity: number;
+  pricePerItem: number;
+}
+
+// Delivery settings for cobuy sessions
+export interface CoBuyDeliverySettings {
+  deliveryAddress?: {
+    address: string;
+    addressDetail?: string;
+    postalCode?: string;
+  };
+  pickupAddress?: {
+    address: string;
+    addressDetail?: string;
+    postalCode?: string;
+  };
+  enableIndividualDelivery?: boolean;
+  deliveryFee?: number;
+}
 
 export interface CoBuyCustomField {
   id: string;

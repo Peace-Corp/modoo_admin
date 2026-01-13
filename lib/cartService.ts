@@ -9,6 +9,7 @@ export interface CartItemData {
   product_title: string;
   product_color: string;
   product_color_name: string;
+  // size_id and size_name are the same value now (just the size string like "S", "M", "L")
   size_id: string;
   size_name: string;
   quantity: number;
@@ -23,8 +24,7 @@ export interface AddToCartParams {
   productTitle: string;
   productColor: string;
   productColorName: string;
-  sizeId: string;
-  sizeName: string;
+  size: string; // Size option (e.g., "S", "M", "L", "XL")
   quantity: number;
   pricePerItem: number;
   canvasState: Record<string, string>;
@@ -76,6 +76,7 @@ export async function addToCartDB(params: AddToCartParams): Promise<CartItemData
     }
 
     // Then, create the cart item with the design reference
+    // size_id and size_name are the same value now (just the size string)
     const cartItemData = {
       user_id: user.id,
       product_id: params.productId,
@@ -83,8 +84,8 @@ export async function addToCartDB(params: AddToCartParams): Promise<CartItemData
       product_title: params.productTitle,
       product_color: params.productColor,
       product_color_name: params.productColorName,
-      size_id: params.sizeId,
-      size_name: params.sizeName,
+      size_id: params.size,
+      size_name: params.size,
       quantity: params.quantity,
       price_per_item: params.pricePerItem,
       thumbnail_url: params.thumbnailUrl,

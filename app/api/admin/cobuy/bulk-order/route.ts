@@ -152,30 +152,27 @@ export async function POST(request: Request) {
     const totalAmount = totalPaid > 0 ? totalPaid : basePrice * totalQuantity;
     const pricePerItem = totalQuantity > 0 ? Number((totalAmount / totalQuantity).toFixed(2)) : basePrice;
 
-    const sizeOptions = normalizeJson<Array<{ id?: string; name?: string; label?: string }>>(
+    // SizeOption is now just a string array (e.g., ["S", "M", "L", "XL"])
+    const sizeOptions = normalizeJson<string[]>(
       product.size_options ?? null,
       []
     );
 
-    const variantMap = new Map<string, { size_id?: string; size_name?: string; quantity: number }>();
+    const variantMap = new Map<string, { size_id: string; size_name: string; quantity: number }>();
 
     participants.forEach((participant) => {
       const selectedSize = participant.selected_size || 'unknown';
-      const match = sizeOptions.find((option) =>
-        option.id === selectedSize || option.name === selectedSize || option.label === selectedSize
-      );
+      // Find matching size option (direct string comparison)
+      const matchedSize = sizeOptions.find((option) => option === selectedSize) || selectedSize;
 
-      const sizeId = match?.id || selectedSize;
-      const sizeName = match?.name || match?.label || selectedSize;
-      const key = sizeId || sizeName;
-
-      const existing = variantMap.get(key);
+      const existing = variantMap.get(matchedSize);
       if (existing) {
         existing.quantity += 1;
       } else {
-        variantMap.set(key, {
-          size_id: sizeId,
-          size_name: sizeName,
+        // size_id and size_name are the same value now (just the size string)
+        variantMap.set(matchedSize, {
+          size_id: matchedSize,
+          size_name: matchedSize,
           quantity: 1,
         });
       }
