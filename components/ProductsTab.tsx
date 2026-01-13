@@ -6,6 +6,7 @@ import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers } from 'lucide-
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
 import EditTemplateTab from './EditTemplateTab';
+import { getCategoryName } from '@/lib/categories';
 
 type EditorMode = 'print-area' | 'full-edit' | 'template-edit' | null;
 
@@ -184,6 +185,9 @@ export default function ProductsTab() {
                   카테고리
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  제조사
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   기본 가격
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -205,7 +209,10 @@ export default function ProductsTab() {
                     <div className="text-xs text-gray-500">ID: {product.id.slice(0, 8)}...</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{product.category || '-'}</span>
+                    <span className="text-sm text-gray-900">{product.category ? getCategoryName(product.category) : '-'}</span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{product.manufacturers?.name || '-'}</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{product.base_price.toLocaleString()}원</span>

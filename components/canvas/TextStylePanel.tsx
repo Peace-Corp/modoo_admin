@@ -34,9 +34,11 @@ import {
 interface TextStylePanelProps {
   selectedObject: fabric.IText | fabric.Text;
   onClose?: () => void;
+  variant?: 'mobile' | 'desktop';
 }
 
-const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose }) => {
+const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose, variant = 'mobile' }) => {
+  const isDesktop = variant === 'desktop';
   const [activeTab, setActiveTab] = useState<'font' | 'colors' | 'spacing' | 'warp'>('font');
   const [fontFamily, setFontFamily] = useState<string>('Arial');
   const [fontSize, setFontSize] = useState<number>(30);
@@ -456,16 +458,39 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
       </div>
     )}
 
-    <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
-      <div className="border-t rounded-t-2xl bg-white border-gray-200 shadow-2xl h-[34vh] flex flex-col px-4">
+    <div className={isDesktop
+      ? "w-full"
+      : "fixed inset-x-0 bottom-0 z-50 animate-slide-up"
+    }>
+      <div className={isDesktop
+        ? "bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col"
+        : "border-t rounded-t-2xl bg-white border-gray-200 shadow-2xl h-[34vh] flex flex-col px-4"
+      }>
         {/* Header with Tabs */}
-        <div className="shrink-0 sticky top-0 border-b border-gray-100">
-          <div className='py-3 w-10 mx-auto'>
-            <hr className='border-2 border-black/20 rounded-full'/>
-          </div>
+        <div className={`shrink-0 ${isDesktop ? 'border-b border-gray-200 p-3' : 'sticky top-0 border-b border-gray-100'}`}>
+          {/* Mobile drag handle */}
+          {!isDesktop && (
+            <div className='py-3 w-10 mx-auto'>
+              <hr className='border-2 border-black/20 rounded-full'/>
+            </div>
+          )}
+
+          {/* Desktop header */}
+          {isDesktop && (
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-800">텍스트 스타일</h3>
+              <button
+                onClick={handleOpenTextEdit}
+                className="p-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center"
+                title="텍스트 편집"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Tabs */}
-          <div className="flex">
+          <div className={`flex ${isDesktop ? 'gap-1' : ''}`}>
             <button
               onClick={() => setActiveTab('font')}
               className={`flex-1 py-2 px-4 text-sm font-medium ${
@@ -506,19 +531,21 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             >
               변형
             </button>
-            {/* Persistent Edit Button */}
-            <button
-              onClick={handleOpenTextEdit}
-              className="ml-2 p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center"
-              title="텍스트 편집"
-            >
-              <Pencil className="size-4" />
-            </button>
+            {/* Mobile Edit Button */}
+            {!isDesktop && (
+              <button
+                onClick={handleOpenTextEdit}
+                className="ml-2 p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center"
+                title="텍스트 편집"
+              >
+                <Pencil className="size-4" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDesktop ? 'max-h-100' : ''}`}>
           {/* Font Tab */}
           {activeTab === 'font' && (
             <>

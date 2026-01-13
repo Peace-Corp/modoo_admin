@@ -90,10 +90,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [colorsLoading, setColorsLoading] = useState(false);
   const [deletingColorId, setDeletingColorId] = useState<string | null>(null);
 
+  // Linked manufacturer (saved to product)
+  const [linkedManufacturerId, setLinkedManufacturerId] = useState<string>(product?.manufacturer_id || '');
+
   // Manufacturer and manufacturer colors
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [manufacturersLoading, setManufacturersLoading] = useState(false);
-  const [selectedManufacturerId, setSelectedManufacturerId] = useState<string>('');
   const [manufacturerColors, setManufacturerColors] = useState<ManufacturerColor[]>([]);
   const [manufacturerColorsLoading, setManufacturerColorsLoading] = useState(false);
   const [togglingColorId, setTogglingColorId] = useState<string | null>(null);
@@ -148,6 +150,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     void fetchManufacturers();
   }, []);
 
+  // Load manufacturer colors if product already has a linked manufacturer
+  useEffect(() => {
+    if (linkedManufacturerId && !hasLayeredItem) {
+      void fetchManufacturerColors(linkedManufacturerId);
+    }
+  }, [linkedManufacturerId, hasLayeredItem]);
+
   const fetchManufacturers = async () => {
     setManufacturersLoading(true);
     try {
@@ -182,14 +191,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     }
   };
 
-  const handleManufacturerChange = (manufacturerId: string) => {
-    setSelectedManufacturerId(manufacturerId);
-    if (manufacturerId) {
-      void fetchManufacturerColors(manufacturerId);
-    } else {
-      setManufacturerColors([]);
-    }
-  };
 
   const isColorSelected = (manufacturerColorId: string) => {
     return productColors.some((pc) => pc.manufacturer_color_id === manufacturerColorId);
@@ -753,6 +754,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
         product_code: productCode.trim() ? productCode.trim() : null,
         discount_rates: discountRates.length > 0 ? discountRates : null,
+        manufacturer_id: linkedManufacturerId || null,
       };
 
       if (!isNewProduct && !product?.id) {
@@ -872,6 +874,32 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   placeholder="예: TSHIRT-001"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">연결된 제조사</label>
+                <select
+                  value={linkedManufacturerId}
+                  onChange={(e) => {
+                    const newManufacturerId = e.target.value;
+                    setLinkedManufacturerId(newManufacturerId);
+                    // Fetch colors for the new manufacturer
+                    if (newManufacturerId) {
+                      void fetchManufacturerColors(newManufacturerId);
+                    } else {
+                      setManufacturerColors([]);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                  disabled={manufacturersLoading}
+                >
+                  <option value="">-- 제조사 선택 --</option>
+                  {manufacturers.map((manufacturer) => (
+                    <option key={manufacturer.id} value={manufacturer.id}>
+                      {manufacturer.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">제품에 연결할 제조사를 선택하세요. 색상 옵션은 연결된 제조사의 색상에서 선택됩니다.</p>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1152,40 +1180,25 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-gray-900">색상 옵션</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">제조사 색상에서 선택합니다. (product_colors)</p>
+                  <p className="text-xs text-gray-500 mt-0.5">연결된 제조사의 색상에서 선택합니다. (product_colors)</p>
                 </div>
               </div>
 
               {!product?.id ? (
                 <p className="text-sm text-gray-600">제품을 저장한 후 색상을 추가할 수 있습니다.</p>
+              ) : !linkedManufacturerId ? (
+                <p className="text-sm text-gray-600">기본 정보에서 제조사를 먼저 선택해주세요.</p>
               ) : (
                 <>
-                  {/* Manufacturer Selection */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">제조사 선택</label>
-                    <select
-                      value={selectedManufacturerId}
-                      onChange={(e) => handleManufacturerChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      disabled={manufacturersLoading}
-                    >
-                      <option value="">-- 제조사 선택 --</option>
-                      {manufacturers.map((manufacturer) => (
-                        <option key={manufacturer.id} value={manufacturer.id}>
-                          {manufacturer.name}
-                        </option>
-                      ))}
-                    </select>
-                    {manufacturersLoading && (
-                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        제조사 목록 로딩 중...
-                      </p>
-                    )}
+                  {/* Show linked manufacturer name */}
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                    <span className="text-sm text-blue-700">
+                      연결된 제조사: <strong>{manufacturers.find(m => m.id === linkedManufacturerId)?.name || '로딩 중...'}</strong>
+                    </span>
                   </div>
 
                   {/* Manufacturer Colors Selection */}
-                  {selectedManufacturerId && (
+                  {linkedManufacturerId && (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-gray-900">제조사 색상</p>

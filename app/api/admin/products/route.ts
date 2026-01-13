@@ -48,7 +48,7 @@ export async function GET() {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
-      .select('*')
+      .select('*, manufacturers(id, name)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     const sizingChartImage = payload?.sizing_chart_image ?? null;
     const productCode = payload?.product_code ?? null;
     const discountRates = payload?.discount_rates ?? null;
+    const manufacturerId = payload?.manufacturer_id ?? null;
 
     if (!title || typeof title !== 'string') {
       return NextResponse.json({ error: '제품명이 필요합니다.' }, { status: 400 });
@@ -124,6 +125,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '할인율 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
+    if (manufacturerId !== null && typeof manufacturerId !== 'string') {
+      return NextResponse.json({ error: '제조사 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
@@ -139,6 +144,7 @@ export async function POST(request: Request) {
         sizing_chart_image: sizingChartImage,
         product_code: productCode,
         discount_rates: discountRates,
+        manufacturer_id: manufacturerId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -245,6 +251,13 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '할인율 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.discount_rates = payload.discount_rates ?? null;
+    }
+
+    if (payload?.manufacturer_id !== undefined) {
+      if (payload.manufacturer_id !== null && typeof payload.manufacturer_id !== 'string') {
+        return NextResponse.json({ error: '제조사 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.manufacturer_id = payload.manufacturer_id ?? null;
     }
 
     if (Object.keys(updateData).length === 1) {

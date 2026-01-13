@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import * as fabric from 'fabric';
 import type { ProductLayer, PrintMethod } from '@/types/types';
+import { normalizePrintMethod } from '@/lib/printPricingConfig';
 
 interface TextExportResult {
   svg: string;
@@ -286,18 +287,40 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return zoomLevels[activeSideId] || 1;
   },
 
-  setObjectPrintMethod: (objectId, method) =>
+  setObjectPrintMethod: (objectId, method) => {
+    const { canvasMap } = get();
+
+    // Find and update the fabric object's data property
+    Object.values(canvasMap).forEach((canvas) => {
+      canvas.getObjects().forEach((obj) => {
+        const objData = obj as { data?: { objectId?: string; printMethod?: string } };
+        if (objData.data?.objectId === objectId) {
+          // Update the object's data with new print method
+          objData.data.printMethod = method;
+          canvas.renderAll();
+        }
+      });
+    });
+
+    // Update store state and increment canvas version for recalculation
     set((state) => ({
       objectPrintMethods: {
         ...state.objectPrintMethods,
         [objectId]: method,
       },
-    })),
+      canvasVersion: state.canvasVersion + 1,
+    }));
+  },
 
   getObjectPrintMethod: (obj) => {
     if (!obj) return null;
-    const objData = obj as { data?: { objectId?: string; printMethod?: PrintMethod } };
-    if (objData.data?.printMethod) return objData.data.printMethod;
+    const objData = obj as { data?: { objectId?: string; printMethod?: string } };
+    // Get print method from object data (might be legacy) or from store
+    const rawMethod = objData.data?.printMethod;
+    if (rawMethod) {
+      // Normalize legacy method names (e.g., 'printing' -> 'dtf')
+      return normalizePrintMethod(rawMethod);
+    }
     const objectId = objData.data?.objectId;
     return objectId ? get().objectPrintMethods[objectId] || null : null;
   },
