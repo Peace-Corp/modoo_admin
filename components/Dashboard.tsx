@@ -188,7 +188,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="text-right text-sm text-gray-500">
-          <div className="font-medium text-gray-700">{user?.factory_name ?? '관리자'}</div>
+          <div className="font-medium text-gray-700">{user?.manufacturer_name ?? '관리자'}</div>
           <div className="mt-1">{user?.email}</div>
         </div>
       </div>
