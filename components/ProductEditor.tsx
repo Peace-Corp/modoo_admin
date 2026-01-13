@@ -662,12 +662,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Add size option
   const handleAddSizeOption = () => {
-    const newSize: SizeOption = {
-      id: '',
-      name: '',
-      label: '',
-    };
-    setSizeOptions([...sizeOptions, newSize]);
+    setSizeOptions([...sizeOptions, '']);
   };
 
   // Remove size option
@@ -676,12 +671,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   };
 
   // Update size option
-  const updateSizeOption = (index: number, field: keyof SizeOption, value: string) => {
+  const updateSizeOption = (index: number, value: string) => {
     const newSizeOptions = [...sizeOptions];
-    newSizeOptions[index] = {
-      ...newSizeOptions[index],
-      [field]: value,
-    };
+    newSizeOptions[index] = value;
     setSizeOptions(newSizeOptions);
   };
 
@@ -1132,27 +1124,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
             <div className="space-y-2">
               {sizeOptions.map((size, index) => (
-                <div key={`size-${index}`} className="flex gap-2 w-full">
+                <div key={`size-${index}`} className="flex gap-2 w-full items-center">
                   <input
                     type="text"
-                    value={size.id}
-                    onChange={(e) => updateSizeOption(index, 'id', e.target.value)}
-                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                    placeholder="ID"
-                  />
-                  <input
-                    type="text"
-                    value={size.name}
-                    onChange={(e) => updateSizeOption(index, 'name', e.target.value)}
-                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                    placeholder="코드 (예: S)"
-                  />
-                  <input
-                    type="text"
-                    value={size.label}
-                    onChange={(e) => updateSizeOption(index, 'label', e.target.value)}
-                    className="w-30 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                    placeholder="라벨 (예: Small)"
+                    value={size}
+                    onChange={(e) => updateSizeOption(index, e.target.value)}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    placeholder="사이즈 (예: S, M, L, XL)"
                   />
                   <button
                     onClick={() => handleRemoveSizeOption(index)}

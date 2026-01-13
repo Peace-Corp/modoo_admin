@@ -594,18 +594,33 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     return Object.values(dimensionsBySide).flat();
   }, [dimensionsBySide]);
 
-  const sizeOptions = product?.size_options ?? [];
+  const sizeOptions = (product?.size_options ?? []) as Array<string | { id: string; name: string; label?: string }>;
   const sizeQuantities = useMemo(() => {
     if (!sizeOptions.length) {
       return new Map<string, number>();
     }
 
     const map = new Map<string, number>();
-    const normalizedOptions = sizeOptions.map((option) => ({
-      ...option,
-      normalizedName: option.name?.toLowerCase() || '',
-      normalizedLabel: option.label?.toLowerCase() || '',
-    }));
+    const normalizedOptions = sizeOptions.map((option) => {
+      // Handle both string and object formats for size options
+      if (typeof option === 'string') {
+        return {
+          id: option,
+          name: option,
+          label: option,
+          normalizedName: option.toLowerCase(),
+          normalizedLabel: option.toLowerCase(),
+        };
+      }
+      const opt = option as { id?: string; name?: string; label?: string };
+      return {
+        id: opt.id || '',
+        name: opt.name || '',
+        label: opt.label || '',
+        normalizedName: opt.name?.toLowerCase() || '',
+        normalizedLabel: opt.label?.toLowerCase() || '',
+      };
+    });
 
     const findOptionId = (sizeId?: string, sizeName?: string) => {
       if (sizeId) {
@@ -1151,9 +1166,10 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                   <thead className="bg-gray-50 text-black">
                     <tr>
                       {sizeOptions.map((size) => {
-                        const sizeLabel = size.name || '-';
+                        const sizeId = typeof size === 'string' ? size : size.id;
+                        const sizeLabel = typeof size === 'string' ? size : (size.name || '-');
                         return (
-                          <th key={size.id} className="px-3 py-2 text-center font-medium border border-gray-200">
+                          <th key={sizeId} className="px-3 py-2 text-center font-medium border border-gray-200">
                             {sizeLabel}
                           </th>
                         );
@@ -1166,9 +1182,10 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                   <tbody className="divide-y divide-gray-200 text-black">
                     <tr>
                       {sizeOptions.map((size) => {
-                        const quantity = sizeQuantities.get(size.id);
+                        const sizeId = typeof size === 'string' ? size : size.id;
+                        const quantity = sizeQuantities.get(sizeId);
                         return (
-                          <td key={size.id} className="px-3 py-2 text-center border border-gray-200">
+                          <td key={sizeId} className="px-3 py-2 text-center border border-gray-200">
                             {quantity && quantity > 0 ? quantity : '-'}
                           </td>
                         );

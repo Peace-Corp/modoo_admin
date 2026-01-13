@@ -97,11 +97,8 @@ export interface CustomFont {
   format?: string;
 }
 
-export interface SizeOption {
-  id: string;
-  name: string;
-  label: string;
-}
+// Size option is now just a simple string (e.g., "S", "M", "L", "XL")
+export type SizeOption = string;
 
 export interface Order {
   id: string;

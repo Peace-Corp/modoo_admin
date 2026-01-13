@@ -22,7 +22,6 @@ const navItems: Array<{
   { href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
   { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
   { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
-  { href: '/settings', label: '설정', icon: Settings, roles: ['admin'] },
 ];
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
@@ -38,14 +37,23 @@ const defaultRouteByRole: Record<AdminRole, string> = {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, setUser, setLoading, logout } = useAuthStore();
+  const { user, setUser, setLoading, logout } = useAuthStore();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
 
+  // Handle zustand hydration
   useEffect(() => {
-    if (isLoginRoute) return;
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoginRoute) {
+      setIsCheckingAuth(false);
+      return;
+    }
 
     let isActive = true;
 
@@ -57,6 +65,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const { data: { user: supabaseUser } } = await supabase.auth.getUser();
 
         if (!supabaseUser) {
+          if (isActive) {
+            setLoading(false);
+            setIsCheckingAuth(false);
+          }
           router.push('/login');
           return;
         }
@@ -69,39 +81,52 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         if (error || !profile) {
           console.error('Error fetching profile:', error);
+          // Sign out to prevent redirect loop
+          await logout();
+          if (isActive) {
+            setIsCheckingAuth(false);
+          }
           router.push('/login');
           return;
         }
 
-        if (profile.role !== 'admin') {
-          if (profile.role !== 'factory') {
-            router.push('/login');
-            return;
+        if (profile.role !== 'admin' && profile.role !== 'factory') {
+          console.error('User does not have admin or factory role:', profile.role);
+          // Sign out to prevent redirect loop
+          await logout();
+          if (isActive) {
+            setIsCheckingAuth(false);
           }
+          router.push('/login');
+          return;
         }
 
         const factoryRecord = Array.isArray(profile.factory)
           ? profile.factory[0]
           : profile.factory;
 
-        setUser({
-          id: supabaseUser.id,
-          email: supabaseUser.email || profile.email || '',
-          name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name,
-          avatar_url: supabaseUser.user_metadata?.avatar_url,
-          phone: supabaseUser.phone || profile.phone_number,
-          role: profile.role,
-          factory_id: profile.factory_id ?? null,
-          factory_name: factoryRecord?.name ?? null,
-        });
-      } catch (error) {
-        console.error('Error checking admin auth:', error);
-        router.push('/login');
-      } finally {
         if (isActive) {
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email || profile.email || '',
+            name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name,
+            avatar_url: supabaseUser.user_metadata?.avatar_url,
+            phone: supabaseUser.phone || profile.phone_number,
+            role: profile.role,
+            factory_id: profile.factory_id ?? null,
+            factory_name: factoryRecord?.name ?? null,
+          });
           setLoading(false);
           setIsCheckingAuth(false);
         }
+      } catch (error) {
+        console.error('Error checking admin auth:', error);
+        // Sign out to prevent redirect loop
+        await logout();
+        if (isActive) {
+          setIsCheckingAuth(false);
+        }
+        router.push('/login');
       }
     };
 
@@ -110,14 +135,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       isActive = false;
     };
-  }, [isLoginRoute, router, setUser, setLoading]);
+  }, [isLoginRoute, router, setUser, setLoading, logout]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
   const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
-  const hasAccess = role === 'admin' || role === 'factory';
 
   useEffect(() => {
     if (!role || isLoginRoute) return;
@@ -136,7 +160,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  if (isCheckingAuth || !isAuthenticated || !hasAccess) {
+  // Only show loading spinner while checking auth or waiting for hydration
+  // Also show spinner if no user after auth check (redirect in progress)
+  if (!isHydrated || isCheckingAuth || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -192,10 +218,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <aside
           className={`
-            fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 z-30
+            fixed top-16 left-0 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 z-30
             transition-transform duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            w-64
+            w-64 overflow-y-auto
           `}
         >
           <nav className="p-3 space-y-1">
@@ -214,7 +240,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </aside>
 
-        <main className="flex-1 p-4 lg:ml-0">{children}</main>
+        <main className="flex-1 p-4 lg:ml-64">{children}</main>
       </div>
     </div>
   );
