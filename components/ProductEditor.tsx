@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Product, ProductColor, ProductLayer, ProductSide, SizeOption } from '@/types/types';
+import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
-import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { CATEGORIES } from '@/lib/categories';
+import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -87,17 +88,22 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // Product colors (single image products)
   const [productColors, setProductColors] = useState<ProductColor[]>([]);
   const [colorsLoading, setColorsLoading] = useState(false);
-  const [addingColor, setAddingColor] = useState(false);
   const [deletingColorId, setDeletingColorId] = useState<string | null>(null);
-  const [colorDraft, setColorDraft] = useState({
-    color_id: '',
-    name: '',
-    hex: '#FFFFFF',
-    label: '',
-    color_code: '',
-    sort_order: 0,
-    is_active: true,
-  });
+
+  // Manufacturer and manufacturer colors
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [manufacturersLoading, setManufacturersLoading] = useState(false);
+  const [selectedManufacturerId, setSelectedManufacturerId] = useState<string>('');
+  const [manufacturerColors, setManufacturerColors] = useState<ManufacturerColor[]>([]);
+  const [manufacturerColorsLoading, setManufacturerColorsLoading] = useState(false);
+  const [togglingColorId, setTogglingColorId] = useState<string | null>(null);
+  const [colorSearch, setColorSearch] = useState('');
+
+  // Layer-specific manufacturer selection (for layered products)
+  // Key format: `${sideIndex}-${layerIndex}`, value: manufacturerId
+  const [layerManufacturerIds, setLayerManufacturerIds] = useState<Record<string, string>>({});
+  const [layerManufacturerColors, setLayerManufacturerColors] = useState<Record<string, ManufacturerColor[]>>({});
+  const [layerColorsLoading, setLayerColorsLoading] = useState<Record<string, boolean>>({});
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -137,70 +143,171 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     void fetchProductColors(product.id);
   }, [product?.id, hasLayeredItem]);
 
-  const handleAddProductColor = async () => {
+  // Fetch manufacturers when component mounts (for both layered and non-layered products)
+  useEffect(() => {
+    void fetchManufacturers();
+  }, []);
+
+  const fetchManufacturers = async () => {
+    setManufacturersLoading(true);
+    try {
+      const response = await fetch('/api/admin/manufacturers');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제조사 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setManufacturers(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+    } finally {
+      setManufacturersLoading(false);
+    }
+  };
+
+  const fetchManufacturerColors = async (manufacturerId: string) => {
+    setManufacturerColorsLoading(true);
+    try {
+      const response = await fetch(`/api/admin/manufacturer-colors?manufacturerId=${manufacturerId}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '색상 데이터를 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setManufacturerColors(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching manufacturer colors:', error);
+    } finally {
+      setManufacturerColorsLoading(false);
+    }
+  };
+
+  const handleManufacturerChange = (manufacturerId: string) => {
+    setSelectedManufacturerId(manufacturerId);
+    if (manufacturerId) {
+      void fetchManufacturerColors(manufacturerId);
+    } else {
+      setManufacturerColors([]);
+    }
+  };
+
+  const isColorSelected = (manufacturerColorId: string) => {
+    return productColors.some((pc) => pc.manufacturer_color_id === manufacturerColorId);
+  };
+
+  const handleToggleColor = async (manufacturerColor: ManufacturerColor) => {
     if (!product?.id) {
       alert('제품을 먼저 저장해주세요.');
       return;
     }
 
-    const colorId = colorDraft.color_id.trim();
-    const name = colorDraft.name.trim();
-    const hex = colorDraft.hex.trim();
-    const isValidHex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(hex);
+    const existingProductColor = productColors.find(
+      (pc) => pc.manufacturer_color_id === manufacturerColor.id
+    );
 
-    if (!colorId) {
-      alert('color_id가 필요합니다.');
-      return;
-    }
-    if (!name) {
-      alert('이름이 필요합니다.');
-      return;
-    }
-    if (!isValidHex) {
-      alert('HEX 형식이 올바르지 않습니다. (예: #FFFFFF)');
-      return;
-    }
-
-    setAddingColor(true);
+    setTogglingColorId(manufacturerColor.id);
     try {
-      const response = await fetch('/api/admin/product-colors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: product.id,
-          color_id: colorId,
-          name,
-          hex,
-          label: colorDraft.label.trim() || null,
-          color_code: colorDraft.color_code.trim() || null,
-          sort_order: Number.isFinite(colorDraft.sort_order) ? colorDraft.sort_order : 0,
-          is_active: colorDraft.is_active,
-        }),
-      });
+      if (existingProductColor) {
+        // Remove the color
+        const response = await fetch(`/api/admin/product-colors?id=${existingProductColor.id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload?.error || '색상 삭제에 실패했습니다.');
+        }
+        setProductColors((prev) => prev.filter((pc) => pc.id !== existingProductColor.id));
+      } else {
+        // Add the color
+        const response = await fetch('/api/admin/product-colors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: product.id,
+            manufacturer_color_id: manufacturerColor.id,
+            is_active: true,
+            sort_order: productColors.length,
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload?.error || '색상 추가에 실패했습니다.');
+        }
+        const payload = await response.json();
+        const created = payload?.data as ProductColor;
+        setProductColors((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+      }
+    } catch (error) {
+      console.error('Error toggling product color:', error);
+      alert(error instanceof Error ? error.message : '색상 변경에 실패했습니다.');
+    } finally {
+      setTogglingColorId(null);
+    }
+  };
 
+  // Layer-specific manufacturer handling
+  const getLayerKey = (sideIndex: number, layerIndex: number) => `${sideIndex}-${layerIndex}`;
+
+  const fetchLayerManufacturerColors = async (sideIndex: number, layerIndex: number, manufacturerId: string) => {
+    const key = getLayerKey(sideIndex, layerIndex);
+    setLayerColorsLoading((prev) => ({ ...prev, [key]: true }));
+    try {
+      const response = await fetch(`/api/admin/manufacturer-colors?manufacturerId=${manufacturerId}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '색상 추가에 실패했습니다.');
+        throw new Error(payload?.error || '색상 데이터를 불러오지 못했습니다.');
       }
-
       const payload = await response.json();
-      const created = payload?.data as ProductColor;
-      setProductColors((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
-      setColorDraft({
-        color_id: '',
-        name: '',
-        hex: '#FFFFFF',
-        label: '',
-        color_code: '',
-        sort_order: 0,
-        is_active: true,
-      });
+      setLayerManufacturerColors((prev) => ({ ...prev, [key]: payload?.data || [] }));
     } catch (error) {
-      console.error('Error adding product color:', error);
-      alert(error instanceof Error ? error.message : '색상 추가에 실패했습니다.');
+      console.error('Error fetching layer manufacturer colors:', error);
     } finally {
-      setAddingColor(false);
+      setLayerColorsLoading((prev) => ({ ...prev, [key]: false }));
     }
+  };
+
+  const handleLayerManufacturerChange = (sideIndex: number, layerIndex: number, manufacturerId: string) => {
+    const key = getLayerKey(sideIndex, layerIndex);
+    setLayerManufacturerIds((prev) => ({ ...prev, [key]: manufacturerId }));
+    if (manufacturerId) {
+      void fetchLayerManufacturerColors(sideIndex, layerIndex, manufacturerId);
+    } else {
+      setLayerManufacturerColors((prev) => ({ ...prev, [key]: [] }));
+    }
+  };
+
+  const isLayerColorSelected = (sideIndex: number, layerIndex: number, hex: string, colorCode: string) => {
+    const side = sides[sideIndex];
+    const layer = side?.layers?.[layerIndex];
+    if (!layer) return false;
+    return layer.colorOptions.some(
+      (opt) => opt.hex.toLowerCase() === hex.toLowerCase() && opt.colorCode === colorCode
+    );
+  };
+
+  const handleToggleLayerColor = (sideIndex: number, layerIndex: number, mColor: ManufacturerColor) => {
+    const newSides = [...sides];
+    const side = newSides[sideIndex];
+    const layers = Array.isArray(side.layers) ? [...side.layers] : [];
+    const layer = layers[layerIndex];
+    if (!layer) return;
+
+    const colorOptions = Array.isArray(layer.colorOptions) ? [...layer.colorOptions] : [];
+    const existingIndex = colorOptions.findIndex(
+      (opt) => opt.hex.toLowerCase() === mColor.hex.toLowerCase() && opt.colorCode === mColor.color_code
+    );
+
+    if (existingIndex >= 0) {
+      // Remove the color
+      colorOptions.splice(existingIndex, 1);
+    } else {
+      // Add the color
+      colorOptions.push({ hex: mColor.hex, colorCode: mColor.color_code });
+    }
+
+    layers[layerIndex] = { ...layer, colorOptions };
+    newSides[sideIndex] = { ...side, layers };
+    setSides(newSides);
   };
 
   const handleDeleteProductColor = async (id: string) => {
@@ -751,13 +858,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                <input
-                  type="text"
+                <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                  placeholder="예: 의류"
-                />
+                >
+                  <option value="">-- 카테고리 선택 --</option>
+                  {CATEGORIES.filter((cat) => cat.key !== 'all').map((cat) => (
+                    <option key={cat.key} value={cat.key}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">제품 코드 (product_code)</label>
@@ -1062,7 +1174,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-gray-900">색상 옵션</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">단일 이미지 제품만 해당됩니다. (product_colors)</p>
+                  <p className="text-xs text-gray-500 mt-0.5">제조사 색상에서 선택합니다. (product_colors)</p>
                 </div>
               </div>
 
@@ -1070,135 +1182,127 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 <p className="text-sm text-gray-600">제품을 저장한 후 색상을 추가할 수 있습니다.</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">color_id *</label>
-                      <input
-                        type="text"
-                        value={colorDraft.color_id}
-                        onChange={(e) => setColorDraft((prev) => ({ ...prev, color_id: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="예: white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">이름 *</label>
-                      <input
-                        type="text"
-                        value={colorDraft.name}
-                        onChange={(e) => setColorDraft((prev) => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="예: 화이트"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">HEX *</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={colorDraft.hex}
-                          onChange={(e) => setColorDraft((prev) => ({ ...prev, hex: e.target.value }))}
-                          className="h-9 w-10 border border-gray-300 rounded"
-                        />
-                        <input
-                          type="text"
-                          value={colorDraft.hex}
-                          onChange={(e) => setColorDraft((prev) => ({ ...prev, hex: e.target.value }))}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                          placeholder="#FFFFFF"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">sort_order</label>
-                      <input
-                        type="number"
-                        value={colorDraft.sort_order}
-                        onChange={(e) => setColorDraft((prev) => ({ ...prev, sort_order: parseInt(e.target.value) || 0 }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">label</label>
-                      <input
-                        type="text"
-                        value={colorDraft.label}
-                        onChange={(e) => setColorDraft((prev) => ({ ...prev, label: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="옵션 설명 (선택)"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">color_code</label>
-                      <input
-                        type="text"
-                        value={colorDraft.color_code}
-                        onChange={(e) => setColorDraft((prev) => ({ ...prev, color_code: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        placeholder="코드 (선택)"
-                      />
-                    </div>
-                    <div className="col-span-2 flex items-center justify-between">
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={colorDraft.is_active}
-                          onChange={(e) => setColorDraft((prev) => ({ ...prev, is_active: e.target.checked }))}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-                        />
-                        활성
-                      </label>
-                      <button
-                        onClick={handleAddProductColor}
-                        disabled={addingColor}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-                      >
-                        <Plus className="w-4 h-4" />
-                        {addingColor ? '추가 중...' : '추가'}
-                      </button>
-                    </div>
+                  {/* Manufacturer Selection */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">제조사 선택</label>
+                    <select
+                      value={selectedManufacturerId}
+                      onChange={(e) => handleManufacturerChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      disabled={manufacturersLoading}
+                    >
+                      <option value="">-- 제조사 선택 --</option>
+                      {manufacturers.map((manufacturer) => (
+                        <option key={manufacturer.id} value={manufacturer.id}>
+                          {manufacturer.name}
+                        </option>
+                      ))}
+                    </select>
+                    {manufacturersLoading && (
+                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        제조사 목록 로딩 중...
+                      </p>
+                    )}
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Manufacturer Colors Selection */}
+                  {selectedManufacturerId && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-900">제조사 색상</p>
+                        {manufacturerColorsLoading && (
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            로딩 중...
+                          </p>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={colorSearch}
+                        onChange={(e) => setColorSearch(e.target.value)}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        placeholder="색상 코드 검색..."
+                      />
+                      {!manufacturerColorsLoading && manufacturerColors.length === 0 && (
+                        <p className="text-sm text-gray-500">등록된 색상이 없습니다.</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                        {[...manufacturerColors]
+                          .filter((c) => !colorSearch || c.color_code.toLowerCase().includes(colorSearch.toLowerCase()) || c.name.toLowerCase().includes(colorSearch.toLowerCase()))
+                          .sort((a, b) => a.color_code.localeCompare(b.color_code))
+                          .map((mColor) => {
+                          const selected = isColorSelected(mColor.id);
+                          const isToggling = togglingColorId === mColor.id;
+                          return (
+                            <button
+                              key={mColor.id}
+                              onClick={() => handleToggleColor(mColor)}
+                              disabled={isToggling}
+                              className={`flex items-center gap-2 p-2 border rounded-md text-left transition-all ${
+                                selected
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              } ${isToggling ? 'opacity-50' : ''}`}
+                            >
+                              <div className="relative shrink-0">
+                                <div
+                                  className="w-6 h-6 rounded border border-gray-300"
+                                  style={{ backgroundColor: mColor.hex }}
+                                />
+                                {selected && (
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                    <Check className="w-3 h-3 text-white" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm text-gray-900 truncate">{mColor.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{mColor.color_code}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Currently Selected Colors */}
+                  <div className="space-y-2 border-t border-gray-200 pt-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900">등록된 색상</p>
+                      <p className="text-sm font-medium text-gray-900">선택된 색상 ({productColors.length})</p>
                       {colorsLoading && <p className="text-xs text-gray-500">불러오는 중...</p>}
                     </div>
                     {productColors.length === 0 && !colorsLoading && (
-                      <p className="text-sm text-gray-500">등록된 색상이 없습니다.</p>
+                      <p className="text-sm text-gray-500">선택된 색상이 없습니다.</p>
                     )}
-                    {productColors.map((color) => (
-                      <div
-                        key={color.id}
-                        className="flex items-center justify-between gap-2 border border-gray-200 rounded-md px-2 py-2"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      {[...productColors].sort((a, b) => (a.manufacturer_colors?.color_code || '').localeCompare(b.manufacturer_colors?.color_code || '')).map((color) => {
+                        const mColor = color.manufacturer_colors;
+                        return (
                           <div
-                            className="w-5 h-5 rounded border border-gray-300 shrink-0"
-                            style={{ backgroundColor: color.hex }}
-                            title={color.hex}
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm text-gray-900 truncate">
-                              {color.name} <span className="text-xs text-gray-500">({color.color_id})</span>
-                            </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {color.hex}
-                              {color.label ? ` · ${color.label}` : ''}
-                              {color.color_code ? ` · ${color.color_code}` : ''}
-                            </p>
+                            key={color.id}
+                            className="flex items-center gap-2 border border-gray-200 rounded-md px-2 py-1.5 bg-gray-50"
+                          >
+                            <div
+                              className="w-4 h-4 rounded border border-gray-300 shrink-0"
+                              style={{ backgroundColor: mColor?.hex || '#ccc' }}
+                              title={mColor?.hex}
+                            />
+                            <span className="text-sm text-gray-700">{mColor?.name || '알 수 없음'}</span>
+                            <button
+                              onClick={() => handleDeleteProductColor(color.id)}
+                              disabled={deletingColorId === color.id}
+                              className="p-0.5 text-gray-400 hover:text-red-600 rounded disabled:opacity-50"
+                              title="삭제"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteProductColor(color.id)}
-                          disabled={deletingColorId === color.id}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                          title="삭제"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -1567,43 +1671,107 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                         </button>
                       </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-medium text-gray-600">컬러 옵션</p>
-                          <button
-                            onClick={() => addLayerColorOption(currentSideIndex, layerIndex)}
-                            className="text-xs text-blue-600 hover:text-blue-700"
-                          >
-                            옵션 추가
-                          </button>
-                        </div>
-                        {layer.colorOptions.length === 0 && (
-                          <p className="text-xs text-gray-400">등록된 컬러 옵션이 없습니다.</p>
-                        )}
-                        {layer.colorOptions.map((option, optionIndex) => (
-                          <div key={`${layer.id}-color-${optionIndex}`} className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={option.hex}
-                              onChange={(e) => updateLayerColorOption(currentSideIndex, layerIndex, optionIndex, 'hex', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs border border-gray-300 rounded"
-                              placeholder="#FFFFFF"
-                            />
-                            <input
-                              type="text"
-                              value={option.colorCode}
-                              onChange={(e) => updateLayerColorOption(currentSideIndex, layerIndex, optionIndex, 'colorCode', e.target.value)}
-                              className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded"
-                              placeholder="WHT-001"
-                            />
-                            <button
-                              onClick={() => removeLayerColorOption(currentSideIndex, layerIndex, optionIndex)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                      {/* Layer Color Options - Manufacturer Selection */}
+                      <div className="space-y-3 border-t border-gray-100 pt-3">
+                        <p className="text-xs font-medium text-gray-600">컬러 옵션 (제조사 선택)</p>
+
+                        {/* Manufacturer Dropdown for Layer */}
+                        <select
+                          value={layerManufacturerIds[getLayerKey(currentSideIndex, layerIndex)] || ''}
+                          onChange={(e) => handleLayerManufacturerChange(currentSideIndex, layerIndex, e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                          disabled={manufacturersLoading}
+                        >
+                          <option value="">-- 제조사 선택 --</option>
+                          {manufacturers.map((manufacturer) => (
+                            <option key={manufacturer.id} value={manufacturer.id}>
+                              {manufacturer.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Manufacturer Colors for Layer */}
+                        {layerManufacturerIds[getLayerKey(currentSideIndex, layerIndex)] && (
+                          <div className="space-y-2">
+                            {layerColorsLoading[getLayerKey(currentSideIndex, layerIndex)] ? (
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                색상 로딩 중...
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-3 gap-1.5 max-h-32 overflow-y-auto">
+                                {[...(layerManufacturerColors[getLayerKey(currentSideIndex, layerIndex)] || [])].sort((a, b) => a.color_code.localeCompare(b.color_code)).map((mColor) => {
+                                  const selected = isLayerColorSelected(currentSideIndex, layerIndex, mColor.hex, mColor.color_code);
+                                  return (
+                                    <button
+                                      key={mColor.id}
+                                      onClick={() => handleToggleLayerColor(currentSideIndex, layerIndex, mColor)}
+                                      className={`flex items-center gap-1.5 p-1.5 border rounded text-left transition-all ${
+                                        selected
+                                          ? 'border-blue-500 bg-blue-50'
+                                          : 'border-gray-200 hover:border-gray-300'
+                                      }`}
+                                      title={`${mColor.name} (${mColor.color_code})`}
+                                    >
+                                      <div className="relative shrink-0">
+                                        <div
+                                          className="w-4 h-4 rounded border border-gray-300"
+                                          style={{ backgroundColor: mColor.hex }}
+                                        />
+                                        {selected && (
+                                          <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                                            <Check className="w-2 h-2 text-white" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] text-gray-700 truncate">{mColor.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        )}
+
+                        {/* Currently Selected Colors for Layer */}
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-500">선택된 색상 ({layer.colorOptions.length})</p>
+                          {layer.colorOptions.length === 0 ? (
+                            <p className="text-xs text-gray-400">등록된 컬러 옵션이 없습니다.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {[...layer.colorOptions].sort((a, b) => a.colorCode.localeCompare(b.colorCode)).map((option) => (
+                                <div
+                                  key={`${layer.id}-color-${option.colorCode}`}
+                                  className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-[10px]"
+                                >
+                                  <div
+                                    className="w-3 h-3 rounded border border-gray-300"
+                                    style={{ backgroundColor: option.hex }}
+                                  />
+                                  <span className="text-gray-600">{option.colorCode || option.hex}</span>
+                                  <button
+                                    onClick={() => {
+                                      const originalIndex = layer.colorOptions.findIndex((o) => o.colorCode === option.colorCode && o.hex === option.hex);
+                                      if (originalIndex !== -1) removeLayerColorOption(currentSideIndex, layerIndex, originalIndex);
+                                    }}
+                                    className="p-0.5 text-gray-400 hover:text-red-600 rounded"
+                                  >
+                                    <X className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Manual Add Option (fallback) */}
+                        <button
+                          onClick={() => addLayerColorOption(currentSideIndex, layerIndex)}
+                          className="text-[10px] text-gray-500 hover:text-blue-600"
+                        >
+                          + 수동으로 색상 추가
+                        </button>
                       </div>
                     </div>
                   ))}

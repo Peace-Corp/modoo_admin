@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
-import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState } from '@/types/types';
+import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState, CustomFont } from '@/types/types';
 import { ChevronLeft, Palette, Ruler, Grid3x3, Download } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
@@ -259,6 +259,29 @@ const coerceTextSvgObjectUrlsBySide = (value: unknown): TextSvgObjectUrlsBySide 
 
 const sanitizeFilenameSegment = (value: string) => value.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
 
+const coerceCustomFonts = (value: unknown): CustomFont[] => {
+  const parsed = parseJsonValue(value);
+  if (!Array.isArray(parsed)) return [];
+
+  const fonts: CustomFont[] = [];
+  parsed.forEach((raw) => {
+    if (!isPlainRecord(raw)) return;
+    const fontFamily = typeof raw.fontFamily === 'string' ? raw.fontFamily : '';
+    const url = typeof raw.url === 'string' ? raw.url : '';
+    if (!fontFamily || !url) return;
+    fonts.push({
+      fontFamily,
+      fileName: typeof raw.fileName === 'string' ? raw.fileName : `${fontFamily}.ttf`,
+      url,
+      path: typeof raw.path === 'string' ? raw.path : undefined,
+      uploadedAt: typeof raw.uploadedAt === 'string' ? raw.uploadedAt : undefined,
+      format: typeof raw.format === 'string' ? raw.format : undefined,
+    });
+  });
+
+  return fonts;
+};
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasProps) {
@@ -269,6 +292,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   const [isDownloading, setIsDownloading] = useState(false);
 
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
+  const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
 
   const textSvgExports = useMemo(() => coerceTextSvgExports(orderItem.text_svg_exports), [orderItem.text_svg_exports]);
   const textSvgSideUrls = useMemo(() => {
@@ -757,6 +781,12 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
   };
 
+  const handleDownloadFont = async (font: CustomFont) => {
+    const ext = font.format || getFileExtensionFromUrl(font.url) || 'ttf';
+    const filename = buildFilename(`font-${sanitizeFilenameSegment(font.fontFamily)}`, ext);
+    await downloadUrl(font.url, filename);
+  };
+
   const isTextObjectType = (rawType?: string | null) => {
     const normalized = (rawType || '').toLowerCase();
     return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox';
@@ -1023,6 +1053,18 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         });
       }
 
+      // Add custom fonts
+      customFonts.forEach((font) => {
+        if (!font.url || seenUrls.has(font.url)) return;
+        seenUrls.add(font.url);
+        const ext = font.format || getFileExtensionFromUrl(font.url) || 'ttf';
+        files.push({
+          type: 'url',
+          url: font.url,
+          filename: buildFilename(`${prefix}-font-${sanitizeFilenameSegment(font.fontFamily)}`, ext),
+        });
+      });
+
       if (files.length === 0) {
         alert('다운로드할 파일이 없습니다.');
         return;
@@ -1159,6 +1201,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                       height={500}
                       onCanvasReady={handleCanvasReady}
                       renderFromCanvasStateOnly
+                      customFonts={customFonts}
                     />
                   </div>
                 </div>
@@ -1351,6 +1394,44 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
               <p className="text-sm text-gray-500">크기 정보가 없습니다.</p>
             )}
           </div>
+
+          {/* Custom Fonts */}
+          {customFonts.length > 0 && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+                </svg>
+                <h3 className="text-base font-semibold text-gray-900">커스텀 폰트</h3>
+              </div>
+              <div className="space-y-2">
+                {customFonts.map((font, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 border border-gray-200 rounded-md bg-gray-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {font.fontFamily}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {font.fileName}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownloadFont(font)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded transition-colors ml-2"
+                      title="폰트 다운로드"
+                    >
+                      <Download className="w-3 h-3" />
+                      다운로드
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </div>
       </div>

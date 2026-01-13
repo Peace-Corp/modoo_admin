@@ -15,18 +15,38 @@ export interface Product {
   updated_at: string;
 }
 
+export interface Manufacturer {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturerColor {
+  id: string;
+  manufacturer_id: string;
+  name: string;
+  hex: string;
+  color_code: string;
+  label: string | null;
+  is_active: boolean | null;
+  sort_order: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductColor {
   id: string;
   product_id: string;
-  color_id: string;
-  name: string;
-  hex: string;
-  label: string | null;
+  manufacturer_color_id: string;
   is_active: boolean | null;
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
-  color_code: string | null;
+  manufacturer_colors?: ManufacturerColor;
 }
 
 export interface ProductConfig {
@@ -67,6 +87,15 @@ export interface ProductLayer {
 }
 
 export type PrintMethod = 'printing' | 'embroidery';
+
+export interface CustomFont {
+  fontFamily: string;
+  fileName: string;
+  url: string;
+  path?: string;
+  uploadedAt?: string;
+  format?: string;
+}
 
 export interface SizeOption {
   id: string;
@@ -142,6 +171,9 @@ export interface OrderItem {
   // Order file downloads (JSONB)
   image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
   text_svg_exports?: Record<string, unknown> | string | null;
+
+  // Custom fonts used in the design
+  custom_fonts?: CustomFont[] | string | null;
 
   // Joined from products table
   products?: { product_code: string | null } | null;

@@ -29,7 +29,9 @@ import {
   AlignRight,
   Type,
   Palette,
+  Spline,
 } from 'lucide-react';
+import { CurvedText, isCurvedText, convertToCurvedText } from '@/lib/curvedText';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
@@ -67,6 +69,7 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
   const [underline, setUnderlineState] = useState(false);
   const [linethrough, setLinethrough] = useState(false);
   const [textAlign, setTextAlign] = useState('left');
+  const [curveIntensity, setCurveIntensity] = useState(0);
 
   const canvasReadyRef = useRef<Record<string, { canvas: fabric.Canvas; scale: number }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,20 +160,43 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
 
   // Update text styling state from selected object
   const updateTextStateFromObject = useCallback((obj: fabric.FabricObject | null) => {
-    if (!obj || (obj.type !== 'i-text' && obj.type !== 'text')) {
+    // Check for CurvedText, IText, or Text objects
+    const isCurved = obj && isCurvedText(obj);
+    const isTextType = obj && (obj.type === 'i-text' || obj.type === 'text');
+
+    if (!obj || (!isCurved && !isTextType)) {
       setSelectedObject(null);
+      setCurveIntensity(0);
       return;
     }
-    const textObj = obj as fabric.IText;
+
     setSelectedObject(obj);
-    setFontFamily((textObj.fontFamily as string) || 'Arial');
-    setFontSize((textObj.fontSize as number) || 30);
-    setFillColor((textObj.fill as string) || '#333333');
-    setFontWeight((textObj.fontWeight as string) || 'normal');
-    setFontStyle((textObj.fontStyle as string) || 'normal');
-    setUnderlineState(textObj.underline || false);
-    setLinethrough(textObj.linethrough || false);
-    setTextAlign((textObj.textAlign as string) || 'left');
+
+    if (isCurved) {
+      // Handle CurvedText object
+      const curvedObj = obj as CurvedText;
+      setFontFamily(curvedObj.fontFamily || 'Arial');
+      setFontSize(curvedObj.fontSize || 30);
+      setFillColor((curvedObj.fill as string) || '#333333');
+      setFontWeight(curvedObj.fontWeight || 'normal');
+      setFontStyle(curvedObj.fontStyle || 'normal');
+      setUnderlineState(false); // CurvedText doesn't support underline
+      setLinethrough(false); // CurvedText doesn't support linethrough
+      setTextAlign('center'); // CurvedText is always centered
+      setCurveIntensity(curvedObj.curveIntensity || 0);
+    } else {
+      // Handle IText/Text object
+      const textObj = obj as fabric.IText;
+      setFontFamily((textObj.fontFamily as string) || 'Arial');
+      setFontSize((textObj.fontSize as number) || 30);
+      setFillColor((textObj.fill as string) || '#333333');
+      setFontWeight((textObj.fontWeight as string) || 'normal');
+      setFontStyle((textObj.fontStyle as string) || 'normal');
+      setUnderlineState(textObj.underline || false);
+      setLinethrough(textObj.linethrough || false);
+      setTextAlign((textObj.textAlign as string) || 'left');
+      setCurveIntensity(0);
+    }
   }, []);
 
   // Listen for canvas selection events
@@ -219,17 +245,35 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
 
   const handleFontFamilyChange = (value: string) => {
     setFontFamily(value);
-    updateTextProperty('fontFamily', value);
+    if (selectedObject && isCurvedText(selectedObject)) {
+      // Use CurvedText's setter method for proper bounds recalculation
+      (selectedObject as CurvedText).setFont(value);
+      incrementCanvasVersion();
+    } else {
+      updateTextProperty('fontFamily', value);
+    }
   };
 
   const handleFontSizeChange = (value: number) => {
     setFontSize(value);
-    updateTextProperty('fontSize', value);
+    if (selectedObject && isCurvedText(selectedObject)) {
+      // Use CurvedText's setter method for proper bounds recalculation
+      (selectedObject as CurvedText).setFontSize(value);
+      incrementCanvasVersion();
+    } else {
+      updateTextProperty('fontSize', value);
+    }
   };
 
   const handleFillColorChange = (value: string) => {
     setFillColor(value);
-    updateTextProperty('fill', value);
+    if (selectedObject && isCurvedText(selectedObject)) {
+      // Use CurvedText's setter method
+      (selectedObject as CurvedText).setFill(value);
+      incrementCanvasVersion();
+    } else {
+      updateTextProperty('fill', value);
+    }
   };
 
   const handleTextAlignChange = (value: string) => {
@@ -240,13 +284,25 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
   const toggleBold = () => {
     const newWeight = fontWeight === 'bold' ? 'normal' : 'bold';
     setFontWeight(newWeight);
-    updateTextProperty('fontWeight', newWeight);
+    if (selectedObject && isCurvedText(selectedObject)) {
+      // Use CurvedText's setter method for proper bounds recalculation
+      (selectedObject as CurvedText).setFontWeight(newWeight);
+      incrementCanvasVersion();
+    } else {
+      updateTextProperty('fontWeight', newWeight);
+    }
   };
 
   const toggleItalic = () => {
     const newStyle = fontStyle === 'italic' ? 'normal' : 'italic';
     setFontStyle(newStyle);
-    updateTextProperty('fontStyle', newStyle);
+    if (selectedObject && isCurvedText(selectedObject)) {
+      // Use CurvedText's setter method for proper bounds recalculation
+      (selectedObject as CurvedText).setFontStyle(newStyle);
+      incrementCanvasVersion();
+    } else {
+      updateTextProperty('fontStyle', newStyle);
+    }
   };
 
   const toggleUnderline = () => {
@@ -261,8 +317,52 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
     updateTextProperty('linethrough', newLinethrough);
   };
 
-  // Check if selected object is text
-  const isTextSelected = selectedObject && (selectedObject.type === 'i-text' || selectedObject.type === 'text');
+  // Edit text content for CurvedText
+  const handleEditCurvedText = () => {
+    if (selectedObject && isCurvedText(selectedObject)) {
+      (selectedObject as CurvedText).enterEditing();
+    }
+  };
+
+  // Handle curve intensity change - converts between IText and CurvedText as needed
+  const handleCurveIntensityChange = (value: number) => {
+    setCurveIntensity(value);
+
+    if (!selectedObject) return;
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+
+    if (isCurvedText(selectedObject)) {
+      // Already a CurvedText - just update the curve
+      const curvedObj = selectedObject as CurvedText;
+      curvedObj.setCurve(value);
+      canvas.renderAll();
+      incrementCanvasVersion();
+    } else if (value !== 0 && (selectedObject.type === 'i-text' || selectedObject.type === 'text')) {
+      // Convert IText/Text to CurvedText when curve is applied
+      const textObj = selectedObject as fabric.IText;
+      const newCurvedText = convertToCurvedText(textObj, value);
+
+      // Copy custom data if it exists
+      // @ts-expect-error - Accessing custom data property
+      if (textObj.data) {
+        // @ts-expect-error - Setting custom data property
+        newCurvedText.data = { ...textObj.data };
+      }
+
+      // Update the selected object reference
+      setSelectedObject(newCurvedText);
+      incrementCanvasVersion();
+    }
+  };
+
+  // Check if selected object is text (including CurvedText)
+  const isTextSelected = selectedObject && (
+    selectedObject.type === 'i-text' ||
+    selectedObject.type === 'text' ||
+    isCurvedText(selectedObject)
+  );
+  const isCurvedTextSelected = selectedObject && isCurvedText(selectedObject);
 
   // Enter edit mode for a template
   const startEditing = () => {
@@ -282,6 +382,18 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
     setEditMode(false);
   };
 
+  // Helper to prepare objects for serialization (ensures CurvedText has accurate bounds)
+  const prepareObjectsForSave = (objects: fabric.FabricObject[]) => {
+    return objects.map((obj) => {
+      // Ensure CurvedText objects have up-to-date bounds before serialization
+      if (isCurvedText(obj)) {
+        const curvedText = obj as CurvedText;
+        curvedText.updateBounds();
+      }
+      return obj.toObject(['data']);
+    });
+  };
+
   // Save a single side's canvas state
   const saveCurrentSideState = () => {
     if (!activeSideId) return;
@@ -297,7 +409,7 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
 
     const newState: CanvasState = {
       version: '6.0.0',
-      objects: objects.map((obj) => obj.toObject(['data'])),
+      objects: prepareObjectsForSave(objects),
     };
 
     setEditedCanvasStates((prev) => ({
@@ -322,7 +434,7 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
 
           newStates[side.id] = {
             version: '6.0.0',
-            objects: objects.map((obj) => obj.toObject(['data'])),
+            objects: prepareObjectsForSave(objects),
           };
         }
       });
@@ -582,7 +694,233 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Text Styling Sidebar - Fixed left panel that slides in */}
+      <div
+        className={`fixed left-0 top-0 h-full w-72 bg-white border-r border-gray-200 shadow-lg z-50 transform transition-transform duration-300 ease-in-out ${
+          isTextSelected && isEditing ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-4 h-full overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Type className="w-5 h-5" />
+              텍스트 스타일
+            </h3>
+          </div>
+
+          <div className="space-y-4">
+            {/* Edit Text Button - only show for CurvedText */}
+            {isCurvedTextSelected && (
+              <div>
+                <button
+                  onClick={handleEditCurvedText}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  텍스트 편집
+                </button>
+                <p className="text-xs text-gray-500 mt-1.5 text-center">
+                  더블클릭으로도 편집할 수 있습니다
+                </p>
+              </div>
+            )}
+
+            {/* Font Family */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">글꼴</label>
+              <select
+                value={fontFamily}
+                onChange={(e) => handleFontFamilyChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+              >
+                {fontFamilies.map((font) => (
+                  <option key={font} value={font} style={{ fontFamily: font }}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">크기</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="8"
+                  max="120"
+                  value={fontSize}
+                  onChange={(e) => handleFontSizeChange(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="number"
+                  min="8"
+                  max="200"
+                  value={fontSize}
+                  onChange={(e) => handleFontSizeChange(Number(e.target.value))}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm text-center"
+                />
+              </div>
+            </div>
+
+            {/* Color */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <Palette className="w-4 h-4" />
+                색상
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={fillColor}
+                  onChange={(e) => handleFillColorChange(e.target.value)}
+                  className="w-10 h-10 border border-gray-300 rounded-md cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={fillColor}
+                  onChange={(e) => handleFillColorChange(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  placeholder="#000000"
+                />
+              </div>
+            </div>
+
+            {/* Text Style Buttons */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">스타일</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={toggleBold}
+                  className={`p-2 rounded-md border transition-colors ${
+                    fontWeight === 'bold'
+                      ? 'bg-blue-100 border-blue-500 text-blue-700'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                  title="굵게"
+                >
+                  <Bold className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={toggleItalic}
+                  className={`p-2 rounded-md border transition-colors ${
+                    fontStyle === 'italic'
+                      ? 'bg-blue-100 border-blue-500 text-blue-700'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                  title="기울임"
+                >
+                  <Italic className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={toggleUnderline}
+                  className={`p-2 rounded-md border transition-colors ${
+                    underline
+                      ? 'bg-blue-100 border-blue-500 text-blue-700'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                  title="밑줄"
+                >
+                  <Underline className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={toggleLinethrough}
+                  className={`p-2 rounded-md border transition-colors ${
+                    linethrough
+                      ? 'bg-blue-100 border-blue-500 text-blue-700'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                  title="취소선"
+                >
+                  <Strikethrough className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Text Alignment - hide for CurvedText since it's always centered */}
+            {!isCurvedTextSelected && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">정렬</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleTextAlignChange('left')}
+                    className={`flex-1 p-2 rounded-md border transition-colors ${
+                      textAlign === 'left'
+                        ? 'bg-blue-100 border-blue-500 text-blue-700'
+                        : 'border-gray-300 hover:bg-gray-100'
+                    }`}
+                    title="왼쪽 정렬"
+                  >
+                    <AlignLeft className="w-5 h-5 mx-auto" />
+                  </button>
+                  <button
+                    onClick={() => handleTextAlignChange('center')}
+                    className={`flex-1 p-2 rounded-md border transition-colors ${
+                      textAlign === 'center'
+                        ? 'bg-blue-100 border-blue-500 text-blue-700'
+                        : 'border-gray-300 hover:bg-gray-100'
+                    }`}
+                    title="가운데 정렬"
+                  >
+                    <AlignCenter className="w-5 h-5 mx-auto" />
+                  </button>
+                  <button
+                    onClick={() => handleTextAlignChange('right')}
+                    className={`flex-1 p-2 rounded-md border transition-colors ${
+                      textAlign === 'right'
+                        ? 'bg-blue-100 border-blue-500 text-blue-700'
+                        : 'border-gray-300 hover:bg-gray-100'
+                    }`}
+                    title="오른쪽 정렬"
+                  >
+                    <AlignRight className="w-5 h-5 mx-auto" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Text Curve / Warp */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <Spline className="w-4 h-4" />
+                텍스트 휘기
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={curveIntensity}
+                    onChange={(e) => handleCurveIntensityChange(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <input
+                    type="number"
+                    min="-100"
+                    max="100"
+                    value={curveIntensity}
+                    onChange={(e) => handleCurveIntensityChange(Number(e.target.value))}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm text-center"
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>↑ 위로 휘기</span>
+                  <span>↓ 아래로 휘기</span>
+                </div>
+                {curveIntensity !== 0 && !isCurvedTextSelected && (
+                  <p className="text-xs text-blue-600">
+                    휘기를 적용하면 곡선 텍스트로 변환됩니다
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -791,160 +1129,6 @@ export default function EditTemplateTab({ product, onClose }: EditTemplateTabPro
                       편집 완료
                     </button>
                   </div>
-
-                  {/* Text Styling Panel */}
-                  {isTextSelected && (
-                    <div className="border border-gray-200 rounded-md p-4 mb-4 bg-gray-50">
-                      <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                        <Type className="w-4 h-4" />
-                        텍스트 스타일
-                      </h4>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Font Family */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">글꼴</label>
-                          <select
-                            value={fontFamily}
-                            onChange={(e) => handleFontFamilyChange(e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40"
-                          >
-                            {fontFamilies.map((font) => (
-                              <option key={font} value={font}>
-                                {font}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Font Size */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">크기: {fontSize}px</label>
-                          <input
-                            type="range"
-                            min="8"
-                            max="200"
-                            value={fontSize}
-                            onChange={(e) => handleFontSizeChange(Number(e.target.value))}
-                            className="w-full"
-                          />
-                        </div>
-
-                        {/* Fill Color */}
-                        <div>
-                          <label className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                            <Palette className="w-3 h-3" />
-                            색상
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={fillColor}
-                              onChange={(e) => handleFillColorChange(e.target.value)}
-                              className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={fillColor}
-                              onChange={(e) => handleFillColorChange(e.target.value)}
-                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Text Style Buttons */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">스타일</label>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={toggleBold}
-                              className={`p-1.5 rounded border transition ${
-                                fontWeight === 'bold'
-                                  ? 'bg-gray-900 text-white border-gray-900'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                              }`}
-                              title="굵게"
-                            >
-                              <Bold className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={toggleItalic}
-                              className={`p-1.5 rounded border transition ${
-                                fontStyle === 'italic'
-                                  ? 'bg-gray-900 text-white border-gray-900'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                              }`}
-                              title="기울임"
-                            >
-                              <Italic className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={toggleUnderline}
-                              className={`p-1.5 rounded border transition ${
-                                underline
-                                  ? 'bg-gray-900 text-white border-gray-900'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                              }`}
-                              title="밑줄"
-                            >
-                              <Underline className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={toggleLinethrough}
-                              className={`p-1.5 rounded border transition ${
-                                linethrough
-                                  ? 'bg-gray-900 text-white border-gray-900'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                              }`}
-                              title="취소선"
-                            >
-                              <Strikethrough className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Text Alignment */}
-                      <div className="mt-3">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">정렬</label>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleTextAlignChange('left')}
-                            className={`p-1.5 rounded border transition ${
-                              textAlign === 'left'
-                                ? 'bg-gray-900 text-white border-gray-900'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                            }`}
-                            title="왼쪽 정렬"
-                          >
-                            <AlignLeft className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleTextAlignChange('center')}
-                            className={`p-1.5 rounded border transition ${
-                              textAlign === 'center'
-                                ? 'bg-gray-900 text-white border-gray-900'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                            }`}
-                            title="가운데 정렬"
-                          >
-                            <AlignCenter className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleTextAlignChange('right')}
-                            className={`p-1.5 rounded border transition ${
-                              textAlign === 'right'
-                                ? 'bg-gray-900 text-white border-gray-900'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                            }`}
-                            title="오른쪽 정렬"
-                          >
-                            <AlignRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Side Navigation */}
                   {sides.length > 1 && (
