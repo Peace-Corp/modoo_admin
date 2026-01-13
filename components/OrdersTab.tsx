@@ -56,11 +56,11 @@ export default function OrdersTab() {
 
   useEffect(() => {
     if (user?.role === 'factory') {
-      if (user.factory_id) {
+      if (user.manufacturer_id) {
         setFactories([
           {
-            id: user.factory_id,
-            name: user.factory_name || user.email || '공장',
+            id: user.manufacturer_id,
+            name: user.manufacturer_name || user.email || '공장',
             email: user.email || null,
             phone_number: user.phone || null,
             is_active: true,
@@ -72,7 +72,7 @@ export default function OrdersTab() {
         setFactories([]);
       }
     }
-  }, [user?.role, user?.factory_id, user?.factory_name, user?.email, user?.phone]);
+  }, [user?.role, user?.manufacturer_id, user?.manufacturer_name, user?.email, user?.phone]);
 
   useEffect(() => {
     setCobuyParticipants((prev) => {
@@ -92,8 +92,8 @@ export default function OrdersTab() {
     setErrorMessage(null);
     try {
       let url = `/api/admin/orders?status=${filterStatus}`;
-      if (user?.role === 'factory' && user.factory_id) {
-        url += `&factoryId=${user.factory_id}`;
+      if (user?.role === 'factory' && user.manufacturer_id) {
+        url += `&factoryId=${user.manufacturer_id}`;
       }
       const response = await fetch(url, {
         method: 'GET',
@@ -277,10 +277,10 @@ export default function OrdersTab() {
     return map;
   }, [factories]);
 
-  const getFactoryLabel = (factoryId: string | null | undefined) => {
-    if (!factoryId) return '미배정';
-    const factory = factoryMap.get(factoryId);
-    return factory?.name || factory?.email || factoryId;
+  const getFactoryLabel = (manufacturerId: string | null | undefined) => {
+    if (!manufacturerId) return '미배정';
+    const factory = factoryMap.get(manufacturerId);
+    return factory?.name || factory?.email || manufacturerId;
   };
 
   const handleOrderUpdate = (updatedOrder: Order) => {
@@ -532,8 +532,8 @@ export default function OrdersTab() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_factory_id) === '미배정' && 'text-red-500'}`}>
-                          {getFactoryLabel(order.assigned_factory_id)}
+                        <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_manufacturer_id) === '미배정' && 'text-red-500'}`}>
+                          {getFactoryLabel(order.assigned_manufacturer_id)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">

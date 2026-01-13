@@ -41,7 +41,7 @@ export async function GET() {
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
-      .from('factories')
+      .from('manufacturers')
       .select('id, name, email, phone_number, is_active, created_at, updated_at')
       .order('name', { ascending: true });
 
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
-      .from('factories')
+      .from('manufacturers')
       .insert({
         name: name.trim(),
         email,
@@ -155,7 +155,7 @@ export async function PATCH(request: Request) {
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
-      .from('factories')
+      .from('manufacturers')
       .update(updateData)
       .eq('id', factoryId)
       .select('id, name, email, phone_number, is_active, created_at, updated_at')

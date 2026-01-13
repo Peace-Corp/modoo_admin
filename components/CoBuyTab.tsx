@@ -1,14 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Calendar, ChevronLeft, ClipboardList, RefreshCw } from 'lucide-react';
+import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Plus, RefreshCw } from 'lucide-react';
 import { CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
+import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 
 const statusLabels: Record<CoBuyStatus, string> = {
   open: '진행중',
   closed: '마감',
   finalized: '확정',
   cancelled: '취소',
+  gathering: '모집중',
+  gather_complete: '모집완료',
+  order_complete: '주문완료',
+  manufacturing: '제작중',
+  manufacture_complete: '제작완료',
+  delivering: '배송중',
+  delivery_complete: '배송완료',
 };
 
 const statusColors: Record<CoBuyStatus, string> = {
@@ -16,6 +24,13 @@ const statusColors: Record<CoBuyStatus, string> = {
   closed: 'bg-yellow-100 text-yellow-800',
   finalized: 'bg-blue-100 text-blue-800',
   cancelled: 'bg-red-100 text-red-800',
+  gathering: 'bg-green-100 text-green-800',
+  gather_complete: 'bg-teal-100 text-teal-800',
+  order_complete: 'bg-indigo-100 text-indigo-800',
+  manufacturing: 'bg-purple-100 text-purple-800',
+  manufacture_complete: 'bg-violet-100 text-violet-800',
+  delivering: 'bg-orange-100 text-orange-800',
+  delivery_complete: 'bg-emerald-100 text-emerald-800',
 };
 
 const paymentStatusLabels: Record<CoBuyParticipant['payment_status'], string> = {
@@ -74,6 +89,7 @@ export default function CoBuyTab() {
   const [actionLoading, setActionLoading] = useState<'status' | 'bulk' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [showCreator, setShowCreator] = useState(false);
 
   useEffect(() => {
     fetchSessions();
@@ -479,6 +495,23 @@ export default function CoBuyTab() {
     );
   }
 
+  const handleCoBuyCreated = (session: CoBuySession) => {
+    setSessions((prev) => [session, ...prev]);
+  };
+
+  // Show the creator modal
+  if (showCreator) {
+    return (
+      <AdminCoBuyCreator
+        onClose={() => setShowCreator(false)}
+        onSuccess={(session) => {
+          handleCoBuyCreated(session);
+          setShowCreator(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -486,13 +519,22 @@ export default function CoBuyTab() {
           <h2 className="text-xl font-semibold text-gray-900">공동구매 관리</h2>
           <p className="text-sm text-gray-500 mt-1">총 {sessions.length}개의 세션</p>
         </div>
-        <button
-          onClick={fetchSessions}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          새로고침
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreator(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            공동구매 생성하기
+          </button>
+          <button
+            onClick={fetchSessions}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            새로고침
+          </button>
+        </div>
       </div>
 
       {errorMessage && (

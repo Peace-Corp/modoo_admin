@@ -21,7 +21,7 @@ const requireAdminOrFactory = async () => {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role, factory_id')
+    .select('role, manufacturer_id')
     .eq('id', user.id)
     .single();
 
@@ -33,7 +33,7 @@ const requireAdminOrFactory = async () => {
     return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
   }
 
-  return { user, profile: profile as { role: AdminRole; factory_id: string | null } };
+  return { user, profile: profile as { role: AdminRole; manufacturer_id: string | null } };
 };
 
 const countQuery = async (query: PromiseLike<{ count: number | null; error: { message: string } | null }>) => {
@@ -50,7 +50,7 @@ export async function GET() {
     const { profile } = authResult;
     const adminClient = createAdminClient();
 
-    if (profile.role === 'factory' && !profile.factory_id) {
+    if (profile.role === 'factory' && !profile.manufacturer_id) {
       return NextResponse.json({
         data: {
           role: profile.role,
@@ -71,7 +71,7 @@ export async function GET() {
       let query = adminClient.from('orders').select('id', { count: 'exact', head: true });
 
       if (profile.role === 'factory') {
-        query = query.eq('assigned_factory_id', profile.factory_id);
+        query = query.eq('assigned_manufacturer_id', profile.manufacturer_id);
       }
 
       if (status) {
@@ -97,7 +97,7 @@ export async function GET() {
       countQuery(ordersCountQuery('cancelled')),
       countQuery(ordersCountQuery('refunded')),
       profile.role === 'admin'
-        ? countQuery(adminClient.from('orders').select('id', { count: 'exact', head: true }).is('assigned_factory_id', null))
+        ? countQuery(adminClient.from('orders').select('id', { count: 'exact', head: true }).is('assigned_manufacturer_id', null))
         : Promise.resolve(0),
     ]);
 
@@ -106,7 +106,7 @@ export async function GET() {
         ? adminClient
             .from('orders')
             .select('id, created_at, customer_name, total_amount, order_status, payment_status')
-            .eq('assigned_factory_id', profile.factory_id)
+            .eq('assigned_manufacturer_id', profile.manufacturer_id)
         : adminClient
             .from('orders')
             .select('id, created_at, customer_name, total_amount, order_status, payment_status');
@@ -154,7 +154,7 @@ export async function GET() {
       countQuery(adminClient.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin')),
       countQuery(adminClient.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'factory')),
       countQuery(adminClient.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'customer')),
-      countQuery(adminClient.from('factories').select('id', { count: 'exact', head: true })),
+      countQuery(adminClient.from('manufacturers').select('id', { count: 'exact', head: true })),
       countQuery(adminClient.from('inquiries').select('id', { count: 'exact', head: true }).eq('status', 'pending')),
     ]);
 

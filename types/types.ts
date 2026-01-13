@@ -15,18 +15,38 @@ export interface Product {
   updated_at: string;
 }
 
+export interface Manufacturer {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturerColor {
+  id: string;
+  manufacturer_id: string;
+  name: string;
+  hex: string;
+  color_code: string;
+  label: string | null;
+  is_active: boolean | null;
+  sort_order: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProductColor {
   id: string;
   product_id: string;
-  color_id: string;
-  name: string;
-  hex: string;
-  label: string | null;
+  manufacturer_color_id: string;
   is_active: boolean | null;
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
-  color_code: string | null;
+  manufacturer_colors?: ManufacturerColor;
 }
 
 export interface ProductConfig {
@@ -68,11 +88,17 @@ export interface ProductLayer {
 
 export type PrintMethod = 'printing' | 'embroidery';
 
-export interface SizeOption {
-  id: string;
-  name: string;
-  label: string;
+export interface CustomFont {
+  fontFamily: string;
+  fileName: string;
+  url: string;
+  path?: string;
+  uploadedAt?: string;
+  format?: string;
 }
+
+// Size option is now just a simple string (e.g., "S", "M", "L", "XL")
+export type SizeOption = string;
 
 export interface Order {
   id: string;
@@ -98,7 +124,7 @@ export interface Order {
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
   order_status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
-  assigned_factory_id: string | null;
+  assigned_manufacturer_id: string | null;
   total_amount: number;
 
   // Factory-specific fields (set by admin)
@@ -128,12 +154,14 @@ export interface OrderItem {
     color_id?: string;
     color_name?: string;
     color_hex?: string;
+    color_code?: string;
     variants?: Array<{
       size_id?: string;
       size_name?: string;
       color_id?: string;
       color_name?: string;
       color_hex?: string;
+      color_code?: string;
       quantity?: number;
     }>;
   };
@@ -142,6 +170,9 @@ export interface OrderItem {
   // Order file downloads (JSONB)
   image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
   text_svg_exports?: Record<string, unknown> | string | null;
+
+  // Custom fonts used in the design
+  custom_fonts?: CustomFont[] | string | null;
 
   // Joined from products table
   products?: { product_code: string | null } | null;
@@ -215,7 +246,7 @@ export interface Profile {
   email: string;
   phone_number: string | null;
   role: 'customer' | 'admin' | 'factory';
-  factory_id?: string | null;
+  manufacturer_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -282,7 +313,29 @@ export interface InquiryReply {
   updated_at: string;
 }
 
-export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized';
+export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized' | 'gathering' | 'gather_complete' | 'order_complete' | 'manufacturing' | 'manufacture_complete' | 'delivering' | 'delivery_complete';
+
+// Pricing tier for quantity-based discounts
+export interface CoBuyPricingTier {
+  minQuantity: number;
+  pricePerItem: number;
+}
+
+// Delivery settings for cobuy sessions
+export interface CoBuyDeliverySettings {
+  deliveryAddress?: {
+    address: string;
+    addressDetail?: string;
+    postalCode?: string;
+  };
+  pickupAddress?: {
+    address: string;
+    addressDetail?: string;
+    postalCode?: string;
+  };
+  enableIndividualDelivery?: boolean;
+  deliveryFee?: number;
+}
 
 export interface CoBuyCustomField {
   id: string;
@@ -329,4 +382,18 @@ export interface CoBuyParticipant {
   payment_amount: number | null;
   paid_at: string | null;
   joined_at: string;
+}
+
+export interface DesignTemplate {
+  id: string;
+  product_id: string;
+  title: string;
+  description: string | null;
+  canvas_state: Record<string, CanvasState | string>;
+  preview_url: string | null;
+  layer_colors: Record<string, string> | null;
+  sort_order: number | null;
+  is_active: boolean | null;
+  created_at: string;
+  updated_at: string;
 }

@@ -9,12 +9,14 @@
 export const STORAGE_BUCKETS = {
   USER_DESIGNS: 'user-designs',
   TEXT_EXPORTS: 'text-exports',
+  FONTS: 'fonts',
 } as const;
 
 export const STORAGE_FOLDERS = {
   IMAGES: 'images',
   TEXTS: 'texts',
   SVG: 'svg',
+  FONTS: 'fonts',
 } as const;
 
 /**

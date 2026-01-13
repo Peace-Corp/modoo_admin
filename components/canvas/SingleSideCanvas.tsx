@@ -2,10 +2,13 @@
 'use client'
 import React, {useEffect, useRef, useState} from 'react';
 import * as fabric from "fabric";
-import { ProductSide, ProductLayer, CanvasState } from '@/types/types';
+import { ProductSide, ProductLayer, CanvasState, CustomFont } from '@/types/types';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import ScaleBox from './ScaleBox';
 import { formatMm } from '@/lib/canvasUtils';
+// Import CurvedText to register the class with fabric.js for deserialization
+import '@/lib/curvedText';
+import { setupCurvedTextEditing, loadCustomFonts } from '@/lib/curvedText';
 
 
 interface SingleSideCanvasProps {
@@ -17,6 +20,7 @@ interface SingleSideCanvasProps {
   productColor?: string;
   onCanvasReady?: (canvas: fabric.Canvas, sideId: string, canvasScale: number) => void;
   renderFromCanvasStateOnly?: boolean;
+  customFonts?: CustomFont[]; // Custom fonts to load before rendering
 }
 
 const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
@@ -28,6 +32,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   productColor,
   onCanvasReady,
   renderFromCanvasStateOnly = false,
+  customFonts = [],
 }) => {
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -151,6 +156,9 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     console.log(`[SingleSideCanvas] Registering canvas for side: ${side.id}`);
     registerCanvas(side.id, canvas)
     console.log(`[SingleSideCanvas] Canvas registered for side: ${side.id}`);
+
+    // Setup CurvedText double-click editing support
+    setupCurvedTextEditing(canvas);
 
 
     // -- For calculations
@@ -698,10 +706,10 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           height: formatMm(heightMm),
         });
 
-        // Position above the object's bounding box at the horizontal center
+        // Position below the object's bounding box at the horizontal center
         setScaleBoxPosition({
           x: boundingRect.left + boundingRect.width / 2,
-          y: boundingRect.top - 10,
+          y: boundingRect.top + boundingRect.height + 10,
         });
 
         setScaleBoxVisible(true);
@@ -793,6 +801,33 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
     canvas.on('mouse:up', () => {
         canvas.requestRenderAll();
+    });
+
+    // Show scale box when object is selected
+    canvas.on('selection:created', (e) => {
+        const selected = e.selected;
+        if (selected && selected.length > 0) {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            updateScaleBox(activeObj);
+          }
+        }
+    });
+
+    // Update scale box when selection changes
+    canvas.on('selection:updated', (e) => {
+        const selected = e.selected;
+        if (selected && selected.length > 0) {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            updateScaleBox(activeObj);
+          }
+        }
+    });
+
+    // Hide scale box when selection is cleared
+    canvas.on('selection:cleared', () => {
+        setScaleBoxVisible(false);
     });
 
     return () => {
@@ -935,6 +970,18 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
     const applyObjects = async () => {
       await waitForBackground();
+
+      // Load custom fonts before enliving objects that may use them
+      if (customFonts.length > 0) {
+        console.log(`[SingleSideCanvas] Loading ${customFonts.length} custom font(s) before rendering...`);
+        await loadCustomFonts(customFonts.map(f => ({ fontFamily: f.fontFamily, url: f.url })));
+        // Wait for document fonts to be ready (ensures FontFace API fonts are fully available)
+        if (typeof document !== 'undefined' && document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+        console.log(`[SingleSideCanvas] Custom fonts loaded and ready.`);
+      }
+
       suppressObjectAddedRef.current = renderFromCanvasStateOnly;
       const objects = await fabric.util.enlivenObjects(parsedState.objects);
 
@@ -947,10 +994,35 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         fabricObj.evented = isEditRef.current;
         canvas.add(fabricObj);
         canvas.bringObjectToFront(fabricObj);
+
+        // For text objects, recalculate dimensions to ensure custom fonts render correctly
+        const objType = fabricObj.type?.toLowerCase() || '';
+        if (objType === 'i-text' || objType === 'itext' || objType === 'text' || objType === 'textbox') {
+          const textObj = fabricObj as fabric.IText | fabric.Text | fabric.Textbox;
+          // Force text measurement recalculation with loaded font
+          if ('initDimensions' in textObj && typeof textObj.initDimensions === 'function') {
+            textObj.initDimensions();
+          }
+          textObj.setCoords();
+        }
       });
 
       normalizeStacking(canvas, side);
       canvas.requestRenderAll();
+
+      // Additional render pass after a short delay to ensure fonts are applied
+      if (customFonts.length > 0) {
+        requestAnimationFrame(() => {
+          canvas.getObjects().forEach((obj) => {
+            const objType = obj.type?.toLowerCase() || '';
+            if (objType === 'i-text' || objType === 'itext' || objType === 'text' || objType === 'textbox' || objType === 'curvedtext') {
+              obj.setCoords();
+              obj.dirty = true;
+            }
+          });
+          canvas.requestRenderAll();
+        });
+      }
       suppressObjectAddedRef.current = false;
       lastCanvasStateRef.current = serializedState;
       lastCanvasSideRef.current = side.id;
@@ -961,7 +1033,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     };
 
     applyObjects();
-  }, [canvasState, height, isLoading, layersReady, onCanvasReady, side.id, side.layers, side.printArea.height, side.printArea.width, width]);
+  }, [canvasState, customFonts, height, isLoading, layersReady, onCanvasReady, renderFromCanvasStateOnly, side, width]);
 
   // Effect to apply color filter to layers when layerColors change or layers are ready
   useEffect(() => {

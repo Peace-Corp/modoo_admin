@@ -35,8 +35,8 @@ export default function UsersTab() {
     setError(null);
     try {
       let url = `/api/admin/users?role=${filterRole}`;
-      if (currentUser?.role === 'factory' && currentUser.factory_id) {
-        url += `&factoryId=${currentUser.factory_id}`;
+      if (currentUser?.role === 'factory' && currentUser.manufacturer_id) {
+        url += `&factoryId=${currentUser.manufacturer_id}`;
       }
       const response = await fetch(url, {
         method: 'GET',
@@ -78,7 +78,7 @@ export default function UsersTab() {
       const payload = await response.json();
       const updatedUser = payload?.data as Profile | undefined;
       const updatedRole = updatedUser?.role ?? newRole;
-      const updatedFactoryId = updatedUser?.factory_id ?? null;
+      const updatedManufacturerId = updatedUser?.manufacturer_id ?? null;
 
       setUsers((prev) => {
         if (filterRole !== 'all' && updatedRole !== filterRole) {
@@ -86,7 +86,7 @@ export default function UsersTab() {
         }
         return prev.map((user) =>
           user.id === userId
-            ? { ...user, role: updatedRole, factory_id: updatedFactoryId }
+            ? { ...user, role: updatedRole, manufacturer_id: updatedManufacturerId }
             : user
         );
       });
@@ -117,11 +117,11 @@ export default function UsersTab() {
 
       const payload = await response.json();
       const updatedUser = payload?.data as Profile | undefined;
-      const updatedFactoryId = updatedUser?.factory_id ?? factoryId;
+      const updatedManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
       setUsers((prev) =>
         prev.map((user) =>
-          user.id === userId ? { ...user, factory_id: updatedFactoryId } : user
+          user.id === userId ? { ...user, manufacturer_id: updatedManufacturerId } : user
         )
       );
     } catch (error) {
@@ -168,12 +168,12 @@ export default function UsersTab() {
     return map;
   }, [factories]);
 
-  const getFactoryName = (factoryId?: string | null) => {
-    if (!factoryId) return '-';
-    const factory = factoryMap.get(factoryId);
+  const getFactoryName = (manufacturerId?: string | null) => {
+    if (!manufacturerId) return '-';
+    const factory = factoryMap.get(manufacturerId);
     if (factory?.name) return factory.name;
-    if (currentUser?.role === 'factory' && currentUser.factory_id === factoryId) {
-      return currentUser.factory_name || '-';
+    if (currentUser?.role === 'factory' && currentUser.manufacturer_id === manufacturerId) {
+      return currentUser.manufacturer_name || '-';
     }
     return '-';
   };
@@ -306,7 +306,7 @@ export default function UsersTab() {
                     {currentUser?.role === 'admin' && user.role === 'factory' ? (
                       <div className="flex items-center gap-2">
                         <select
-                          value={user.factory_id || ''}
+                          value={user.manufacturer_id || ''}
                           onChange={(event) =>
                             updateUserFactory(user.id, event.target.value || null)
                           }
@@ -329,7 +329,7 @@ export default function UsersTab() {
                       </div>
                     ) : (
                       <span className="text-sm text-gray-500">
-                        {getFactoryName(user.factory_id)}
+                        {getFactoryName(user.manufacturer_id)}
                       </span>
                     )}
                   </td>

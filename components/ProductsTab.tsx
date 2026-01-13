@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2 } from 'lucide-react';
+import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
+import EditTemplateTab from './EditTemplateTab';
 
-type EditorMode = 'print-area' | 'full-edit' | null;
+type EditorMode = 'print-area' | 'full-edit' | 'template-edit' | null;
 
 export default function ProductsTab() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -139,6 +140,16 @@ export default function ProductsTab() {
     );
   }
 
+  // Show Template Editor
+  if (editorMode === 'template-edit' && selectedProduct) {
+    return (
+      <EditTemplateTab
+        product={selectedProduct}
+        onClose={handleCancel}
+      />
+    );
+  }
+
 
   return (
     <div className="space-y-4">
@@ -245,6 +256,16 @@ export default function ProductsTab() {
                       >
                         <Edit className="w-4 h-4" />
                         인쇄 영역
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setEditorMode('template-edit');
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
+                      >
+                        <Layers className="w-4 h-4" />
+                        템플릿
                       </button>
                       <button
                         onClick={() => handleDeleteProduct(product.id, product.title)}

@@ -45,7 +45,7 @@ export default function FactoriesTab() {
   }, []);
 
   const unassignedFactoryUsers = useMemo(
-    () => factoryUsers.filter((user) => !user.factory_id),
+    () => factoryUsers.filter((user) => !user.manufacturer_id),
     [factoryUsers]
   );
 
@@ -213,11 +213,11 @@ export default function FactoriesTab() {
 
       const payload = await response.json();
       const updatedUser = payload?.data as Profile | undefined;
-      const nextFactoryId = updatedUser?.factory_id ?? factoryId;
+      const nextManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
       setFactoryUsers((prev) =>
         prev.map((user) =>
-          user.id === userId ? { ...user, factory_id: nextFactoryId } : user
+          user.id === userId ? { ...user, manufacturer_id: nextManufacturerId } : user
         )
       );
       return updatedUser ?? null;
@@ -351,7 +351,7 @@ export default function FactoriesTab() {
                 const isEditing = editingId === factory.id;
                 const isUpdating = updatingFactoryId === factory.id;
                 const isExpanded = expandedFactoryId === factory.id;
-                const members = factoryUsers.filter((user) => user.factory_id === factory.id);
+                const members = factoryUsers.filter((user) => user.manufacturer_id === factory.id);
 
                 return (
                   <Fragment key={factory.id}>

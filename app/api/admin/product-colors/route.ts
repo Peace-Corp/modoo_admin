@@ -34,9 +34,6 @@ const requireAdmin = async () => {
   return { user };
 };
 
-const isValidHex = (value: unknown) =>
-  typeof value === 'string' && /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value);
-
 const parseNumber = (value: unknown) => {
   if (typeof value === 'number') return value;
   if (typeof value === 'string' && value.trim() !== '') return Number(value);
@@ -58,7 +55,22 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('product_colors')
-      .select('*')
+      .select(`
+        id,
+        product_id,
+        manufacturer_color_id,
+        is_active,
+        sort_order,
+        created_at,
+        updated_at,
+        manufacturer_colors (
+          id,
+          name,
+          hex,
+          color_code,
+          label
+        )
+      `)
       .eq('product_id', productId)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true });
@@ -81,38 +93,18 @@ export async function POST(request: Request) {
 
     const payload = await request.json().catch(() => null);
     const productId = payload?.product_id ?? payload?.productId;
-    const colorId = payload?.color_id ?? payload?.colorId;
-    const name = payload?.name;
-    const hex = payload?.hex;
+    const manufacturerColorId = payload?.manufacturer_color_id ?? payload?.manufacturerColorId;
 
     if (!productId || typeof productId !== 'string') {
       return NextResponse.json({ error: 'product_id가 필요합니다.' }, { status: 400 });
     }
 
-    if (!colorId || typeof colorId !== 'string') {
-      return NextResponse.json({ error: 'color_id가 필요합니다.' }, { status: 400 });
+    if (!manufacturerColorId || typeof manufacturerColorId !== 'string') {
+      return NextResponse.json({ error: 'manufacturer_color_id가 필요합니다.' }, { status: 400 });
     }
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json({ error: 'name이 필요합니다.' }, { status: 400 });
-    }
-
-    if (!isValidHex(hex)) {
-      return NextResponse.json({ error: 'hex 형식이 올바르지 않습니다.' }, { status: 400 });
-    }
-
-    const label = payload?.label ?? null;
-    const colorCode = payload?.color_code ?? payload?.colorCode ?? null;
     const isActive = payload?.is_active ?? payload?.isActive ?? true;
     const sortOrder = payload?.sort_order ?? payload?.sortOrder ?? 0;
-
-    if (label !== null && typeof label !== 'string') {
-      return NextResponse.json({ error: 'label 형식이 올바르지 않습니다.' }, { status: 400 });
-    }
-
-    if (colorCode !== null && typeof colorCode !== 'string') {
-      return NextResponse.json({ error: 'color_code 형식이 올바르지 않습니다.' }, { status: 400 });
-    }
 
     if (typeof isActive !== 'boolean') {
       return NextResponse.json({ error: 'is_active 형식이 올바르지 않습니다.' }, { status: 400 });
@@ -124,21 +116,45 @@ export async function POST(request: Request) {
     }
 
     const adminClient = createAdminClient();
+
+    // Check if already exists
+    const { data: existing } = await adminClient
+      .from('product_colors')
+      .select('id')
+      .eq('product_id', productId)
+      .eq('manufacturer_color_id', manufacturerColorId)
+      .single();
+
+    if (existing) {
+      return NextResponse.json({ error: '이미 등록된 색상입니다.' }, { status: 400 });
+    }
+
     const { data, error } = await adminClient
       .from('product_colors')
       .insert({
         product_id: productId,
-        color_id: colorId,
-        name,
-        hex,
-        label,
-        color_code: colorCode,
+        manufacturer_color_id: manufacturerColorId,
         is_active: isActive,
         sort_order: sortOrderNumber,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .select('*')
+      .select(`
+        id,
+        product_id,
+        manufacturer_color_id,
+        is_active,
+        sort_order,
+        created_at,
+        updated_at,
+        manufacturer_colors (
+          id,
+          name,
+          hex,
+          color_code,
+          label
+        )
+      `)
       .single();
 
     if (error) {
@@ -168,41 +184,6 @@ export async function PATCH(request: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    if (payload?.color_id !== undefined) {
-      if (typeof payload.color_id !== 'string' || payload.color_id.trim() === '') {
-        return NextResponse.json({ error: 'color_id 형식이 올바르지 않습니다.' }, { status: 400 });
-      }
-      updateData.color_id = payload.color_id;
-    }
-
-    if (payload?.name !== undefined) {
-      if (typeof payload.name !== 'string' || payload.name.trim() === '') {
-        return NextResponse.json({ error: 'name 형식이 올바르지 않습니다.' }, { status: 400 });
-      }
-      updateData.name = payload.name;
-    }
-
-    if (payload?.hex !== undefined) {
-      if (!isValidHex(payload.hex)) {
-        return NextResponse.json({ error: 'hex 형식이 올바르지 않습니다.' }, { status: 400 });
-      }
-      updateData.hex = payload.hex;
-    }
-
-    if (payload?.label !== undefined) {
-      if (payload.label !== null && typeof payload.label !== 'string') {
-        return NextResponse.json({ error: 'label 형식이 올바르지 않습니다.' }, { status: 400 });
-      }
-      updateData.label = payload.label ?? null;
-    }
-
-    if (payload?.color_code !== undefined) {
-      if (payload.color_code !== null && typeof payload.color_code !== 'string') {
-        return NextResponse.json({ error: 'color_code 형식이 올바르지 않습니다.' }, { status: 400 });
-      }
-      updateData.color_code = payload.color_code ?? null;
-    }
-
     if (payload?.is_active !== undefined) {
       if (typeof payload.is_active !== 'boolean') {
         return NextResponse.json({ error: 'is_active 형식이 올바르지 않습니다.' }, { status: 400 });
@@ -227,7 +208,22 @@ export async function PATCH(request: Request) {
       .from('product_colors')
       .update(updateData)
       .eq('id', id)
-      .select('*')
+      .select(`
+        id,
+        product_id,
+        manufacturer_color_id,
+        is_active,
+        sort_order,
+        created_at,
+        updated_at,
+        manufacturer_colors (
+          id,
+          name,
+          hex,
+          color_code,
+          label
+        )
+      `)
       .single();
 
     if (error) {

@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { Plus, TextCursor, Layers, FileImage, Trash2, RefreshCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Plus, TextCursor, Layers, FileImage, Trash2, RefreshCcw, ZoomIn, ZoomOut, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown } from 'lucide-react';
 import { ProductSide } from '@/types/types';
 import TextStylePanel from './TextStylePanel';
+import { isCurvedText } from '@/lib/curvedText';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
 import { createClient } from '@/lib/supabase-client';
@@ -362,6 +363,73 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     incrementCanvasVersion();
   }
 
+  // Layer manipulation functions
+  const bringToFront = () => {
+    const canvas = getActiveCanvas();
+    const activeObject = canvas?.getActiveObject();
+    if (canvas && activeObject) {
+      canvas.bringObjectToFront(activeObject);
+      canvas.renderAll();
+    }
+  };
+
+  const sendToBack = () => {
+    const canvas = getActiveCanvas();
+    const activeObject = canvas?.getActiveObject();
+    if (canvas && activeObject) {
+      const objects = canvas.getObjects();
+      const systemObjects = objects.filter(obj => {
+        const objData = obj.get('data') as { id?: string } | undefined;
+        return objData?.id === 'background-product-image' ||
+               objData?.id === 'center-line' ||
+               objData?.id === 'visual-guide-box' ||
+               obj.get('excludeFromExport') === true;
+      });
+
+      const maxSystemIndex = Math.max(...systemObjects.map(obj => objects.indexOf(obj)), -1);
+      const currentIndex = objects.indexOf(activeObject);
+      const targetIndex = maxSystemIndex + 1;
+
+      if (currentIndex > targetIndex) {
+        canvas.remove(activeObject);
+        canvas.insertAt(targetIndex, activeObject);
+        canvas.setActiveObject(activeObject);
+        canvas.renderAll();
+      }
+    }
+  };
+
+  const bringForward = () => {
+    const canvas = getActiveCanvas();
+    const activeObject = canvas?.getActiveObject();
+    if (canvas && activeObject) {
+      canvas.bringObjectForward(activeObject);
+      canvas.renderAll();
+    }
+  };
+
+  const sendBackward = () => {
+    const canvas = getActiveCanvas();
+    const activeObject = canvas?.getActiveObject();
+    if (canvas && activeObject) {
+      const objects = canvas.getObjects();
+      const systemObjects = objects.filter(obj => {
+        const objData = obj.get('data') as { id?: string } | undefined;
+        return objData?.id === 'background-product-image' ||
+               objData?.id === 'center-line' ||
+               objData?.id === 'visual-guide-box' ||
+               obj.get('excludeFromExport') === true;
+      });
+
+      const maxSystemIndex = Math.max(...systemObjects.map(obj => objects.indexOf(obj)), -1);
+      const currentIndex = objects.indexOf(activeObject);
+      if (currentIndex > maxSystemIndex + 1) {
+        canvas.sendObjectBackwards(activeObject);
+        canvas.renderAll();
+      }
+    }
+  };
+
   // Generate canvas previews when modal is open
   const canvasPreviews = useMemo(() => {
     if (!isModalOpen) return {};
@@ -389,66 +457,85 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   if (isDesktop) {
     return (
       <>
-        <div className="w-full flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={addText}
-              className="flex items-center gap-2 rounded-full border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
-              title="텍스트 추가"
-            >
-              <TextCursor className="size-4" />
-              텍스트
-            </button>
-            <button
-              onClick={addImage}
-              className="flex items-center gap-2 rounded-full border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
-              title="이미지 추가"
-            >
-              <FileImage className="size-4" />
-              이미지
-            </button>
-            <button
-              onClick={handleResetCanvas}
-              className="flex items-center gap-2 rounded-full border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
-              title="초기화"
-            >
-              <RefreshCcw className="size-4" />
-              초기화
-            </button>
-            {selectedObject && (
+        <div className="w-full space-y-3">
+          {/* Main Toolbar */}
+          <div className="w-full flex items-center justify-start gap-4 rounded-md border border-gray-200 bg-white p-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={addText}
+                className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                title="텍스트 추가"
+              >
+                <TextCursor className="size-4" />
+                텍스트
+              </button>
+              <button
+                onClick={addImage}
+                className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                title="이미지 추가"
+              >
+                <FileImage className="size-4" />
+                이미지
+              </button>
+              <button
+                onClick={handleResetCanvas}
+                className="flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                title="초기화"
+              >
+                <RefreshCcw className="size-4" />
+                초기화
+              </button>
+            </div>
+          </div>
+
+          {/* Layer Manipulation Controls - Only shown when object is selected */}
+          {selectedObject && (
+            <div className="w-full flex items-center justify-between gap-4 rounded-md border border-blue-200 bg-blue-50/50 px-5 py-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700 mr-2">레이어 조정:</span>
+                <button
+                  onClick={bringToFront}
+                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                  title="맨 앞으로"
+                >
+                  <ChevronsUp className="size-4" />
+                </button>
+                <button
+                  onClick={bringForward}
+                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                  title="앞으로"
+                >
+                  <ArrowUp className="size-4" />
+                </button>
+                <button
+                  onClick={sendBackward}
+                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                  title="뒤로"
+                >
+                  <ArrowDown className="size-4" />
+                </button>
+                <button
+                  onClick={sendToBack}
+                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                  title="맨 뒤로"
+                >
+                  <ChevronsDown className="size-4" />
+                </button>
+              </div>
+
               <button
                 onClick={handleDeleteObject}
-                className="flex items-center gap-2 rounded-full border border-red-200 px-3.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition"
+                className="flex items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 transition"
                 title="삭제"
               >
                 <Trash2 className="size-4" />
                 삭제
               </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => zoomOut()}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition"
-              title="축소"
-            >
-              <ZoomOut className='text-black/80 size-5' />
-            </button>
-            <span className='text-xs text-gray-600 min-w-12 text-center'>
-              {Math.round(currentZoom * 100)}%
-            </span>
-            <button
-              onClick={() => zoomIn()}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition"
-              title="확대"
-            >
-              <ZoomIn className='text-black/80 size-5' />
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
-        {selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text") && (
+        {selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text" || isCurvedText(selectedObject)) && (
           <TextStylePanel
             selectedObject={selectedObject as fabric.IText}
             onClose={() => setSelectedObject(null)}
@@ -615,7 +702,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
 
       {/* Render if selected item is text */}
-      {selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text") && (
+      {selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text" || isCurvedText(selectedObject)) && (
         <TextStylePanel
           selectedObject={selectedObject as fabric.IText}
           onClose={() => setSelectedObject(null)}
