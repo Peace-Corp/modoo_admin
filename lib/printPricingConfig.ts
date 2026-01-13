@@ -1,4 +1,26 @@
-import { PrintPricingConfig, PrintSize } from '@/types/types';
+import { PrintPricingConfig, PrintSize, PrintMethod } from '@/types/types';
+
+/**
+ * Map legacy print method names to new ones
+ * This handles objects that were created with old method names
+ */
+const LEGACY_METHOD_MAP: Record<string, PrintMethod> = {
+  'printing': 'dtf',      // Old 'printing' maps to DTF
+  'embroidery': 'embroidery',
+  'dtf': 'dtf',
+  'dtg': 'dtg',
+  'screen_printing': 'screen_printing',
+  'applique': 'applique',
+};
+
+/**
+ * Normalize print method name from legacy to new format
+ * Returns null if the method is invalid
+ */
+export function normalizePrintMethod(method: string | undefined | null): PrintMethod | null {
+  if (!method) return null;
+  return LEGACY_METHOD_MAP[method] || null;
+}
 
 /**
  * Default print pricing configuration
@@ -134,6 +156,8 @@ export function getPrintMethodDisplayName(method: string): string {
  * Get short display name for print method in Korean
  */
 export function getPrintMethodShortName(method: string): string {
+  // First normalize to handle legacy methods
+  const normalized = normalizePrintMethod(method) || method;
   const shortNames: Record<string, string> = {
     dtf: 'DTF',
     dtg: 'DTG',
@@ -141,5 +165,5 @@ export function getPrintMethodShortName(method: string): string {
     embroidery: '자수',
     applique: '아플리케'
   };
-  return shortNames[method] || method;
+  return shortNames[normalized] || method;
 }

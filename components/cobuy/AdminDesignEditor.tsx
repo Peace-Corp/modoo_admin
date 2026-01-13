@@ -8,6 +8,8 @@ import { useCanvasStore } from '@/store/useCanvasStore';
 import Toolbar from '@/components/canvas/Toolbar';
 import LayerColorSelector from '@/components/canvas/LayerColorSelector';
 import TextStylePanel from '@/components/canvas/TextStylePanel';
+import ObjectPreviewPanel from '@/components/canvas/ObjectPreviewPanel';
+import PricingInfo from '@/components/canvas/PricingInfo';
 import { saveDesign, SaveDesignData } from '@/lib/designService';
 import { serializeCanvasState } from '@/lib/canvasUtils';
 import { isCurvedText } from '@/lib/curvedText';
@@ -223,22 +225,27 @@ export default function AdminDesignEditor({ product, onDesignSaved, onBack }: Ad
             </div>
           )}
 
-          {/* Canvas */}
+          {/* Canvas - Render all sides but only show active one to preserve state */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            {currentSide && (
-              <SingleSideCanvas
-                side={currentSide}
-                width={400}
-                height={500}
-                isEdit={isEditMode}
-                productColor={productColor}
-              />
-            )}
+            {sides.map((side) => (
+              <div
+                key={side.id}
+                className={side.id === activeSideId ? 'block' : 'hidden'}
+              >
+                <SingleSideCanvas
+                  side={side}
+                  width={400}
+                  height={500}
+                  isEdit={isEditMode}
+                  productColor={productColor}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Right panel */}
-        <div className="w-80 bg-white border-l flex flex-col overflow-y-auto">
+        <div className="w-96 bg-white border-l flex flex-col overflow-y-auto">
           {/* Text Style Panel - shown when text is selected */}
           {isTextSelected && (
             <div className="p-4 border-b">
@@ -305,6 +312,12 @@ export default function AdminDesignEditor({ product, onDesignSaved, onBack }: Ad
               placeholder="디자인 제목 입력"
               className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Print Options & Pricing */}
+          <div className="p-4 border-b">
+            <ObjectPreviewPanel sides={sides} />
+            <PricingInfo basePrice={product.base_price} sides={sides} />
           </div>
 
           {/* Save button */}

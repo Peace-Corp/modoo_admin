@@ -1,7 +1,7 @@
 import * as fabric from 'fabric';
 import { PrintMethod, PrintSize, ProductSide } from '@/types/types';
 import { countObjectColors } from '@/lib/colorExtractor';
-import { getPrintPricingConfig, recommendPrintMethod } from '@/lib/printPricingConfig';
+import { getPrintPricingConfig, recommendPrintMethod, normalizePrintMethod } from '@/lib/printPricingConfig';
 
 // Size thresholds in mm
 const SIZE_THRESHOLDS = {
@@ -274,11 +274,12 @@ export async function calculateSidePricing(
     // @ts-expect-error - Checking custom data property
     const objectId = obj.data?.objectId || `obj-${Math.random().toString(36).substring(2, 11)}`;
 
-    // Get explicit print method if set
+    // Get explicit print method if set (normalize legacy method names)
     // @ts-expect-error - Checking custom data property
-    let printMethod = obj.data?.printMethod as PrintMethod | undefined;
+    const rawPrintMethod = obj.data?.printMethod as string | undefined;
+    let printMethod = normalizePrintMethod(rawPrintMethod);
 
-    // Auto-determine print method if not set
+    // Auto-determine print method if not set or invalid
     if (!printMethod) {
       const { width, height } = calculateObjectDimensionsMm(obj, pixelToMmRatio);
       const printSize = determinePrintSize(width, height);
