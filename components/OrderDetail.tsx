@@ -43,7 +43,7 @@ export default function OrderDetail({
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null);
-  const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_factory_id || '');
+  const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -82,8 +82,8 @@ export default function OrderDetail({
   }, [order.id, order.order_category]);
 
   useEffect(() => {
-    setSelectedFactoryId(order.assigned_factory_id || '');
-  }, [order.assigned_factory_id]);
+    setSelectedFactoryId(order.assigned_manufacturer_id || '');
+  }, [order.assigned_manufacturer_id]);
 
   // Sync factory fields when order changes
   useEffect(() => {
@@ -228,10 +228,10 @@ export default function OrderDetail({
     return map;
   }, [factories]);
 
-  const currentFactoryLabel = order.assigned_factory_id
-    ? factoryMap.get(order.assigned_factory_id)?.name ||
-      factoryMap.get(order.assigned_factory_id)?.email ||
-      order.assigned_factory_id
+  const currentFactoryLabel = order.assigned_manufacturer_id
+    ? factoryMap.get(order.assigned_manufacturer_id)?.name ||
+      factoryMap.get(order.assigned_manufacturer_id)?.email ||
+      order.assigned_manufacturer_id
     : '미배정';
 
   const handleAssignFactory = async () => {

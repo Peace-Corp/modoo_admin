@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, factory_id')
+      .select('role, manufacturer_id')
       .eq('id', user.id)
       .single();
 
@@ -51,12 +51,12 @@ export async function GET(request: Request) {
     }
 
     if (isFactoryUser) {
-      if (!profile.factory_id) {
+      if (!profile.manufacturer_id) {
         return NextResponse.json({ data: [] });
       }
-      query = query.eq('assigned_factory_id', profile.factory_id);
+      query = query.eq('assigned_manufacturer_id', profile.manufacturer_id);
     } else if (profile.role === 'admin' && factoryId) {
-      query = query.eq('assigned_factory_id', factoryId);
+      query = query.eq('assigned_manufacturer_id', factoryId);
     }
 
     if (status !== 'all') {
@@ -94,7 +94,7 @@ export async function PATCH(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, factory_id')
+      .select('role, manufacturer_id')
       .eq('id', user.id)
       .single();
 
@@ -108,7 +108,7 @@ export async function PATCH(request: Request) {
 
     const payload = await request.json().catch(() => null);
     const orderId = payload?.orderId;
-    const factoryId = payload?.factoryId ?? null;
+    const manufacturerId = payload?.factoryId ?? null;
 
     // Factory-specific fields
     const deadlineInput = payload?.deadline ?? null;
@@ -120,7 +120,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
     }
 
-    if (factoryId !== null && typeof factoryId !== 'string') {
+    if (manufacturerId !== null && typeof manufacturerId !== 'string') {
       return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
@@ -131,21 +131,21 @@ export async function PATCH(request: Request) {
     }
 
     const adminClient = createAdminClient();
-    if (factoryId !== null) {
-      const { data: factory, error: factoryError } = await adminClient
-        .from('factories')
+    if (manufacturerId !== null) {
+      const { data: manufacturer, error: manufacturerError } = await adminClient
+        .from('manufacturers')
         .select('id')
-        .eq('id', factoryId)
+        .eq('id', manufacturerId)
         .single();
 
-      if (factoryError || !factory) {
+      if (manufacturerError || !manufacturer) {
         return NextResponse.json({ error: '공장을 찾을 수 없습니다.' }, { status: 400 });
       }
     }
 
     // Build update object
     const updateData: Record<string, unknown> = {
-      assigned_factory_id: factoryId,
+      assigned_manufacturer_id: manufacturerId,
       updated_at: new Date().toISOString(),
     };
 

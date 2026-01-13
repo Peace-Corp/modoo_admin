@@ -706,10 +706,10 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           height: formatMm(heightMm),
         });
 
-        // Position above the object's bounding box at the horizontal center
+        // Position below the object's bounding box at the horizontal center
         setScaleBoxPosition({
           x: boundingRect.left + boundingRect.width / 2,
-          y: boundingRect.top - 10,
+          y: boundingRect.top + boundingRect.height + 10,
         });
 
         setScaleBoxVisible(true);
@@ -801,6 +801,33 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
     canvas.on('mouse:up', () => {
         canvas.requestRenderAll();
+    });
+
+    // Show scale box when object is selected
+    canvas.on('selection:created', (e) => {
+        const selected = e.selected;
+        if (selected && selected.length > 0) {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            updateScaleBox(activeObj);
+          }
+        }
+    });
+
+    // Update scale box when selection changes
+    canvas.on('selection:updated', (e) => {
+        const selected = e.selected;
+        if (selected && selected.length > 0) {
+          const activeObj = canvas.getActiveObject();
+          if (activeObj) {
+            updateScaleBox(activeObj);
+          }
+        }
+    });
+
+    // Hide scale box when selection is cleared
+    canvas.on('selection:cleared', () => {
+        setScaleBoxVisible(false);
     });
 
     return () => {

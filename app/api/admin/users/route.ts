@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, factory_id')
+      .select('role, manufacturer_id')
       .eq('id', user.id)
       .single();
 
@@ -35,13 +35,13 @@ export async function GET(request: Request) {
     }
     const url = new URL(request.url);
     const role = url.searchParams.get('role') || 'all';
-    let factoryId = url.searchParams.get('factoryId');
+    let manufacturerId = url.searchParams.get('factoryId');
 
     // Factory users can only see users from their own factory
     if (profile.role === 'factory') {
-      factoryId = profile.factory_id;
-      if (!factoryId) {
-        // A factory user must have a factory_id assigned
+      manufacturerId = profile.manufacturer_id;
+      if (!manufacturerId) {
+        // A factory user must have a manufacturer_id assigned
         return NextResponse.json({ data: [] });
       }
     }
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     let query = adminClient
       .from('profiles')
-      .select('id, email, phone_number, role, factory_id, created_at, updated_at')
+      .select('id, email, phone_number, role, manufacturer_id, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (role !== 'all') {
@@ -58,9 +58,9 @@ export async function GET(request: Request) {
       }
       query = query.eq('role', role);
     }
-    
-    if (factoryId) {
-      query = query.eq('factory_id', factoryId);
+
+    if (manufacturerId) {
+      query = query.eq('manufacturer_id', manufacturerId);
     }
     
     const { data, error } = await query;
@@ -109,7 +109,7 @@ export async function PATCH(request: Request) {
     const payload = await request.json().catch(() => null);
     const userId = payload?.userId;
     const role = payload?.role;
-    const factoryId = payload?.factoryId;
+    const manufacturerId = payload?.factoryId;
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
@@ -129,26 +129,26 @@ export async function PATCH(request: Request) {
     if (role !== undefined) {
       updateData.role = role;
       if (role !== 'factory') {
-        updateData.factory_id = null;
+        updateData.manufacturer_id = null;
       }
     }
 
-    if (factoryId !== undefined) {
-      if (factoryId !== null && typeof factoryId !== 'string') {
+    if (manufacturerId !== undefined) {
+      if (manufacturerId !== null && typeof manufacturerId !== 'string') {
         return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
       }
-      if (factoryId) {
-        const { data: factory, error: factoryError } = await adminClient
-          .from('factories')
+      if (manufacturerId) {
+        const { data: manufacturer, error: manufacturerError } = await adminClient
+          .from('manufacturers')
           .select('id')
-          .eq('id', factoryId)
+          .eq('id', manufacturerId)
           .single();
 
-        if (factoryError || !factory) {
+        if (manufacturerError || !manufacturer) {
           return NextResponse.json({ error: '공장을 찾을 수 없습니다.' }, { status: 400 });
         }
       }
-      updateData.factory_id = factoryId || null;
+      updateData.manufacturer_id = manufacturerId || null;
     }
 
     if (Object.keys(updateData).length === 1) {
@@ -159,7 +159,7 @@ export async function PATCH(request: Request) {
       .from('profiles')
       .update(updateData)
       .eq('id', userId)
-      .select('id, email, phone_number, role, factory_id, created_at, updated_at')
+      .select('id, email, phone_number, role, manufacturer_id, created_at, updated_at')
       .single();
 
     if (error) {

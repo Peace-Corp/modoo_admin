@@ -75,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('role, email, phone_number, factory_id, factory:factories(id, name)')
+          .select('role, email, phone_number, manufacturer_id, manufacturer:manufacturers(id, name)')
           .eq('id', supabaseUser.id)
           .single();
 
@@ -101,9 +101,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
 
-        const factoryRecord = Array.isArray(profile.factory)
-          ? profile.factory[0]
-          : profile.factory;
+        const manufacturerRecord = Array.isArray(profile.manufacturer)
+          ? profile.manufacturer[0]
+          : profile.manufacturer;
 
         if (isActive) {
           setUser({
@@ -113,8 +113,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             avatar_url: supabaseUser.user_metadata?.avatar_url,
             phone: supabaseUser.phone || profile.phone_number,
             role: profile.role,
-            factory_id: profile.factory_id ?? null,
-            factory_name: factoryRecord?.name ?? null,
+            manufacturer_id: profile.manufacturer_id ?? null,
+            manufacturer_name: manufacturerRecord?.name ?? null,
           });
           setLoading(false);
           setIsCheckingAuth(false);

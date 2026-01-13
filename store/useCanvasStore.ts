@@ -183,10 +183,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return { canvasMap, zoomLevels, layerColors, activeSideId };
     }),
 
-  setActiveSide: (sideId) =>
-    set((state) => ({
-      activeSideId: state.canvasMap[sideId] ? sideId : state.activeSideId,
-    })),
+  setActiveSide: (sideId) => set({ activeSideId: sideId }),
 
   getActiveCanvas: () => {
     const { canvasMap, activeSideId } = get();
@@ -228,7 +225,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set((state) => {
       const canvas = state.canvasMap[sideId];
       if (!canvas) return state;
-      canvas.setZoom(1);
+
+      // Reset zoom centered on canvas center
+      const center = new fabric.Point(canvas.width! / 2, canvas.height! / 2);
+      canvas.zoomToPoint(center, 1);
       canvas.requestRenderAll();
       return {
         zoomLevels: {
@@ -244,8 +244,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     if (!canvas || !activeSideId) return;
 
     const currentZoom = zoomLevels[activeSideId] || canvas.getZoom() || 1;
-    const nextZoom = Math.min(currentZoom * 1.1, 5);
-    canvas.setZoom(nextZoom);
+    const nextZoom = Math.min(currentZoom + 0.1, 5);
+
+    // Get canvas center point and zoom to center
+    const center = new fabric.Point(canvas.width! / 2, canvas.height! / 2);
+    canvas.zoomToPoint(center, nextZoom);
     canvas.requestRenderAll();
 
     set((state) => ({
@@ -262,8 +265,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     if (!canvas || !activeSideId) return;
 
     const currentZoom = zoomLevels[activeSideId] || canvas.getZoom() || 1;
-    const nextZoom = Math.max(currentZoom / 1.1, 0.2);
-    canvas.setZoom(nextZoom);
+    const nextZoom = Math.max(currentZoom - 0.1, 0.2);
+
+    // Get canvas center point and zoom to center
+    const center = new fabric.Point(canvas.width! / 2, canvas.height! / 2);
+    canvas.zoomToPoint(center, nextZoom);
     canvas.requestRenderAll();
 
     set((state) => ({

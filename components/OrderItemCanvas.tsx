@@ -378,23 +378,54 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   const fetchProductColors = async (productId: string, colorId?: string, colorHex?: string) => {
     try {
       const supabase = createClient();
-      let query = supabase
+      const { data, error } = await supabase
         .from('product_colors')
-        .select('name, hex, color_code')
-        .eq('product_id', productId);
-
-      if (colorHex) {
-        query = query.ilike('hex', colorHex);
-      } else if (colorId) {
-        query = query.eq('color_id', colorId);
-      }
-
-      const { data, error } = await query.single();
+        .select(`
+          id,
+          manufacturer_color_id,
+          manufacturer_colors (
+            id,
+            name,
+            hex,
+            color_code
+          )
+        `)
+        .eq('product_id', productId)
+        .eq('is_active', true);
 
       if (error) throw error;
 
-      if (data) {
-        setProductColors([data]);
+      if (data && data.length > 0) {
+        // Find matching color by hex or color_id
+        type ManufacturerColor = { id: string; name: string; hex: string; color_code?: string };
+        let matchedColor: ManufacturerColor | null = null;
+
+        for (const item of data) {
+          const mc = item.manufacturer_colors as unknown as ManufacturerColor | null;
+          if (!mc) continue;
+
+          if (colorHex && mc.hex.toLowerCase() === colorHex.toLowerCase()) {
+            matchedColor = mc;
+            break;
+          }
+          if (colorId && item.manufacturer_color_id === colorId) {
+            matchedColor = mc;
+            break;
+          }
+        }
+
+        // If no specific match found, use the first available color
+        if (!matchedColor && data[0]?.manufacturer_colors) {
+          matchedColor = data[0].manufacturer_colors as unknown as ManufacturerColor;
+        }
+
+        if (matchedColor) {
+          setProductColors([{
+            name: matchedColor.name,
+            hex: matchedColor.hex,
+            color_code: matchedColor.color_code,
+          }]);
+        }
       }
     } catch (error) {
       console.error('Error fetching product colors:', error);
@@ -594,54 +625,28 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     return Object.values(dimensionsBySide).flat();
   }, [dimensionsBySide]);
 
-  const sizeOptions = (product?.size_options ?? []) as Array<string | { id: string; name: string; label?: string }>;
+  // Size options are now just strings (e.g., ["S", "M", "L", "XL"])
+  const sizeOptions = (product?.size_options ?? []) as string[];
   const sizeQuantities = useMemo(() => {
     if (!sizeOptions.length) {
       return new Map<string, number>();
     }
 
     const map = new Map<string, number>();
-    const normalizedOptions = sizeOptions.map((option) => {
-      // Handle both string and object formats for size options
-      if (typeof option === 'string') {
-        return {
-          id: option,
-          name: option,
-          label: option,
-          normalizedName: option.toLowerCase(),
-          normalizedLabel: option.toLowerCase(),
-        };
-      }
-      const opt = option as { id?: string; name?: string; label?: string };
-      return {
-        id: opt.id || '',
-        name: opt.name || '',
-        label: opt.label || '',
-        normalizedName: opt.name?.toLowerCase() || '',
-        normalizedLabel: opt.label?.toLowerCase() || '',
-      };
-    });
 
-    const findOptionId = (sizeId?: string, sizeName?: string) => {
-      if (sizeId) {
-        const match = normalizedOptions.find((option) => option.id === sizeId);
-        if (match) return match.id;
-      }
-      if (sizeName) {
-        const normalized = sizeName.toLowerCase();
-        const match = normalizedOptions.find(
-          (option) => option.normalizedName === normalized || option.normalizedLabel === normalized
-        );
-        if (match) return match.id;
-      }
-      return undefined;
+    const findSize = (sizeId?: string, sizeName?: string) => {
+      // size_id and size_name are now the same value (just the size string)
+      const size = sizeId || sizeName;
+      if (!size) return undefined;
+      // Find matching size option (case-insensitive)
+      return sizeOptions.find((opt) => opt.toLowerCase() === size.toLowerCase()) || size;
     };
 
     const addQuantity = (sizeId?: string, sizeName?: string, quantity?: number) => {
       if (!quantity || quantity <= 0) return;
-      const optionId = findOptionId(sizeId, sizeName);
-      if (!optionId) return;
-      map.set(optionId, (map.get(optionId) || 0) + quantity);
+      const size = findSize(sizeId, sizeName);
+      if (!size) return;
+      map.set(size, (map.get(size) || 0) + quantity);
     };
 
     const variants = orderItem.item_options?.variants ?? [];
@@ -751,7 +756,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         return [{
           name: orderItem.item_options?.variants?.[0]?.color_name || orderItem.item_options?.color_name || 'Selected Color',
           hex: appliedColorHex,
-          colorCode: undefined,
+          colorCode: orderItem.item_options?.variants?.[0]?.color_code || orderItem.item_options?.color_code,
           label: undefined
         }];
       }
@@ -1165,15 +1170,11 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                 <table className="w-full text-sm border-collapse">
                   <thead className="bg-gray-50 text-black">
                     <tr>
-                      {sizeOptions.map((size) => {
-                        const sizeId = typeof size === 'string' ? size : size.id;
-                        const sizeLabel = typeof size === 'string' ? size : (size.name || '-');
-                        return (
-                          <th key={sizeId} className="px-3 py-2 text-center font-medium border border-gray-200">
-                            {sizeLabel}
+                      {sizeOptions.map((size) => (
+                          <th key={size} className="px-3 py-2 text-center font-medium border border-gray-200">
+                            {size}
                           </th>
-                        );
-                      })}
+                        ))}
                       <th className="px-3 py-2 text-center font-medium border border-gray-200 bg-gray-100">
                         합계
                       </th>
@@ -1182,10 +1183,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                   <tbody className="divide-y divide-gray-200 text-black">
                     <tr>
                       {sizeOptions.map((size) => {
-                        const sizeId = typeof size === 'string' ? size : size.id;
-                        const quantity = sizeQuantities.get(sizeId);
+                        const quantity = sizeQuantities.get(size);
                         return (
-                          <td key={sizeId} className="px-3 py-2 text-center border border-gray-200">
+                          <td key={size} className="px-3 py-2 text-center border border-gray-200">
                             {quantity && quantity > 0 ? quantity : '-'}
                           </td>
                         );

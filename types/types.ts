@@ -124,7 +124,7 @@ export interface Order {
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
   order_status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
-  assigned_factory_id: string | null;
+  assigned_manufacturer_id: string | null;
   total_amount: number;
 
   // Factory-specific fields (set by admin)
@@ -154,12 +154,14 @@ export interface OrderItem {
     color_id?: string;
     color_name?: string;
     color_hex?: string;
+    color_code?: string;
     variants?: Array<{
       size_id?: string;
       size_name?: string;
       color_id?: string;
       color_name?: string;
       color_hex?: string;
+      color_code?: string;
       quantity?: number;
     }>;
   };
@@ -244,7 +246,7 @@ export interface Profile {
   email: string;
   phone_number: string | null;
   role: 'customer' | 'admin' | 'factory';
-  factory_id?: string | null;
+  manufacturer_id?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -28,7 +28,7 @@ const requireAdminOrFactory = async () => {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role, factory_id')
+    .select('role, manufacturer_id')
     .eq('id', user.id)
     .single();
 
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     const { data: order, error: orderError } = await adminClient
       .from('orders')
-      .select('id, assigned_factory_id, cobuy_session_id')
+      .select('id, assigned_manufacturer_id, cobuy_session_id')
       .eq('id', orderId)
       .single();
 
@@ -117,10 +117,10 @@ export async function GET(request: Request) {
     }
 
     if (authResult.profile.role === 'factory') {
-      if (!authResult.profile.factory_id) {
+      if (!authResult.profile.manufacturer_id) {
         return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
       }
-      if (order.assigned_factory_id !== authResult.profile.factory_id) {
+      if (order.assigned_manufacturer_id !== authResult.profile.manufacturer_id) {
         return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
       }
     }

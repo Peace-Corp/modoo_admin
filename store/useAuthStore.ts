@@ -9,8 +9,8 @@ export interface UserData {
   avatar_url?: string;
   phone?: string;
   role?: 'admin' | 'customer' | 'factory';
-  factory_id?: string | null;
-  factory_name?: string | null;
+  manufacturer_id?: string | null;
+  manufacturer_name?: string | null;
   created_at?: string;
 }
 
