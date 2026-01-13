@@ -48,7 +48,7 @@ export async function GET() {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
-      .select('*')
+      .select('*, manufacturers(id, name)')
       .order('created_at', { ascending: false });
 
     if (error) {

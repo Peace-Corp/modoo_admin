@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Palette, Save } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Palette } from 'lucide-react';
 import { Product, ProductSide, ProductColor, ManufacturerColor } from '@/types/types';
 import dynamic from 'next/dynamic';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import Toolbar from '@/components/canvas/Toolbar';
 import LayerColorSelector from '@/components/canvas/LayerColorSelector';
+import TextStylePanel from '@/components/canvas/TextStylePanel';
 import { saveDesign, SaveDesignData } from '@/lib/designService';
 import { serializeCanvasState } from '@/lib/canvasUtils';
+import { isCurvedText } from '@/lib/curvedText';
 import * as fabric from 'fabric';
 
 const SingleSideCanvas = dynamic(() => import('@/components/canvas/SingleSideCanvas'), {
@@ -40,6 +42,18 @@ export default function AdminDesignEditor({ product, onDesignSaved, onBack }: Ad
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [designTitle, setDesignTitle] = useState('');
+  const [selectedTextObject, setSelectedTextObject] = useState<fabric.FabricObject | null>(null);
+
+  // Check if selected object is a text object
+  const isTextSelected = selectedTextObject && (
+    selectedTextObject.type === 'i-text' ||
+    selectedTextObject.type === 'text' ||
+    isCurvedText(selectedTextObject)
+  );
+
+  const handleSelectedObjectChange = useCallback((obj: fabric.FabricObject | null) => {
+    setSelectedTextObject(obj);
+  }, []);
 
   const sides: ProductSide[] = product.configuration || [];
   const currentSideIndex = sides.findIndex((s) => s.id === activeSideId);
@@ -162,7 +176,12 @@ export default function AdminDesignEditor({ product, onDesignSaved, onBack }: Ad
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="px-6 py-4 border-b bg-gray-50">
-        <Toolbar sides={sides} handleExitEditMode={() => {}} variant="desktop" />
+        <Toolbar
+          sides={sides}
+          handleExitEditMode={() => {}}
+          variant="desktop"
+          onSelectedObjectChange={handleSelectedObjectChange}
+        />
       </div>
 
       {/* Main content */}
@@ -219,7 +238,18 @@ export default function AdminDesignEditor({ product, onDesignSaved, onBack }: Ad
         </div>
 
         {/* Right panel */}
-        <div className="w-80 bg-white border-l flex flex-col">
+        <div className="w-80 bg-white border-l flex flex-col overflow-y-auto">
+          {/* Text Style Panel - shown when text is selected */}
+          {isTextSelected && (
+            <div className="p-4 border-b">
+              <TextStylePanel
+                selectedObject={selectedTextObject as fabric.IText}
+                onClose={() => setSelectedTextObject(null)}
+                variant="desktop"
+              />
+            </div>
+          )}
+
           <div className="p-4 border-b">
             <h3 className="font-medium text-gray-900 mb-3">제품 색상</h3>
             {hasLayers && currentSide?.layers ? (

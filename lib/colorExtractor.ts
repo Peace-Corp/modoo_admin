@@ -311,3 +311,19 @@ export async function extractAllColors(
     count: mergedColors.length,
   };
 }
+
+/**
+ * Counts unique colors in a single object for pricing purposes
+ * @param obj - Fabric.js object
+ * @param sensitivity - Merge sensitivity (0-100, default 30)
+ * @returns Promise with number of unique colors
+ */
+export async function countObjectColors(
+  obj: fabric.FabricObject,
+  sensitivity: number = 30
+): Promise<number> {
+  const colors = await extractColorsFromObject(obj);
+  const uniqueColors = [...new Set(colors)];
+  const mergedColors = mergeSimilarColors(uniqueColors, sensitivity);
+  return mergedColors.length;
+}

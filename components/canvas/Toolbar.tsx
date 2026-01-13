@@ -15,9 +15,10 @@ interface ToolbarProps {
   sides?: ProductSide[];
   handleExitEditMode?: () => void;
   variant?: 'mobile' | 'desktop';
+  onSelectedObjectChange?: (obj: fabric.FabricObject | null) => void;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile' }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', onSelectedObjectChange }) => {
   const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,10 +38,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
     if (!object) {
       setSelectedObject(null);
+      onSelectedObjectChange?.(null);
       return;
     }
 
     setSelectedObject(object);
+    onSelectedObjectChange?.(object);
 
     if (object.type === "i-text" || object.type === "text") {
     }
@@ -488,57 +491,68 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             </div>
           </div>
 
-          {/* Layer Manipulation Controls - Only shown when object is selected */}
-          {selectedObject && (
-            <div className="w-full flex items-center justify-between gap-4 rounded-md border border-blue-200 bg-blue-50/50 px-5 py-3 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700 mr-2">레이어 조정:</span>
-                <button
-                  onClick={bringToFront}
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                  title="맨 앞으로"
-                >
-                  <ChevronsUp className="size-4" />
-                </button>
-                <button
-                  onClick={bringForward}
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                  title="앞으로"
-                >
-                  <ArrowUp className="size-4" />
-                </button>
-                <button
-                  onClick={sendBackward}
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                  title="뒤로"
-                >
-                  <ArrowDown className="size-4" />
-                </button>
-                <button
-                  onClick={sendToBack}
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-                  title="맨 뒤로"
-                >
-                  <ChevronsDown className="size-4" />
-                </button>
-              </div>
-
+          {/* Layer Manipulation Controls - Fixed height to prevent layout shift */}
+          <div className={`w-full flex items-center justify-between gap-4 rounded-md border px-5 py-3 shadow-sm transition-all ${
+            selectedObject
+              ? 'border-blue-200 bg-blue-50/50'
+              : 'border-gray-200 bg-gray-50'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-semibold mr-2 ${selectedObject ? 'text-gray-700' : 'text-gray-400'}`}>
+                레이어 조정:
+              </span>
               <button
-                onClick={handleDeleteObject}
-                className="flex items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 transition"
-                title="삭제"
+                onClick={bringToFront}
+                disabled={!selectedObject}
+                className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title="맨 앞으로"
               >
-                <Trash2 className="size-4" />
-                삭제
+                <ChevronsUp className="size-4" />
+              </button>
+              <button
+                onClick={bringForward}
+                disabled={!selectedObject}
+                className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title="앞으로"
+              >
+                <ArrowUp className="size-4" />
+              </button>
+              <button
+                onClick={sendBackward}
+                disabled={!selectedObject}
+                className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title="뒤로"
+              >
+                <ArrowDown className="size-4" />
+              </button>
+              <button
+                onClick={sendToBack}
+                disabled={!selectedObject}
+                className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title="맨 뒤로"
+              >
+                <ChevronsDown className="size-4" />
               </button>
             </div>
-          )}
+
+            <button
+              onClick={handleDeleteObject}
+              disabled={!selectedObject}
+              className="flex items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+              title="삭제"
+            >
+              <Trash2 className="size-4" />
+              삭제
+            </button>
+          </div>
         </div>
 
-        {selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text" || isCurvedText(selectedObject)) && (
+        {/* Mobile: Render TextStylePanel here, Desktop: Rendered by parent component */}
+        {!isDesktop && selectedObject && (selectedObject.type === "i-text" || selectedObject.type === "text" || isCurvedText(selectedObject)) && (
           <TextStylePanel
             selectedObject={selectedObject as fabric.IText}
             onClose={() => setSelectedObject(null)}
+            variant="mobile"
           />
         )}
 

@@ -11,6 +11,7 @@ export interface Product {
   product_code?: string | null;
   discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
   manufacturer_id?: string | null;
+  manufacturers?: { id: string; name: string } | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -87,7 +88,52 @@ export interface ProductLayer {
   zIndex: number;
 }
 
-export type PrintMethod = 'printing' | 'embroidery';
+// Print method types - includes transfer methods and bulk methods
+export type PrintMethod = 'dtf' | 'dtg' | 'screen_printing' | 'embroidery' | 'applique';
+
+// Size categories for printing
+export type PrintSize = '10x10' | 'A4' | 'A3';
+
+// Pricing configuration for transfer methods (DTF, DTG)
+export interface TransferPricing {
+  method: 'dtf' | 'dtg';
+  sizes: {
+    '10x10': number;
+    A4: number;
+    A3: number;
+  };
+}
+
+// Pricing configuration for bulk methods (screen printing, embroidery, applique)
+export interface BulkPricing {
+  method: 'screen_printing' | 'embroidery' | 'applique';
+  sizes: {
+    '10x10': {
+      basePrice: number;
+      baseQuantity: number;
+      additionalPricePerPiece: number;
+    };
+    A4: {
+      basePrice: number;
+      baseQuantity: number;
+      additionalPricePerPiece: number;
+    };
+    A3: {
+      basePrice: number;
+      baseQuantity: number;
+      additionalPricePerPiece: number;
+    };
+  };
+}
+
+// Full print pricing configuration
+export interface PrintPricingConfig {
+  dtf: TransferPricing;
+  dtg: TransferPricing;
+  screen_printing: BulkPricing;
+  embroidery: BulkPricing;
+  applique: BulkPricing;
+}
 
 export interface CustomFont {
   fontFamily: string;
