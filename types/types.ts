@@ -10,6 +10,7 @@ export interface Product {
   sizing_chart_image?: string | null;
   product_code?: string | null;
   discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
+  manufacturer_id?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
