@@ -1338,7 +1338,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                               <Download className="w-3 h-3" />
                               다운로드
                             </button>
-                            {dimension.colors?.[0] && (
+                            {dimension.colors?.[0] && dimension.rawType !== 'image' && (
                               <div
                                 className="w-4 h-4 rounded-full border border-gray-300"
                                 style={{ backgroundColor: dimension.colors[0] }}
@@ -1420,20 +1420,22 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                             </span>
                           </div>
                         </div>
-                        {dimension.colors && dimension.colors.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {dimension.colors.map((color) => (
-                              <div key={color} className="flex items-center gap-1 text-xs">
-                                <span
-                                  className="w-3 h-3 rounded border border-gray-300"
-                                  style={{ backgroundColor: color }}
-                                />
-                                <span className="font-mono text-gray-600">{color}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-xs text-gray-500">색상 정보 없음</p>
+                        {dimension.rawType !== 'image' && (
+                          dimension.colors && dimension.colors.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {dimension.colors.map((color) => (
+                                <div key={color} className="flex items-center gap-1 text-xs">
+                                  <span
+                                    className="w-3 h-3 rounded border border-gray-300"
+                                    style={{ backgroundColor: color }}
+                                  />
+                                  <span className="font-mono text-gray-600">{color}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-gray-500">색상 정보 없음</p>
+                          )
                         )}
                       </div>
                     </div>
