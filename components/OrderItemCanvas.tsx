@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState, CustomFont } from '@/types/types';
-import { ChevronLeft, Palette, Ruler, Grid3x3, Download } from 'lucide-react';
+import { ChevronLeft, Palette, Ruler, Grid3x3, Download, Package } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
 
@@ -67,7 +67,7 @@ const getTextSvgFromCanvasState = (canvasState: CanvasState, sideId: string): st
   const objects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
   const textObjects = objects.filter((obj) => {
     const type = typeof obj?.type === 'string' ? obj.type.toLowerCase() : '';
-    return type === 'i-text' || type === 'itext' || type === 'text' || type === 'textbox';
+    return type === 'i-text' || type === 'itext' || type === 'text' || type === 'textbox' || type === 'curvedtext';
   });
 
   if (textObjects.length === 0) {
@@ -594,8 +594,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         preview: preview || undefined,
       };
 
-      // Add text content for text objects
-      if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
+      // Add text content for text objects (including CurvedText)
+      const objTypeLower = (obj.type || '').toLowerCase();
+      if (objTypeLower === 'text' || objTypeLower === 'i-text' || objTypeLower === 'textbox' || objTypeLower === 'curvedtext') {
         const textObj = obj as {
           text?: string;
           fontFamily?: string;
@@ -604,6 +605,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           fontStyle?: string;
           textAlign?: string;
           lineHeight?: number;
+          curveIntensity?: number;
         };
         const text = textObj.text || '';
         dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
@@ -613,6 +615,11 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         dimension.fontStyle = textObj.fontStyle;
         dimension.textAlign = textObj.textAlign;
         dimension.lineHeight = textObj.lineHeight;
+
+        // CurvedText specific properties
+        if (objTypeLower === 'curvedtext' && typeof textObj.curveIntensity === 'number') {
+          dimension.curveIntensity = textObj.curveIntensity;
+        }
       }
 
       dimensions.push(dimension);
@@ -809,7 +816,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
   const isTextObjectType = (rawType?: string | null) => {
     const normalized = (rawType || '').toLowerCase();
-    return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox';
+    return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox' || normalized === 'curvedtext';
   };
 
   const findTextSvgUrlForObject = (objectId: string, preferredSideId?: string | null) => {
@@ -1229,6 +1236,26 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
         {/* Right Panel - Colors and Dimensions */}
         <div className="space-y-4">
+          {/* Product Information */}
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Package className="w-5 h-5 text-gray-600" />
+              <h3 className="text-base font-semibold text-gray-900">제품정보</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-sm text-gray-500 shrink-0">제품명:</span>
+                <span className="text-sm font-medium text-gray-900">{product.title}</span>
+              </div>
+              {product.product_code && (
+                <div className="flex items-start gap-2">
+                  <span className="text-sm text-gray-500 shrink-0">제품코드:</span>
+                  <span className="text-sm font-medium text-gray-900 font-mono">{product.product_code}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Design Color Information */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -1251,12 +1278,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                       {color.label && (
                         <p className="text-xs text-gray-400">{color.label}</p>
                       )}
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
-                        {color.colorCode && (
-                          <p className="text-xs text-gray-500 font-mono">({color.colorCode})</p>
-                        )}
-                      </div>
+                      {color.colorCode && (
+                        <p className="text-xs text-gray-500 font-mono">{color.colorCode}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1314,7 +1338,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                               <Download className="w-3 h-3" />
                               다운로드
                             </button>
-                            {dimension.colors?.[0] && (
+                            {dimension.colors?.[0] && dimension.rawType !== 'image' && (
                               <div
                                 className="w-4 h-4 rounded-full border border-gray-300"
                                 style={{ backgroundColor: dimension.colors[0] }}
@@ -1329,7 +1353,8 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                           dimension.fontWeight ||
                           dimension.fontStyle ||
                           dimension.textAlign ||
-                          dimension.lineHeight) && (
+                          dimension.lineHeight ||
+                          (typeof dimension.curveIntensity === 'number' && dimension.curveIntensity !== 0)) && (
                           <div className="text-xs text-gray-600 mb-2 space-y-1">
                             {dimension.fontFamily && (
                               <div>
@@ -1371,6 +1396,14 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                                 </span>
                               </div>
                             )}
+                            {typeof dimension.curveIntensity === 'number' && dimension.curveIntensity !== 0 && (
+                              <div>
+                                <span className="text-gray-500">곡률:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.curveIntensity > 0 ? '+' : ''}{dimension.curveIntensity}%
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1387,20 +1420,22 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                             </span>
                           </div>
                         </div>
-                        {dimension.colors && dimension.colors.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {dimension.colors.map((color) => (
-                              <div key={color} className="flex items-center gap-1 text-xs">
-                                <span
-                                  className="w-3 h-3 rounded border border-gray-300"
-                                  style={{ backgroundColor: color }}
-                                />
-                                <span className="font-mono text-gray-600">{color}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-xs text-gray-500">색상 정보 없음</p>
+                        {dimension.rawType !== 'image' && (
+                          dimension.colors && dimension.colors.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {dimension.colors.map((color) => (
+                                <div key={color} className="flex items-center gap-1 text-xs">
+                                  <span
+                                    className="w-3 h-3 rounded border border-gray-300"
+                                    style={{ backgroundColor: color }}
+                                  />
+                                  <span className="font-mono text-gray-600">{color}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-gray-500">색상 정보 없음</p>
+                          )
                         )}
                       </div>
                     </div>

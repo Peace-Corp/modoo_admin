@@ -478,6 +478,34 @@ export default function ContentManagementTab() {
     }
   };
 
+  const handleDeleteInquiry = async (inquiryId: string) => {
+    const confirmed = window.confirm('이 문의를 삭제할까요? 관련된 답변도 함께 삭제됩니다.');
+    if (!confirmed) return;
+
+    setErrors((prev) => ({ ...prev, inquiries: null }));
+    try {
+      const response = await fetch(`/api/admin/inquiries?id=${inquiryId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '문의 삭제에 실패했습니다.');
+      }
+
+      setInquiries((prev) => prev.filter((inquiry) => inquiry.id !== inquiryId));
+      if (expandedInquiryId === inquiryId) {
+        setExpandedInquiryId(null);
+      }
+    } catch (error) {
+      console.error('Error deleting inquiry:', error);
+      setErrors((prev) => ({
+        ...prev,
+        inquiries: error instanceof Error ? error.message : '문의 삭제에 실패했습니다.',
+      }));
+    }
+  };
+
   const handleExampleFormToggle = () => {
     setExampleFormOpen((prev) => !prev);
     setExampleFormError(null);
@@ -2536,6 +2564,16 @@ export default function ContentManagementTab() {
                               {submittingReplyId === inquiry.id ? '전송 중...' : '답변 전송'}
                             </button>
                           </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-200 flex justify-end">
+                          <button
+                            onClick={() => handleDeleteInquiry(inquiry.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            삭제
+                          </button>
                         </div>
                       </div>
                     )}

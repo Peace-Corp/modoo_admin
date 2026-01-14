@@ -127,3 +127,37 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const { searchParams } = new URL(request.url);
+    const inquiryId = searchParams.get('id');
+
+    if (!inquiryId) {
+      return NextResponse.json({ error: '문의 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Delete related inquiry_products first
+    await adminClient.from('inquiry_products').delete().eq('inquiry_id', inquiryId);
+
+    // Delete related inquiry_replies
+    await adminClient.from('inquiry_replies').delete().eq('inquiry_id', inquiryId);
+
+    // Delete the inquiry
+    const { error } = await adminClient.from('inquiries').delete().eq('id', inquiryId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '문의 삭제에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
