@@ -286,6 +286,8 @@ export interface ObjectDimensions {
   fontStyle?: string;
   textAlign?: string;
   lineHeight?: number;
+  // CurvedText specific
+  curveIntensity?: number;
 }
 
 export interface Profile {

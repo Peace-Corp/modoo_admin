@@ -67,7 +67,7 @@ const getTextSvgFromCanvasState = (canvasState: CanvasState, sideId: string): st
   const objects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
   const textObjects = objects.filter((obj) => {
     const type = typeof obj?.type === 'string' ? obj.type.toLowerCase() : '';
-    return type === 'i-text' || type === 'itext' || type === 'text' || type === 'textbox';
+    return type === 'i-text' || type === 'itext' || type === 'text' || type === 'textbox' || type === 'curvedtext';
   });
 
   if (textObjects.length === 0) {
@@ -594,8 +594,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         preview: preview || undefined,
       };
 
-      // Add text content for text objects
-      if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
+      // Add text content for text objects (including CurvedText)
+      const objTypeLower = (obj.type || '').toLowerCase();
+      if (objTypeLower === 'text' || objTypeLower === 'i-text' || objTypeLower === 'textbox' || objTypeLower === 'curvedtext') {
         const textObj = obj as {
           text?: string;
           fontFamily?: string;
@@ -604,6 +605,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
           fontStyle?: string;
           textAlign?: string;
           lineHeight?: number;
+          curveIntensity?: number;
         };
         const text = textObj.text || '';
         dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
@@ -613,6 +615,11 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         dimension.fontStyle = textObj.fontStyle;
         dimension.textAlign = textObj.textAlign;
         dimension.lineHeight = textObj.lineHeight;
+
+        // CurvedText specific properties
+        if (objTypeLower === 'curvedtext' && typeof textObj.curveIntensity === 'number') {
+          dimension.curveIntensity = textObj.curveIntensity;
+        }
       }
 
       dimensions.push(dimension);
@@ -809,7 +816,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
   const isTextObjectType = (rawType?: string | null) => {
     const normalized = (rawType || '').toLowerCase();
-    return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox';
+    return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox' || normalized === 'curvedtext';
   };
 
   const findTextSvgUrlForObject = (objectId: string, preferredSideId?: string | null) => {
@@ -1329,7 +1336,8 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                           dimension.fontWeight ||
                           dimension.fontStyle ||
                           dimension.textAlign ||
-                          dimension.lineHeight) && (
+                          dimension.lineHeight ||
+                          (typeof dimension.curveIntensity === 'number' && dimension.curveIntensity !== 0)) && (
                           <div className="text-xs text-gray-600 mb-2 space-y-1">
                             {dimension.fontFamily && (
                               <div>
@@ -1368,6 +1376,14 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                                 <span className="text-gray-500">줄간격:</span>
                                 <span className="ml-1 font-medium text-gray-900">
                                   {dimension.lineHeight}
+                                </span>
+                              </div>
+                            )}
+                            {typeof dimension.curveIntensity === 'number' && dimension.curveIntensity !== 0 && (
+                              <div>
+                                <span className="text-gray-500">곡률:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {dimension.curveIntensity > 0 ? '+' : ''}{dimension.curveIntensity}%
                                 </span>
                               </div>
                             )}
