@@ -747,7 +747,7 @@ ${charElements.join('\n')}
    * Deserialize from object
    */
   static fromObject(object: Record<string, unknown>): Promise<CurvedText> {
-    return Promise.resolve(new CurvedText({
+    const curvedText = new CurvedText({
       left: object.left as number,
       top: object.top as number,
       width: object.width as number,
@@ -769,7 +769,14 @@ ${charElements.join('\n')}
       scaleX: object.scaleX as number,
       scaleY: object.scaleY as number,
       _fromSavedState: true,
-    }));
+    });
+
+    // Preserve the data property (contains objectId and other metadata)
+    if (object.data && typeof object.data === 'object') {
+      curvedText.set('data', object.data);
+    }
+
+    return Promise.resolve(curvedText);
   }
 }
 
