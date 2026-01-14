@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState, CustomFont } from '@/types/types';
-import { ChevronLeft, Palette, Ruler, Grid3x3, Download } from 'lucide-react';
+import { ChevronLeft, Palette, Ruler, Grid3x3, Download, Package } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { Canvas as FabricCanvas } from 'fabric';
 
@@ -1236,6 +1236,26 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
         {/* Right Panel - Colors and Dimensions */}
         <div className="space-y-4">
+          {/* Product Information */}
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Package className="w-5 h-5 text-gray-600" />
+              <h3 className="text-base font-semibold text-gray-900">제품정보</h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-sm text-gray-500 shrink-0">제품명:</span>
+                <span className="text-sm font-medium text-gray-900">{product.title}</span>
+              </div>
+              {product.product_code && (
+                <div className="flex items-start gap-2">
+                  <span className="text-sm text-gray-500 shrink-0">제품코드:</span>
+                  <span className="text-sm font-medium text-gray-900 font-mono">{product.product_code}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Design Color Information */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -1258,12 +1278,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                       {color.label && (
                         <p className="text-xs text-gray-400">{color.label}</p>
                       )}
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500 font-mono">{color.hex.toUpperCase()}</p>
-                        {color.colorCode && (
-                          <p className="text-xs text-gray-500 font-mono">({color.colorCode})</p>
-                        )}
-                      </div>
+                      {color.colorCode && (
+                        <p className="text-xs text-gray-500 font-mono">{color.colorCode}</p>
+                      )}
                     </div>
                   </div>
                 ))}
