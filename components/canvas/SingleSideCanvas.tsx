@@ -8,7 +8,7 @@ import ScaleBox from './ScaleBox';
 import { formatMm } from '@/lib/canvasUtils';
 // Import CurvedText to register the class with fabric.js for deserialization
 import '@/lib/curvedText';
-import { setupCurvedTextEditing, loadCustomFonts } from '@/lib/curvedText';
+import { setupCurvedTextEditing, loadCustomFonts, isCurvedText } from '@/lib/curvedText';
 
 
 interface SingleSideCanvasProps {
@@ -1004,6 +1004,9 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
             textObj.initDimensions();
           }
           textObj.setCoords();
+        } else if (isCurvedText(fabricObj)) {
+          // For CurvedText, call updateBounds to recalculate with the loaded font
+          fabricObj.updateBounds();
         }
       });
 
@@ -1015,9 +1018,12 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         requestAnimationFrame(() => {
           canvas.getObjects().forEach((obj) => {
             const objType = obj.type?.toLowerCase() || '';
-            if (objType === 'i-text' || objType === 'itext' || objType === 'text' || objType === 'textbox' || objType === 'curvedtext') {
+            if (objType === 'i-text' || objType === 'itext' || objType === 'text' || objType === 'textbox') {
               obj.setCoords();
               obj.dirty = true;
+            } else if (isCurvedText(obj)) {
+              // For CurvedText, updateBounds recalculates dimensions with the loaded font
+              obj.updateBounds();
             }
           });
           canvas.requestRenderAll();

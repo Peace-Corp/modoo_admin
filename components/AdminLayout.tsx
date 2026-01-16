@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard } from 'lucide-react';
+import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -17,6 +17,7 @@ const navItems: Array<{
 }> = [
   { href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
+  { href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin'] },
   { href: '/content', label: '콘텐츠 관리', icon: MessageSquare, roles: ['admin'] },
   { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
   { href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
@@ -25,7 +26,7 @@ const navItems: Array<{
 ];
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
-  admin: ['/dashboard', '/products', '/content', '/orders', '/factories', '/cobuy', '/users', '/settings'],
+  admin: ['/dashboard', '/products', '/designs', '/content', '/orders', '/factories', '/cobuy', '/users', '/settings'],
   factory: ['/orders', '/users'],
 };
 
