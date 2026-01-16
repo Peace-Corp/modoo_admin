@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
 import { Package, Calendar, Clock } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -42,11 +42,59 @@ export default function OrdersTab() {
 
   const isFactoryUser = user?.role === 'factory';
 
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      let url = `/api/admin/orders`;
+      if (user?.role === 'factory' && user.manufacturer_id) {
+        url += `?factoryId=${user.manufacturer_id}`;
+      }
+      const response = await fetch(url, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || '주문 데이터를 불러오지 못했습니다.');
+      }
+
+      const payload = await response.json();
+      const orderCounts = payload.data.length;
+      setOrders(payload?.data || []);
+      setOrderItemCounts(orderCounts);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      setOrders([]);
+      setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.role, user?.manufacturer_id]);
+
+  const fetchFactories = async () => {
+    setLoadingFactories(true);
+    try {
+      const response = await fetch('/api/admin/factories', { method: 'GET' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
+      }
+      const payload = await response.json();
+      setFactories(payload?.data || []);
+    } catch (error) {
+      console.error('Error fetching factories:', error);
+      setFactories([]);
+    } finally {
+      setLoadingFactories(false);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       fetchOrders();
     }
-  }, [filterStatus, user]);
+  }, [user, fetchOrders]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -72,7 +120,7 @@ export default function OrdersTab() {
         setFactories([]);
       }
     }
-  }, [user?.role, user?.manufacturer_id, user?.manufacturer_name, user?.email, user?.phone]);
+  }, [user?.role, user?.manufacturer_id, user?.manufacturer_name, user?.email, user?.phone, user?.created_at]);
 
   useEffect(() => {
     setCobuyParticipants((prev) => {
@@ -86,106 +134,6 @@ export default function OrdersTab() {
       return next;
     });
   }, [orders]);
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      let url = `/api/admin/orders?status=${filterStatus}`;
-      if (user?.role === 'factory' && user.manufacturer_id) {
-        url += `&factoryId=${user.manufacturer_id}`;
-      }
-      const response = await fetch(url, {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || '주문 데이터를 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      setOrders(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      setOrders([]);
-      setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFactories = async () => {
-    setLoadingFactories(true);
-    try {
-      const response = await fetch('/api/admin/factories', { method: 'GET' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching factories:', error);
-      setFactories([]);
-    } finally {
-      setLoadingFactories(false);
-    }
-  };
-
-  const fetchCobuyParticipants = async (orderId: string) => {
-    const existing = cobuyParticipants[orderId];
-    if (existing?.loading) return;
-    if (existing?.fetched) return;
-
-    setCobuyParticipants((prev) => ({
-      ...prev,
-      [orderId]: {
-        sessionId: prev[orderId]?.sessionId ?? null,
-        participants: prev[orderId]?.participants ?? [],
-        loading: true,
-        error: null,
-        fetched: prev[orderId]?.fetched ?? false,
-      },
-    }));
-
-    try {
-      const response = await fetch(`/api/admin/orders/cobuy-participants?orderId=${orderId}`, {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공동구매 참여자 정보를 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      const data = payload?.data as { sessionId: string | null; participants: CoBuyParticipantSummary[] } | undefined;
-
-      setCobuyParticipants((prev) => ({
-        ...prev,
-        [orderId]: {
-          sessionId: data?.sessionId ?? null,
-          participants: data?.participants || [],
-          loading: false,
-          error: null,
-          fetched: true,
-        },
-      }));
-    } catch (error) {
-      console.error('Error fetching cobuy participants:', error);
-      setCobuyParticipants((prev) => ({
-        ...prev,
-        [orderId]: {
-          sessionId: prev[orderId]?.sessionId ?? null,
-          participants: prev[orderId]?.participants ?? [],
-          loading: false,
-          error: error instanceof Error ? error.message : '공동구매 참여자 정보를 불러오지 못했습니다.',
-          fetched: false,
-        },
-      }));
-    }
-  };
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -247,35 +195,18 @@ export default function OrdersTab() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  // Fetch order item counts for factory users
-  useEffect(() => {
-    if (isFactoryUser && orders.length > 0) {
-      fetchOrderItemCounts();
-    }
-  }, [orders, isFactoryUser]);
-
-  const fetchOrderItemCounts = async () => {
-    const counts: Record<string, number> = {};
-    for (const order of orders) {
-      try {
-        const response = await fetch(`/api/admin/orders/items?orderId=${order.id}`);
-        if (response.ok) {
-          const payload = await response.json();
-          const items: OrderItem[] = payload?.data || [];
-          counts[order.id] = items.reduce((sum, item) => sum + item.quantity, 0);
-        }
-      } catch (error) {
-        console.error(`Error fetching items for order ${order.id}:`, error);
-      }
-    }
-    setOrderItemCounts(counts);
-  };
-
   const factoryMap = useMemo(() => {
     const map = new Map<string, Factory>();
     factories.forEach((factory) => map.set(factory.id, factory));
     return map;
   }, [factories]);
+
+  const filteredOrders = useMemo(() => {
+    if (filterStatus === 'all') {
+      return orders;
+    }
+    return orders.filter((order) => order.order_status === filterStatus);
+  }, [orders, filterStatus]);
 
   const getFactoryLabel = (manufacturerId: string | null | undefined) => {
     if (!manufacturerId) return '미배정';
@@ -313,12 +244,6 @@ export default function OrdersTab() {
     );
   }
 
-  const cobuyPaymentStatusLabel: Record<CoBuyParticipant['payment_status'], string> = {
-    pending: '대기',
-    completed: '완료',
-    failed: '실패',
-    refunded: '환불',
-  };
 
   return (
     <div className="space-y-4">
@@ -326,7 +251,7 @@ export default function OrdersTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">주문 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {orders.length}개의 주문</p>
+          <p className="text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
         </div>
       </div>
 
@@ -428,7 +353,7 @@ export default function OrdersTab() {
               )}
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <tr
                   key={order.id}
                   onClick={() => setSelectedOrder(order)}
@@ -553,7 +478,7 @@ export default function OrdersTab() {
           </table>
         </div>
 
-        {orders.length === 0 && (
+        {filteredOrders.length === 0 && (
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">주문이 없습니다</h3>

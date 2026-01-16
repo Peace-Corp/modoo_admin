@@ -446,3 +446,30 @@ export interface DesignTemplate {
   created_at: string;
   updated_at: string;
 }
+
+export interface SavedDesign {
+  id: string;
+  user_id: string;
+  product_id: string;
+  title: string | null;
+  color_selections: Record<string, Record<string, string>>;
+  canvas_state: Record<string, CanvasState | string>;
+  preview_url: string | null;
+  price_per_item: number;
+  image_urls: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | null;
+  text_svg_exports: Record<string, string> | null;
+  custom_fonts: CustomFont[] | null;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  user?: {
+    id: string;
+    email: string;
+    name: string | null;
+  } | null;
+  product?: {
+    id: string;
+    title: string;
+    thumbnail_image_link: string | null;
+  } | null;
+}

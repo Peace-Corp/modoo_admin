@@ -3,7 +3,7 @@ import "./globals.css";
 import AdminLayout from "@/components/AdminLayout";
 
 export const metadata: Metadata = {
-  title: "모두굿즈 관리자 페이지",
+  title: "모두의 유니폼 | 관리자 페이지",
   description: "모두 앱 관리자 페이지",
 };
 
