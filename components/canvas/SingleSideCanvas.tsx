@@ -360,14 +360,43 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
         let addedLayerCount = 0;
 
-        // Add layers to canvas FIRST without color filters
-        // Color filters will be applied by the effect after all layers are confirmed loaded
+        // Parse canvasState to get initial layerColors
+        const initialLayerColors = (() => {
+          if (!canvasState) return {};
+          if (typeof canvasState === 'string') {
+            try {
+              const parsed = JSON.parse(canvasState);
+              return parsed?.layerColors || {};
+            } catch {
+              return {};
+            }
+          }
+          return (canvasState as CanvasState)?.layerColors || {};
+        })();
+
+        console.log(`[SingleSideCanvas] Initial layerColors from canvasState:`, initialLayerColors);
+
+        // Add layers to canvas and apply initial color filters immediately
         sortedLayers.forEach((layer) => {
           const layerImg = layerImagesRef.current.get(layer.id);
           if (layerImg) {
+            // Apply initial color filter from canvasState
+            const initialColor = (typeof initialLayerColors[layer.id] === 'string' && (initialLayerColors[layer.id] as string).startsWith('#'))
+              ? (initialLayerColors[layer.id] as string)
+              : layer.colorOptions[0]?.hex || '#FFFFFF';
+
+            layerImg.filters = [];
+            const colorFilter = new fabric.filters.BlendColor({
+              color: initialColor,
+              mode: 'multiply',
+              alpha: 1,
+            });
+            layerImg.filters.push(colorFilter);
+            layerImg.applyFilters();
+
             canvas.add(layerImg);
             addedLayerCount++;
-            console.log(`[SingleSideCanvas] Added layer ${layer.name} (${layer.id}) to canvas`);
+            console.log(`[SingleSideCanvas] Added layer ${layer.name} (${layer.id}) to canvas with initial color: ${initialColor}`);
           } else {
             console.error(`[SingleSideCanvas] Layer image not found in ref for ${layer.name} (${layer.id})`);
           }
@@ -576,11 +605,26 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         canvas.add(img);
         canvas.sendObjectToBack(img); // ensure it stays behind design elements
 
-        // Apply initial color filter using the current productColor from store
-        const currentColor = productColor ?? useCanvasStore.getState().productColor;
+        // Parse canvasState to get productColor for initial filter
+        const parsedCanvasState = (() => {
+          if (!canvasState) return null;
+          if (typeof canvasState === 'string') {
+            try {
+              return JSON.parse(canvasState);
+            } catch {
+              return null;
+            }
+          }
+          return canvasState;
+        })();
+
+        // Apply initial color filter - check canvasState first, then prop, then store
+        const initialProductColor = parsedCanvasState?.productColor || productColor || useCanvasStore.getState().productColor;
+        console.log(`[SingleSideCanvas] Single-image mode: applying initial productColor: ${initialProductColor} for side: ${side.id}`);
+
         img.filters = [];
         const initialColorFilter = new fabric.filters.BlendColor({
-          color: currentColor,
+          color: initialProductColor,
           mode: 'multiply',
           alpha: 1,
         });
@@ -841,6 +885,10 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
       }
       canvasEl.current = null;
     };
+    // Note: canvasState, initializeLayerColors, and productColor are intentionally excluded from dependencies
+    // because we only want to initialize the canvas once when the side changes.
+    // Subsequent canvasState/color changes are handled by the separate color application effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [side, height, width, registerCanvas, unregisterCanvas, markImageLoaded, incrementCanvasVersion]);
 
   // Separate effect to update selection state when isEdit changes
@@ -880,6 +928,22 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     // Only apply in legacy mode (when side has no layers)
     if (side.layers && side.layers.length > 0) return;
 
+    // Parse canvasState to get productColor
+    const parsedState = (() => {
+      if (!canvasState) return null;
+      if (typeof canvasState === 'string') {
+        try {
+          return JSON.parse(canvasState);
+        } catch {
+          return null;
+        }
+      }
+      return canvasState;
+    })();
+
+    const color = parsedState?.productColor || productColor || productColorFromStore;
+    console.log(`[SingleSideCanvas] Single-image mode effect: applying productColor: ${color} for side: ${side.id} [source: ${parsedState?.productColor ? 'canvasState' : productColor ? 'prop' : 'store'}]`);
+
     // Find all objects with id 'background-product-image' and apply color filter
     canvas.forEachObject((obj) => {
       // @ts-expect-error - Checking custom data property
@@ -889,13 +953,10 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         // Remove any existing filters
         imgObj.filters = [];
 
-        const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
-        const color = state?.productColor || productColor || productColorFromStore;
-
         const colorFilter = new fabric.filters.BlendColor({
           color: color,
           mode: 'multiply',
-          alpha: 1, // Adjust opacity of the color overlay
+          alpha: 1,
         });
 
         imgObj.filters.push(colorFilter);
@@ -904,7 +965,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     });
 
     canvas.requestRenderAll();
-  }, [productColor, productColorFromStore, side.layers, canvasState]);
+  }, [productColor, productColorFromStore, side.layers, side.id, canvasState]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1055,7 +1116,22 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
       return;
     }
 
+    // Parse canvasState to get layerColors
+    const parsedCanvasState = (() => {
+      if (!canvasState) return null;
+      if (typeof canvasState === 'string') {
+        try {
+          return JSON.parse(canvasState) as CanvasState;
+        } catch {
+          return null;
+        }
+      }
+      return canvasState as CanvasState;
+    })();
+
     console.log(`[SingleSideCanvas] Applying color filters to ${side.layers.length} layers for side: ${side.id}`);
+    console.log(`[SingleSideCanvas] canvasState layerColors:`, parsedCanvasState?.layerColors);
+    console.log(`[SingleSideCanvas] store layerColors for side:`, layerColors[side.id]);
 
     // Build a lookup of layerId -> images on canvas to handle duplicates reliably
     const layerImagesById = new Map<string, fabric.FabricImage[]>();
@@ -1085,13 +1161,17 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         return;
       }
 
-      // Check for color in canvasState first, then fall back
-      const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
-      const selectedColor =
-        state?.layerColors?.[layer.id] ||
-        layerColors[side.id]?.[layer.id] ||
-        layer.colorOptions[0]?.hex ||
-        '#FFFFFF';
+      // Check for color in canvasState first (from parsed state), then fall back to store, then default
+      const canvasStateColor = parsedCanvasState?.layerColors?.[layer.id];
+      const storeColor = layerColors[side.id]?.[layer.id];
+      const defaultColor = layer.colorOptions[0]?.hex || '#FFFFFF';
+
+      // Use canvasState color if it's a valid hex color string
+      const selectedColor = (typeof canvasStateColor === 'string' && canvasStateColor.startsWith('#'))
+        ? canvasStateColor
+        : (typeof storeColor === 'string' && storeColor.startsWith('#'))
+          ? storeColor
+          : defaultColor;
 
       layerImages.forEach((layerImg) => {
         // Remove any existing filters
@@ -1108,7 +1188,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         colorsApplied++;
       });
 
-      console.log(`[SingleSideCanvas] Applied color ${selectedColor} to ${layerImages.length} image(s) for layer ${layer.name} (${layer.id})`);
+      console.log(`[SingleSideCanvas] Applied color ${selectedColor} to ${layerImages.length} image(s) for layer ${layer.name} (${layer.id}) [source: ${canvasStateColor ? 'canvasState' : storeColor ? 'store' : 'default'}]`);
     });
 
     console.log(`[SingleSideCanvas] Successfully applied colors to ${colorsApplied}/${side.layers.length} layers for side: ${side.id}`);

@@ -6,11 +6,17 @@ import { Palette, Calendar, User, Package } from 'lucide-react';
 import DesignDetail from './DesignDetail';
 
 export default function DesignsTab() {
+  const [mounted, setMounted] = useState(false);
   const [designs, setDesigns] = useState<SavedDesign[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDesign, setSelectedDesign] = useState<SavedDesign | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Set mounted on client to prevent hydration issues
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchDesigns = useCallback(async () => {
     setLoading(true);
@@ -69,7 +75,7 @@ export default function DesignsTab() {
     });
   }, [designs, searchQuery]);
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
