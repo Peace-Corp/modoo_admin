@@ -64,18 +64,32 @@ const coerceCustomFonts = (value: unknown): CustomFont[] => {
 
 export default function DesignDetail({ design, onBack }: DesignDetailProps) {
   // All useState hooks first
+  const [mounted, setMounted] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [productColors, setProductColors] = useState<Array<{ name: string; hex: string; color_code?: string }>>([]);
 
-  // Get store functions
-  const { setLayerColor, setProductColor } = useCanvasStore();
+  // Get store functions - only access after mount to prevent hydration issues
+  const setLayerColor = useCanvasStore((state) => state.setLayerColor);
+  const setProductColor = useCanvasStore((state) => state.setProductColor);
+
+  // Set mounted on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // All useMemo hooks
   const customFonts = useMemo(() => coerceCustomFonts(design.custom_fonts), [design.custom_fonts]);
 
-  // All useCallback hooks
-  const getAppliedProductColorHex = useCallback(() => {
+  // Helper to get applied product color - check color_selections first (matches main app's DesignEditModal)
+  const appliedProductColorHex = useMemo(() => {
+    // First check color_selections.productColor (main storage location)
+    const colorSelections = design.color_selections as { productColor?: string } | undefined;
+    if (typeof colorSelections?.productColor === 'string' && colorSelections.productColor.startsWith('#')) {
+      return colorSelections.productColor;
+    }
+
+    // Fallback to canvasState.productColor
     const canvasStates = Object.values(design.canvas_state || {});
     for (const canvasStateRaw of canvasStates) {
       const canvasState = parseCanvasState(canvasStateRaw);
@@ -84,9 +98,14 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       }
     }
     return '#FFFFFF';
-  }, [design.canvas_state]);
+  }, [design.color_selections, design.canvas_state]);
 
-  const fetchProductColors = useCallback(async (productId: string, colorHex?: string) => {
+  // All useCallback hooks
+  const getAppliedProductColorHex = useCallback(() => {
+    return appliedProductColorHex;
+  }, [appliedProductColorHex]);
+
+  const fetchProductColors = useCallback(async (productId: string) => {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -107,29 +126,22 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       if (error) throw error;
 
       if (data && data.length > 0) {
+        // Map all colors for matching later
         type ManufacturerColor = { id: string; name: string; hex: string; color_code?: string };
-        let matchedColor: ManufacturerColor | null = null;
+        const allColors: Array<{ name: string; hex: string; color_code?: string }> = [];
 
         for (const item of data) {
           const mc = item.manufacturer_colors as unknown as ManufacturerColor | null;
           if (!mc) continue;
-
-          if (colorHex && mc.hex.toLowerCase() === colorHex.toLowerCase()) {
-            matchedColor = mc;
-            break;
-          }
+          allColors.push({
+            name: mc.name,
+            hex: mc.hex,
+            color_code: mc.color_code,
+          });
         }
 
-        if (!matchedColor && data[0]?.manufacturer_colors) {
-          matchedColor = data[0].manufacturer_colors as unknown as ManufacturerColor;
-        }
-
-        if (matchedColor) {
-          setProductColors([{
-            name: matchedColor.name,
-            hex: matchedColor.hex,
-            color_code: matchedColor.color_code,
-          }]);
+        if (allColors.length > 0) {
+          setProductColors(allColors);
         }
       }
     } catch (error) {
@@ -156,24 +168,14 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
 
         setProduct(data);
 
-        // Fetch product colors for single-layer products
+        // Fetch product colors for single-layer products (no multi-layer colorOptions)
         const hasLayerColorOptions = data.configuration.some((side: ProductSide) =>
           side.layers?.some((layer) => Array.isArray(layer.colorOptions) && layer.colorOptions.length > 0)
         );
 
         if (!hasLayerColorOptions) {
-          const canvasStates = Object.values(design.canvas_state || {});
-          let appliedColorHex = '#FFFFFF';
-          for (const canvasStateRaw of canvasStates) {
-            const canvasState = parseCanvasState(canvasStateRaw);
-            if (typeof canvasState?.productColor === 'string' && canvasState.productColor.startsWith('#')) {
-              appliedColorHex = canvasState.productColor;
-              break;
-            }
-          }
-          if (appliedColorHex && appliedColorHex !== '#FFFFFF') {
-            fetchProductColors(design.product_id, appliedColorHex);
-          }
+          // Always fetch product colors so we can display color name/code
+          fetchProductColors(design.product_id);
         }
       } catch (error) {
         console.error('Error fetching product:', error);
@@ -193,7 +195,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
 
   // Effect to initialize layer colors from the saved design
   useEffect(() => {
-    if (!product) return;
+    if (!mounted || !product) return;
 
     // Initialize product color for single-layer products
     const appliedColor = getAppliedProductColorHex();
@@ -228,7 +230,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         });
       }
     });
-  }, [product, design.canvas_state, design.color_selections, setLayerColor, setProductColor, getAppliedProductColorHex]);
+  }, [mounted, product, design.canvas_state, design.color_selections, setLayerColor, setProductColor, getAppliedProductColorHex]);
 
   // Get selected mockup colors based on whether it's multi-layer or single-layer
   const getMockupColorInfo = useMemo(() => {
@@ -302,6 +304,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       // Single-layer product: show the applied mockup filter color
       const appliedColorHex = getAppliedProductColorHex();
 
+      // Try to match with product colors
       const matchedColor = appliedColorHex
         ? productColors.find(
             color => color.hex.toLowerCase() === appliedColorHex?.toLowerCase()
@@ -317,9 +320,14 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         }];
       }
 
-      if (appliedColorHex && appliedColorHex !== '#FFFFFF') {
+      // Even if not matched, show the applied color (including white)
+      if (appliedColorHex) {
+        // Check color_selections for color name as fallback
+        const colorSelections = design.color_selections as { productColor?: string; colorName?: string } | undefined;
+        const colorName = colorSelections?.colorName || (appliedColorHex === '#FFFFFF' ? '화이트' : '선택된 색상');
+
         return [{
-          name: 'Selected Color',
+          name: colorName,
           hex: appliedColorHex,
           colorCode: undefined,
           label: undefined
@@ -340,7 +348,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
     });
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -392,7 +400,9 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         <div className="lg:col-span-2 bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {product.configuration.map((side) => {
-              const canvasState = design.canvas_state[side.id] as CanvasState | string | null;
+              // Pass canvas state directly - SingleSideCanvas handles parsing and color extraction
+              // This matches OrderItemCanvas's approach
+              const canvasState = design.canvas_state[side.id];
               if (!canvasState) return null;
 
               return (
@@ -400,9 +410,10 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
                   <h3 className="text-sm font-semibold text-gray-700">{side.name}</h3>
                   <div className="flex justify-center items-center bg-gray-50 rounded-md p-3 min-h-125">
                     <SingleSideCanvas
+                      key={`${design.id}-${side.id}`}
                       side={side}
                       canvasState={canvasState}
-                      productColor={getAppliedProductColorHex()}
+                      productColor={appliedProductColorHex}
                       width={400}
                       height={500}
                       renderFromCanvasStateOnly
