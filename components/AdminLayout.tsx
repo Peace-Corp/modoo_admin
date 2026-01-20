@@ -45,8 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
 
-  // Handle zustand hydration
+  // Handle zustand hydration - manually rehydrate the persisted store
   useEffect(() => {
+    useAuthStore.persist.rehydrate();
     setIsHydrated(true);
   }, []);
 
