@@ -1,0 +1,118 @@
+import type {
+  ProductionExampleRecord,
+  HeroBannerRecord,
+  AnnouncementRecord,
+  FaqRecord,
+  ExampleFormState,
+  HeroBannerFormState,
+  AnnouncementFormState,
+  FaqFormState,
+  InquiryStatus,
+} from './types';
+
+export const EXAMPLE_IMAGE_BUCKET = 'products';
+export const EXAMPLE_IMAGE_FOLDER = 'production-examples';
+export const BANNER_IMAGE_BUCKET = 'products';
+export const BANNER_IMAGE_FOLDER = 'hero-banners';
+export const ANNOUNCEMENT_IMAGE_BUCKET = 'products';
+export const ANNOUNCEMENT_IMAGE_FOLDER = 'announcements';
+
+export const emptyExampleForm: ExampleFormState = {
+  product_id: '',
+  title: '',
+  description: '',
+  image_url: '',
+  sort_order: 0,
+  is_active: true,
+};
+
+export const emptyHeroBannerForm: HeroBannerFormState = {
+  title: '',
+  subtitle: '',
+  image_link: '',
+  redirect_link: '',
+  sort_order: 0,
+  is_active: true,
+};
+
+export const emptyAnnouncementForm: AnnouncementFormState = {
+  title: '',
+  content: '',
+  is_published: true,
+  image_links: [],
+};
+
+export const emptyFaqForm: FaqFormState = {
+  question: '',
+  answer: '',
+  category: '',
+  tags: '',
+  sort_order: 0,
+  is_published: true,
+};
+
+export const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export const sortExamples = (examples: ProductionExampleRecord[]) => {
+  return [...examples].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const sortHeroBanners = (banners: HeroBannerRecord[]) => {
+  return [...banners].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const sortAnnouncements = (announcements: AnnouncementRecord[]) => {
+  return [...announcements].sort((a, b) => {
+    if (a.created_at === b.created_at) return 0;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const sortFaqs = (faqs: FaqRecord[]) => {
+  return [...faqs].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const parseFaqTags = (value: string) => {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+};
+
+export const getStatusStyle = (status: InquiryStatus) => {
+  const styles: Record<InquiryStatus, string> = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    ongoing: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800',
+  };
+  return styles[status];
+};
+
+export const getStatusLabel = (status: InquiryStatus) => {
+  const labels: Record<InquiryStatus, string> = {
+    pending: '대기중',
+    ongoing: '진행중',
+    completed: '완료',
+  };
+  return labels[status];
+};
