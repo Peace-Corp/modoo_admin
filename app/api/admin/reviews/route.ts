@@ -43,7 +43,7 @@ export async function GET() {
     const { data, error } = await adminClient
       .from('reviews')
       .select(
-        'id, product_id, rating, title, content, author_name, is_verified_purchase, helpful_count, created_at, updated_at, product:products(id, title)'
+        'id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)'
       )
       .order('created_at', { ascending: false });
 
@@ -54,6 +54,123 @@ export async function GET() {
     return NextResponse.json({ data: data || [] });
   } catch (error) {
     const message = error instanceof Error ? error.message : '리뷰 데이터를 불러오지 못했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const body = await request.json();
+    const {
+      product_id,
+      rating,
+      title,
+      content,
+      author_name,
+      is_verified_purchase,
+      is_best,
+      review_image_urls,
+    } = body;
+
+    if (!product_id || !title || !content || !author_name) {
+      return NextResponse.json(
+        { error: '필수 항목을 입력해주세요.' },
+        { status: 400 }
+      );
+    }
+
+    if (rating < 1 || rating > 5) {
+      return NextResponse.json(
+        { error: '평점은 1~5 사이여야 합니다.' },
+        { status: 400 }
+      );
+    }
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('reviews')
+      .insert({
+        product_id,
+        rating,
+        title,
+        content,
+        author_name,
+        is_verified_purchase: is_verified_purchase ?? false,
+        is_best: is_best ?? false,
+        review_image_urls: review_image_urls ?? [],
+      })
+      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '리뷰 등록에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const body = await request.json();
+    const {
+      id,
+      product_id,
+      rating,
+      title,
+      content,
+      author_name,
+      is_verified_purchase,
+      is_best,
+      review_image_urls,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: '리뷰 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (product_id !== undefined) updateData.product_id = product_id;
+    if (rating !== undefined) {
+      if (rating < 1 || rating > 5) {
+        return NextResponse.json(
+          { error: '평점은 1~5 사이여야 합니다.' },
+          { status: 400 }
+        );
+      }
+      updateData.rating = rating;
+    }
+    if (title !== undefined) updateData.title = title;
+    if (content !== undefined) updateData.content = content;
+    if (author_name !== undefined) updateData.author_name = author_name;
+    if (is_verified_purchase !== undefined) updateData.is_verified_purchase = is_verified_purchase;
+    if (is_best !== undefined) updateData.is_best = is_best;
+    if (review_image_urls !== undefined) updateData.review_image_urls = review_image_urls;
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('reviews')
+      .update(updateData)
+      .eq('id', id)
+      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '리뷰 수정에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
