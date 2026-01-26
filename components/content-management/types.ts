@@ -13,9 +13,24 @@ export type ReviewRecord = {
   content: string;
   author_name: string;
   is_verified_purchase: boolean | null;
+  is_best: boolean | null;
   helpful_count: number | null;
+  review_image_urls: string[] | null;
   created_at: string;
+  updated_at: string;
   product?: ProductSummary | null;
+};
+
+export type ReviewFormState = {
+  id?: string | null;
+  product_id: string;
+  rating: number;
+  title: string;
+  content: string;
+  author_name: string;
+  is_verified_purchase: boolean;
+  is_best: boolean;
+  review_image_urls: string[];
 };
 
 export type ProductionExampleRecord = {

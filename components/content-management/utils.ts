@@ -3,10 +3,12 @@ import type {
   HeroBannerRecord,
   AnnouncementRecord,
   FaqRecord,
+  ReviewRecord,
   ExampleFormState,
   HeroBannerFormState,
   AnnouncementFormState,
   FaqFormState,
+  ReviewFormState,
   InquiryStatus,
   ChatbotInquiryStatus,
   ChatbotInquiryRecord,
@@ -18,6 +20,8 @@ export const BANNER_IMAGE_BUCKET = 'products';
 export const BANNER_IMAGE_FOLDER = 'hero-banners';
 export const ANNOUNCEMENT_IMAGE_BUCKET = 'products';
 export const ANNOUNCEMENT_IMAGE_FOLDER = 'announcements';
+export const REVIEW_IMAGE_BUCKET = 'products';
+export const REVIEW_IMAGE_FOLDER = 'reviews';
 
 export const emptyExampleForm: ExampleFormState = {
   product_id: '',
@@ -51,6 +55,17 @@ export const emptyFaqForm: FaqFormState = {
   tags: '',
   sort_order: 0,
   is_published: true,
+};
+
+export const emptyReviewForm: ReviewFormState = {
+  product_id: '',
+  rating: 5,
+  title: '',
+  content: '',
+  author_name: '',
+  is_verified_purchase: false,
+  is_best: false,
+  review_image_urls: [],
 };
 
 export const formatDate = (dateString: string) => {
@@ -90,6 +105,16 @@ export const sortFaqs = (faqs: FaqRecord[]) => {
   return [...faqs].sort((a, b) => {
     const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
     if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const sortReviews = (reviews: ReviewRecord[]) => {
+  return [...reviews].sort((a, b) => {
+    // Best reviews first
+    if (a.is_best && !b.is_best) return -1;
+    if (!a.is_best && b.is_best) return 1;
+    // Then by date
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 };
