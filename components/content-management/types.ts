@@ -1,4 +1,4 @@
-export type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'faqs' | 'inquiries';
+export type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'faqs' | 'inquiries' | 'chatbotInquiries';
 
 export type ProductSummary = {
   id: string;
@@ -128,4 +128,23 @@ export type FaqFormState = {
   tags: string;
   sort_order: number;
   is_published: boolean;
+};
+
+// Chatbot Inquiry Types
+export type ChatbotInquiryStatus = 'pending' | 'contacted' | 'completed' | 'cancelled';
+
+export type ChatbotInquiryRecord = {
+  id: string;
+  clothing_type: string;
+  quantity: number;
+  priorities: string[];
+  needed_date: string | null;
+  needed_date_flexible: boolean;
+  contact_name: string;
+  contact_email: string | null;
+  contact_phone: string;
+  status: ChatbotInquiryStatus;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
 };

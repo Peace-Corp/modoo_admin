@@ -40,7 +40,13 @@ export async function GET(request: Request) {
 
     // Factory users: sort by deadline (마감일), Admin users: sort by created_at
     const isFactoryUser = profile.role === 'factory';
-    let query = adminClient.from('orders').select('*');
+
+    // Select only fields needed for the list view, include order_items count
+    const selectFields = isFactoryUser
+      ? `id, order_category, order_status, deadline, factory_amount, factory_payment_date, factory_payment_status, created_at, order_items(count)`
+      : `id, customer_name, customer_email, order_category, created_at, total_amount, order_status, payment_status, assigned_manufacturer_id, shipping_method, order_items(count)`;
+
+    let query = adminClient.from('orders').select(selectFields);
 
     if (isFactoryUser) {
       // For factory users, sort by deadline (nulls last to show orders with deadlines first)
