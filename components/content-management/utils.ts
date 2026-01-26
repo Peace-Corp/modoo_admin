@@ -8,6 +8,8 @@ import type {
   AnnouncementFormState,
   FaqFormState,
   InquiryStatus,
+  ChatbotInquiryStatus,
+  ChatbotInquiryRecord,
 } from './types';
 
 export const EXAMPLE_IMAGE_BUCKET = 'products';
@@ -115,4 +117,31 @@ export const getStatusLabel = (status: InquiryStatus) => {
     completed: '완료',
   };
   return labels[status];
+};
+
+// Chatbot Inquiry Utilities
+export const getChatbotInquiryStatusStyle = (status: ChatbotInquiryStatus) => {
+  const styles: Record<ChatbotInquiryStatus, string> = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    contacted: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-gray-100 text-gray-800',
+  };
+  return styles[status];
+};
+
+export const getChatbotInquiryStatusLabel = (status: ChatbotInquiryStatus) => {
+  const labels: Record<ChatbotInquiryStatus, string> = {
+    pending: '대기중',
+    contacted: '연락완료',
+    completed: '완료',
+    cancelled: '취소',
+  };
+  return labels[status];
+};
+
+export const sortChatbotInquiries = (inquiries: ChatbotInquiryRecord[]) => {
+  return [...inquiries].sort((a, b) => {
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 };

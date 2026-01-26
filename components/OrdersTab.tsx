@@ -1,58 +1,44 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Factory, Order } from '@/types/types';
 import { Package, Calendar, Clock } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from './OrderDetail';
 
-type CoBuyParticipantSummary = Pick<
-  CoBuyParticipant,
-  | 'id'
-  | 'cobuy_session_id'
-  | 'name'
-  | 'email'
-  | 'phone'
-  | 'selected_size'
-  | 'payment_status'
-  | 'payment_amount'
-  | 'paid_at'
-  | 'joined_at'
->;
-
-type CobuyParticipantsEntry = {
-  sessionId: string | null;
-  participants: CoBuyParticipantSummary[];
-  loading: boolean;
-  error: string | null;
-  fetched: boolean;
+// Extended order type with item count from API
+type OrderWithItemCount = Order & {
+  order_items?: { count: number }[];
 };
 
 export default function OrdersTab() {
   const { user } = useAuthStore();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderWithItemCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
   const [loadingFactories, setLoadingFactories] = useState(false);
-  const [cobuyParticipants, setCobuyParticipants] = useState<Record<string, CobuyParticipantsEntry>>({});
-  const [orderItemCounts, setOrderItemCounts] = useState<Record<string, number>>({});
+
+  // Track if initial data has been fetched to avoid duplicate fetches
+  const initialFetchDone = useRef(false);
 
   const isFactoryUser = user?.role === 'factory';
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (status: string = 'all') => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      let url = `/api/admin/orders`;
+      const params = new URLSearchParams();
       if (user?.role === 'factory' && user.manufacturer_id) {
-        url += `?factoryId=${user.manufacturer_id}`;
+        params.set('factoryId', user.manufacturer_id);
       }
-      const response = await fetch(url, {
-        method: 'GET',
-      });
+      if (status !== 'all') {
+        params.set('status', status);
+      }
+      const url = `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
+      const response = await fetch(url);
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => ({}));
@@ -60,9 +46,7 @@ export default function OrdersTab() {
       }
 
       const payload = await response.json();
-      const orderCounts = payload.data.length;
       setOrders(payload?.data || []);
-      setOrderItemCounts(orderCounts);
     } catch (error) {
       console.error('Error fetching orders:', error);
       setOrders([]);
@@ -72,10 +56,10 @@ export default function OrdersTab() {
     }
   }, [user?.role, user?.manufacturer_id]);
 
-  const fetchFactories = async () => {
+  const fetchFactories = useCallback(async () => {
     setLoadingFactories(true);
     try {
-      const response = await fetch('/api/admin/factories', { method: 'GET' });
+      const response = await fetch('/api/admin/factories');
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
@@ -88,52 +72,46 @@ export default function OrdersTab() {
     } finally {
       setLoadingFactories(false);
     }
-  };
+  }, []);
 
+  // Initial data fetch - parallel loading of orders and factories
   useEffect(() => {
-    if (user) {
-      fetchOrders();
-    }
-  }, [user, fetchOrders]);
+    if (!user || initialFetchDone.current) return;
+    initialFetchDone.current = true;
 
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      fetchFactories();
-    }
-  }, [user?.role]);
-
-  useEffect(() => {
-    if (user?.role === 'factory') {
-      if (user.manufacturer_id) {
-        setFactories([
-          {
-            id: user.manufacturer_id,
-            name: user.manufacturer_name || user.email || '공장',
-            email: user.email || null,
-            phone_number: user.phone || null,
-            is_active: true,
-            created_at: user.created_at || new Date().toISOString(),
-            updated_at: user.created_at || new Date().toISOString(),
-          },
-        ]);
-      } else {
-        setFactories([]);
-      }
-    }
-  }, [user?.role, user?.manufacturer_id, user?.manufacturer_name, user?.email, user?.phone, user?.created_at]);
-
-  useEffect(() => {
-    setCobuyParticipants((prev) => {
-      const next: Record<string, CobuyParticipantsEntry> = {};
-      orders.forEach((order) => {
-        const entry = prev[order.id];
-        if (entry) {
-          next[order.id] = entry;
+    const loadData = async () => {
+      if (user.role === 'admin') {
+        // Admin: fetch orders and factories in parallel
+        await Promise.all([fetchOrders(filterStatus), fetchFactories()]);
+      } else if (user.role === 'factory') {
+        // Factory user: fetch orders and set factory info from user profile
+        await fetchOrders(filterStatus);
+        if (user.manufacturer_id) {
+          setFactories([
+            {
+              id: user.manufacturer_id,
+              name: user.manufacturer_name || user.email || '공장',
+              email: user.email || null,
+              phone_number: user.phone || null,
+              is_active: true,
+              created_at: user.created_at || new Date().toISOString(),
+              updated_at: user.created_at || new Date().toISOString(),
+            },
+          ]);
         }
-      });
-      return next;
-    });
-  }, [orders]);
+      } else {
+        await fetchOrders(filterStatus);
+      }
+    };
+
+    loadData();
+  }, [user, fetchOrders, fetchFactories, filterStatus]);
+
+  // Re-fetch orders when filter changes (server-side filtering)
+  useEffect(() => {
+    if (!user || !initialFetchDone.current) return;
+    fetchOrders(filterStatus);
+  }, [filterStatus, user, fetchOrders]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -201,12 +179,14 @@ export default function OrdersTab() {
     return map;
   }, [factories]);
 
-  const filteredOrders = useMemo(() => {
-    if (filterStatus === 'all') {
-      return orders;
-    }
-    return orders.filter((order) => order.order_status === filterStatus);
-  }, [orders, filterStatus]);
+  // Orders are now filtered server-side, no client-side filtering needed
+  const filteredOrders = orders;
+
+  // Get order item count from the API response
+  const getOrderItemCount = (order: OrderWithItemCount) => {
+    const count = order.order_items?.[0]?.count;
+    return count !== undefined ? count : '-';
+  };
 
   const getFactoryLabel = (manufacturerId: string | null | undefined) => {
     if (!manufacturerId) return '미배정';
@@ -234,7 +214,7 @@ export default function OrdersTab() {
       <OrderDetail
         order={selectedOrder}
         onBack={() => setSelectedOrder(null)}
-        onUpdate={fetchOrders}
+        onUpdate={() => fetchOrders(filterStatus)}
         onOrderUpdate={handleOrderUpdate}
         factories={factories}
         canAssign={user?.role === 'admin'}
@@ -371,9 +351,7 @@ export default function OrdersTab() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-sm text-gray-900">
-                          {orderItemCounts[order.id] ?? '-'}
-                        </span>
+                        <span className="text-sm text-gray-900">{getOrderItemCount(order)}</span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span

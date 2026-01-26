@@ -8,9 +8,10 @@ import {
   AnnouncementsSection,
   FaqsSection,
   InquiriesSection,
+  ChatbotInquiriesSection,
 } from './content-management';
 
-type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'faqs' | 'inquiries';
+type SectionKey = 'reviews' | 'examples' | 'heroBanners' | 'announcements' | 'faqs' | 'inquiries' | 'chatbotInquiries';
 
 const sectionTabs: { key: SectionKey; label: string }[] = [
   { key: 'reviews', label: '리뷰' },
@@ -19,6 +20,7 @@ const sectionTabs: { key: SectionKey; label: string }[] = [
   { key: 'announcements', label: '공지' },
   { key: 'faqs', label: 'FAQ' },
   { key: 'inquiries', label: '문의' },
+  { key: 'chatbotInquiries', label: '챗봇 문의' },
 ];
 
 export default function ContentManagementTab() {
@@ -30,7 +32,7 @@ export default function ContentManagementTab() {
         <div>
           <h2 className="text-xl font-semibold text-gray-900">콘텐츠 관리</h2>
           <p className="text-sm text-gray-500 mt-1">
-            리뷰, 제작 사례, 배너, 공지, FAQ, 문의를 한 곳에서 관리합니다.
+            리뷰, 제작 사례, 배너, 공지, FAQ, 문의, 챗봇 문의를 한 곳에서 관리합니다.
           </p>
         </div>
       </div>
@@ -59,6 +61,7 @@ export default function ContentManagementTab() {
       {activeSection === 'announcements' && <AnnouncementsSection />}
       {activeSection === 'faqs' && <FaqsSection />}
       {activeSection === 'inquiries' && <InquiriesSection />}
+      {activeSection === 'chatbotInquiries' && <ChatbotInquiriesSection />}
     </div>
   );
 }
