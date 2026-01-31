@@ -373,8 +373,8 @@ export default function OrderDetail({
           </div>
         </div>
 
-        {/* Share Link Button - Admin only */}
-        {canAssign && (
+        {/* Share Link Button - Admin only, requires factory assignment */}
+        {canAssign && order.assigned_manufacturer_id && (
           <div className="flex items-center gap-2">
             {shareUrl ? (
               <>
