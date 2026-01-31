@@ -82,8 +82,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [sides, setSides] = useState<ProductSide[]>(() => normalizeSides(product?.configuration || []));
   const [currentSideIndex, setCurrentSideIndex] = useState(0);
 
-  // Size options
-  const [sizeOptions, setSizeOptions] = useState<SizeOption[]>(product?.size_options || []);
+  // Size options - now objects with label and size_code
+  const [sizeOptions, setSizeOptions] = useState<SizeOption[]>(
+    (product?.size_options || []).map((opt) =>
+      typeof opt === 'string'
+        ? { label: opt, size_code: '' }
+        : opt
+    )
+  );
 
   // Product colors (single image products)
   const [productColors, setProductColors] = useState<ProductColor[]>([]);
@@ -663,7 +669,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Add size option
   const handleAddSizeOption = () => {
-    setSizeOptions([...sizeOptions, '']);
+    setSizeOptions([...sizeOptions, { label: '', size_code: '' }]);
   };
 
   // Remove size option
@@ -671,10 +677,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     setSizeOptions(sizeOptions.filter((_, i) => i !== index));
   };
 
-  // Update size option
-  const updateSizeOption = (index: number, value: string) => {
+  // Update size option field (label or size_code)
+  const updateSizeOption = (index: number, field: 'label' | 'size_code', value: string) => {
     const newSizeOptions = [...sizeOptions];
-    newSizeOptions[index] = value;
+    newSizeOptions[index] = { ...newSizeOptions[index], [field]: value };
     setSizeOptions(newSizeOptions);
   };
 
@@ -1141,7 +1147,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           {/* Size Options */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">사이즈 옵션</h3>
+              <div>
+                <h3 className="font-semibold text-gray-900">사이즈 옵션</h3>
+                <p className="text-xs text-gray-500 mt-0.5">라벨(표시용)과 사이즈 코드(관리용)를 입력하세요</p>
+              </div>
               <button
                 onClick={handleAddSizeOption}
                 className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
@@ -1155,10 +1164,17 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 <div key={`size-${index}`} className="flex gap-2 w-full items-center">
                   <input
                     type="text"
-                    value={size}
-                    onChange={(e) => updateSizeOption(index, e.target.value)}
+                    value={size.label}
+                    onChange={(e) => updateSizeOption(index, 'label', e.target.value)}
                     className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                    placeholder="사이즈 (예: S, M, L, XL)"
+                    placeholder="라벨 (예: S, M, L)"
+                  />
+                  <input
+                    type="text"
+                    value={size.size_code}
+                    onChange={(e) => updateSizeOption(index, 'size_code', e.target.value)}
+                    className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    placeholder="코드 (예: 001)"
                   />
                   <button
                     onClick={() => handleRemoveSizeOption(index)}

@@ -68,13 +68,17 @@ export default function AdminCoBuyForm({
   // Initialize custom fields with size field
   useEffect(() => {
     const sizeOptions = product.size_options || [];
+    // Extract labels for dropdown display (users see label, admin tracks with size_code)
+    const sizeLabels = sizeOptions.map((opt) =>
+      typeof opt === 'string' ? opt : opt.label
+    );
     const sizeField: CoBuyCustomField = {
       id: 'size',
       type: 'dropdown',
       label: '사이즈',
       required: true,
       fixed: true,
-      options: sizeOptions,
+      options: sizeLabels,
     };
     setCustomFields([sizeField]);
   }, [product.size_options]);

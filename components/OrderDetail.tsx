@@ -214,7 +214,7 @@ export default function OrderDetail({
   };
 
   const subtotal = orderItems.reduce(
-    (sum, item) => sum + item.price_per_item * item.quantity,
+    (sum, item) => sum + (item.price_per_item ?? 0) * (item.quantity ?? 0),
     0
   );
 
@@ -343,7 +343,7 @@ export default function OrderDetail({
                         {/* Hide price from factory users */}
                         {!isFactoryUser && (
                           <span className="font-semibold text-gray-900">
-                            {(item.price_per_item * item.quantity).toLocaleString()}원
+                            {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
                           </span>
                         )}
                       </div>
@@ -436,13 +436,13 @@ export default function OrderDetail({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">배송비</span>
                   <span className="font-medium text-gray-900">
-                    {order.delivery_fee.toLocaleString()}원
+                    {(order.delivery_fee ?? 0).toLocaleString()}원
                   </span>
                 </div>
                 <div className="border-t pt-3 flex justify-between">
                   <span className="text-base font-semibold text-gray-900">총 금액</span>
                   <span className="text-base font-bold text-blue-600">
-                    {order.total_amount.toLocaleString()}원
+                    {(order.total_amount ?? 0).toLocaleString()}원
                   </span>
                 </div>
               </div>

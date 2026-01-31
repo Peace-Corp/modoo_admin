@@ -632,8 +632,16 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     return Object.values(dimensionsBySide).flat();
   }, [dimensionsBySide]);
 
-  // Size options are now just strings (e.g., ["S", "M", "L", "XL"])
-  const sizeOptions = (product?.size_options ?? []) as string[];
+  // Size options are now objects with label and size_code
+  interface SizeOptionObj {
+    label: string;
+    size_code: string;
+  }
+  const rawSizeOptions = (product?.size_options ?? []) as (string | SizeOptionObj)[];
+  const sizeOptions: SizeOptionObj[] = rawSizeOptions.map((opt) =>
+    typeof opt === 'string' ? { label: opt, size_code: opt } : opt
+  );
+
   const sizeQuantities = useMemo(() => {
     if (!sizeOptions.length) {
       return new Map<string, number>();
@@ -641,19 +649,28 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
     const map = new Map<string, number>();
 
-    const findSize = (sizeId?: string, sizeName?: string) => {
-      // size_id and size_name are now the same value (just the size string)
-      const size = sizeId || sizeName;
-      if (!size) return undefined;
-      // Find matching size option (case-insensitive)
-      return sizeOptions.find((opt) => opt.toLowerCase() === size.toLowerCase()) || size;
+    const findSizeOption = (sizeId?: string, sizeName?: string): SizeOptionObj | undefined => {
+      // size_id is now size_code, size_name is label
+      if (sizeId) {
+        const byCode = sizeOptions.find((opt) => opt.size_code.toLowerCase() === sizeId.toLowerCase());
+        if (byCode) return byCode;
+      }
+      if (sizeName) {
+        const byLabel = sizeOptions.find((opt) => opt.label.toLowerCase() === sizeName.toLowerCase());
+        if (byLabel) return byLabel;
+      }
+      // Fallback: return a synthetic option
+      const fallbackLabel = sizeName || sizeId || 'unknown';
+      return { label: fallbackLabel, size_code: sizeId || fallbackLabel };
     };
 
     const addQuantity = (sizeId?: string, sizeName?: string, quantity?: number) => {
       if (!quantity || quantity <= 0) return;
-      const size = findSize(sizeId, sizeName);
-      if (!size) return;
-      map.set(size, (map.get(size) || 0) + quantity);
+      const sizeOpt = findSizeOption(sizeId, sizeName);
+      if (!sizeOpt) return;
+      // Key by size_code to ensure uniqueness
+      const key = sizeOpt.size_code;
+      map.set(key, (map.get(key) || 0) + quantity);
     };
 
     const variants = orderItem.item_options?.variants ?? [];
@@ -1178,8 +1195,8 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                   <thead className="bg-gray-50 text-black">
                     <tr>
                       {sizeOptions.map((size) => (
-                          <th key={size} className="px-3 py-2 text-center font-medium border border-gray-200">
-                            {size}
+                          <th key={size.size_code} className="px-3 py-2 text-center font-medium border border-gray-200">
+                            {size.label} ({size.size_code})
                           </th>
                         ))}
                       <th className="px-3 py-2 text-center font-medium border border-gray-200 bg-gray-100">
@@ -1190,9 +1207,9 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                   <tbody className="divide-y divide-gray-200 text-black">
                     <tr>
                       {sizeOptions.map((size) => {
-                        const quantity = sizeQuantities.get(size);
+                        const quantity = sizeQuantities.get(size.size_code);
                         return (
-                          <td key={size} className="px-3 py-2 text-center border border-gray-200">
+                          <td key={size.size_code} className="px-3 py-2 text-center border border-gray-200">
                             {quantity && quantity > 0 ? quantity : '-'}
                           </td>
                         );

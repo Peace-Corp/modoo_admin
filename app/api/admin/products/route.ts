@@ -93,8 +93,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '제품 구성 정보가 필요합니다.' }, { status: 400 });
     }
 
-    if (sizeOptions !== null && !Array.isArray(sizeOptions)) {
-      return NextResponse.json({ error: '사이즈 옵션 형식이 올바르지 않습니다.' }, { status: 400 });
+    if (sizeOptions !== null) {
+      if (!Array.isArray(sizeOptions)) {
+        return NextResponse.json({ error: '사이즈 옵션 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      // Validate each size option has label and size_code
+      const isValidSizeOptions = sizeOptions.every(
+        (opt: unknown) =>
+          typeof opt === 'object' &&
+          opt !== null &&
+          'label' in opt &&
+          'size_code' in opt &&
+          typeof (opt as { label: unknown }).label === 'string' &&
+          typeof (opt as { size_code: unknown }).size_code === 'string'
+      );
+      if (!isValidSizeOptions) {
+        return NextResponse.json({ error: '사이즈 옵션은 label과 size_code가 필요합니다.' }, { status: 400 });
+      }
     }
 
     if (category !== null && typeof category !== 'string') {
@@ -212,8 +227,23 @@ export async function PATCH(request: Request) {
     }
 
     if (payload?.size_options !== undefined) {
-      if (payload.size_options !== null && !Array.isArray(payload.size_options)) {
-        return NextResponse.json({ error: '사이즈 옵션 형식이 올바르지 않습니다.' }, { status: 400 });
+      if (payload.size_options !== null) {
+        if (!Array.isArray(payload.size_options)) {
+          return NextResponse.json({ error: '사이즈 옵션 형식이 올바르지 않습니다.' }, { status: 400 });
+        }
+        // Validate each size option has label and size_code
+        const isValidSizeOptions = payload.size_options.every(
+          (opt: unknown) =>
+            typeof opt === 'object' &&
+            opt !== null &&
+            'label' in opt &&
+            'size_code' in opt &&
+            typeof (opt as { label: unknown }).label === 'string' &&
+            typeof (opt as { size_code: unknown }).size_code === 'string'
+        );
+        if (!isValidSizeOptions) {
+          return NextResponse.json({ error: '사이즈 옵션은 label과 size_code가 필요합니다.' }, { status: 400 });
+        }
       }
       updateData.size_options = payload.size_options ?? null;
     }
