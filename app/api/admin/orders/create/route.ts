@@ -16,6 +16,12 @@ interface CreateOrderRequest {
   customerPhone?: string;
   variants: CreateOrderVariant[];
   notes?: string;
+  shippingMethod?: 'pickup' | 'domestic';
+  postalCode?: string;
+  state?: string;
+  city?: string;
+  addressLine1?: string;
+  addressLine2?: string;
 }
 
 const requireAdmin = async () => {
@@ -199,13 +205,13 @@ export async function POST(request: Request) {
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone || null,
-      shipping_method: 'pickup',
-      country_code: null,
-      state: null,
-      city: null,
-      postal_code: null,
-      address_line_1: null,
-      address_line_2: null,
+      shipping_method: payload.shippingMethod || 'pickup',
+      country_code: payload.shippingMethod === 'domestic' ? 'KR' : null,
+      state: payload.state || null,
+      city: payload.city || null,
+      postal_code: payload.postalCode || null,
+      address_line_1: payload.addressLine1 || null,
+      address_line_2: payload.addressLine2 || null,
       delivery_fee: 0,
       payment_method: 'admin', // Special payment method for admin-created orders
       payment_key: null,

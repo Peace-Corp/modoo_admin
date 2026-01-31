@@ -1,13 +1,24 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Minus, Plus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Minus, Plus, Loader2, Search, MapPin } from 'lucide-react';
 import { Product, SizeOption } from '@/types/types';
+import AddressSearch from './AddressSearch';
+
+type ShippingMethod = 'pickup' | 'domestic';
 
 interface OrderVariant {
   sizeLabel: string;
   sizeCode: string;
   quantity: number;
+}
+
+interface ShippingAddress {
+  postalCode: string;
+  state: string;
+  city: string;
+  addressLine1: string;
+  addressLine2: string;
 }
 
 interface OrderDetailsFormProps {
@@ -30,6 +41,17 @@ export default function OrderDetailsForm({
   const [variants, setVariants] = useState<OrderVariant[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Shipping fields
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>('pickup');
+  const [showAddressSearch, setShowAddressSearch] = useState(false);
+  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+    postalCode: '',
+    state: '',
+    city: '',
+    addressLine1: '',
+    addressLine2: '',
+  });
 
   // Initialize variants from product size options
   useEffect(() => {
@@ -97,6 +119,14 @@ export default function OrderDetailsForm({
       return;
     }
 
+    // Validate shipping address for domestic shipping
+    if (shippingMethod === 'domestic') {
+      if (!shippingAddress.postalCode || !shippingAddress.addressLine1) {
+        setError('배송 주소를 입력해주세요.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -113,6 +143,14 @@ export default function OrderDetailsForm({
           customerPhone: customerPhone.trim() || undefined,
           variants: variants.filter((v) => v.quantity > 0),
           notes: notes.trim() || undefined,
+          shippingMethod,
+          ...(shippingMethod === 'domestic' && {
+            postalCode: shippingAddress.postalCode,
+            state: shippingAddress.state,
+            city: shippingAddress.city,
+            addressLine1: shippingAddress.addressLine1,
+            addressLine2: shippingAddress.addressLine2 || undefined,
+          }),
         }),
       });
 
@@ -195,6 +233,92 @@ export default function OrderDetailsForm({
             />
           </div>
         </div>
+      </div>
+
+      {/* Shipping Section */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold mb-4">배송 정보</h3>
+
+        {/* Shipping Method Selection */}
+        <div className="flex gap-4 mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="shippingMethod"
+              value="pickup"
+              checked={shippingMethod === 'pickup'}
+              onChange={() => setShippingMethod('pickup')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">직접 수령</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="shippingMethod"
+              value="domestic"
+              checked={shippingMethod === 'domestic'}
+              onChange={() => setShippingMethod('domestic')}
+              className="w-4 h-4 text-blue-600"
+            />
+            <span className="text-gray-700">국내 배송</span>
+          </label>
+        </div>
+
+        {/* Address Fields for Domestic Shipping */}
+        {shippingMethod === 'domestic' && (
+          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+            {/* Address Search Button */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                주소 <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAddressSearch(true)}
+                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-left flex items-center gap-2 hover:border-blue-500 transition-colors"
+              >
+                <Search className="w-4 h-4 text-gray-400" />
+                {shippingAddress.addressLine1 ? (
+                  <span className="text-gray-900">{shippingAddress.addressLine1}</span>
+                ) : (
+                  <span className="text-gray-400">주소 검색</span>
+                )}
+              </button>
+            </div>
+
+            {/* Display Selected Address */}
+            {shippingAddress.addressLine1 && (
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      [{shippingAddress.postalCode}] {shippingAddress.addressLine1}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {shippingAddress.state} {shippingAddress.city}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Detail Address */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                상세 주소
+              </label>
+              <input
+                type="text"
+                value={shippingAddress.addressLine2}
+                onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }))}
+                placeholder="상세 주소 입력 (동, 호수 등)"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Size/Quantity Section */}
@@ -301,6 +425,22 @@ export default function OrderDetailsForm({
           <span>주문 생성하기</span>
         )}
       </button>
+
+      {/* Address Search Modal */}
+      {showAddressSearch && (
+        <AddressSearch
+          onSelect={(address) => {
+            setShippingAddress({
+              postalCode: address.postalCode,
+              state: address.state,
+              city: address.city,
+              addressLine1: address.addressLine1,
+              addressLine2: '',
+            });
+          }}
+          onClose={() => setShowAddressSearch(false)}
+        />
+      )}
     </div>
   );
 }
