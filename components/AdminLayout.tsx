@@ -44,6 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isHydrated, setIsHydrated] = useState(false);
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
+  const isPublicRoute = pathname?.startsWith('/shared/') ?? false;
 
   // Handle zustand hydration - manually rehydrate the persisted store
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, []);
 
   useEffect(() => {
-    if (isLoginRoute) {
+    if (isLoginRoute || isPublicRoute) {
       setIsCheckingAuth(false);
       return;
     }
@@ -137,7 +138,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       isActive = false;
     };
-  }, [isLoginRoute, router, setUser, setLoading, logout]);
+  }, [isLoginRoute, isPublicRoute, router, setUser, setLoading, logout]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -146,7 +147,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
 
   useEffect(() => {
-    if (!role || isLoginRoute) return;
+    if (!role || isLoginRoute || isPublicRoute) return;
 
     const allowedRoutes = allowedRoutesByRole[role] || [];
     const isAllowed = allowedRoutes.some(
@@ -156,9 +157,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!isAllowed) {
       router.push(defaultRouteByRole[role]);
     }
-  }, [pathname, role, isLoginRoute, router]);
+  }, [pathname, role, isLoginRoute, isPublicRoute, router]);
 
-  if (isLoginRoute) {
+  // Skip layout for login and public routes (no auth required)
+  if (isLoginRoute || isPublicRoute) {
     return <>{children}</>;
   }
 
