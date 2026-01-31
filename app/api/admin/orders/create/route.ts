@@ -57,8 +57,12 @@ const requireAdmin = async () => {
 };
 
 const buildOrderId = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
   const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `ORDER-${Date.now()}-${random}`;
+  return `ORDER-${year}${month}${day}-${random}`;
 };
 
 const toNumber = (value: unknown) => {
