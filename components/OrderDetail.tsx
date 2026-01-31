@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
 import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download } from 'lucide-react';
-import OrderItemCanvas from './OrderItemCanvas';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -40,9 +40,9 @@ export default function OrderDetail({
   loadingFactories,
   isFactoryUser = false,
 }: OrderDetailProps) {
+  const router = useRouter();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null);
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -214,7 +214,7 @@ export default function OrderDetail({
   };
 
   const subtotal = orderItems.reduce(
-    (sum, item) => sum + item.price_per_item * item.quantity,
+    (sum, item) => sum + (item.price_per_item ?? 0) * (item.quantity ?? 0),
     0
   );
 
@@ -271,14 +271,9 @@ export default function OrderDetail({
     }
   };
 
-  if (selectedItem) {
-    return (
-      <OrderItemCanvas
-        orderItem={selectedItem}
-        onBack={() => setSelectedItem(null)}
-      />
-    );
-  }
+  const handleItemClick = useCallback((itemId: string) => {
+    router.push(`/orders/${order.id}/items/${itemId}`);
+  }, [router, order.id]);
 
   return (
     <div className="space-y-4">
@@ -315,7 +310,7 @@ export default function OrderDetail({
                 {orderItems.map((item) => (
                   <div
                     key={item.id}
-                    onClick={() => setSelectedItem(item)}
+                    onClick={() => handleItemClick(item.id)}
                     className="flex gap-4 p-3 border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all"
                   >
                     <div className="w-20 h-20 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
@@ -343,7 +338,7 @@ export default function OrderDetail({
                         {/* Hide price from factory users */}
                         {!isFactoryUser && (
                           <span className="font-semibold text-gray-900">
-                            {(item.price_per_item * item.quantity).toLocaleString()}원
+                            {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
                           </span>
                         )}
                       </div>
@@ -436,13 +431,13 @@ export default function OrderDetail({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">배송비</span>
                   <span className="font-medium text-gray-900">
-                    {order.delivery_fee.toLocaleString()}원
+                    {(order.delivery_fee ?? 0).toLocaleString()}원
                   </span>
                 </div>
                 <div className="border-t pt-3 flex justify-between">
                   <span className="text-base font-semibold text-gray-900">총 금액</span>
                   <span className="text-base font-bold text-blue-600">
-                    {order.total_amount.toLocaleString()}원
+                    {(order.total_amount ?? 0).toLocaleString()}원
                   </span>
                 </div>
               </div>

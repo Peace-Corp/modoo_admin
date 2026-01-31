@@ -144,8 +144,11 @@ export interface CustomFont {
   format?: string;
 }
 
-// Size option is now just a simple string (e.g., "S", "M", "L", "XL")
-export type SizeOption = string;
+// Size option with display label and internal code
+export interface SizeOption {
+  label: string;      // Display name (e.g., "S", "M", "L")
+  size_code: string;  // Internal code for admin/factory (e.g., "001", "ABC")
+}
 
 export interface Order {
   id: string;
@@ -425,7 +428,8 @@ export interface CoBuyParticipant {
   email: string;
   phone: string | null;
   field_responses: Record<string, string>;
-  selected_size: string;
+  selected_size: string; // Display label (e.g., "S", "M", "L")
+  selected_size_code: string | null; // Internal size code for admin/factory tracking
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   payment_key: string | null;
   payment_amount: number | null;

@@ -152,27 +152,38 @@ export async function POST(request: Request) {
     const totalAmount = totalPaid > 0 ? totalPaid : basePrice * totalQuantity;
     const pricePerItem = totalQuantity > 0 ? Number((totalAmount / totalQuantity).toFixed(2)) : basePrice;
 
-    // SizeOption is now just a string array (e.g., ["S", "M", "L", "XL"])
-    const sizeOptions = normalizeJson<string[]>(
+    // SizeOption is now an object with label and size_code
+    interface SizeOptionObj {
+      label: string;
+      size_code: string;
+    }
+    const rawSizeOptions = normalizeJson<(string | SizeOptionObj)[]>(
       product.size_options ?? null,
       []
+    );
+    // Normalize to ensure all are objects
+    const sizeOptions: SizeOptionObj[] = rawSizeOptions.map((opt) =>
+      typeof opt === 'string' ? { label: opt, size_code: opt } : opt
     );
 
     const variantMap = new Map<string, { size_id: string; size_name: string; quantity: number }>();
 
     participants.forEach((participant) => {
       const selectedSize = participant.selected_size || 'unknown';
-      // Find matching size option (direct string comparison)
-      const matchedSize = sizeOptions.find((option) => option === selectedSize) || selectedSize;
+      // Find matching size option by label (what the user selected)
+      const matchedSizeOpt = sizeOptions.find((opt) => opt.label === selectedSize);
 
-      const existing = variantMap.get(matchedSize);
+      const sizeId = matchedSizeOpt?.size_code || selectedSize;
+      const sizeName = matchedSizeOpt?.label || selectedSize;
+
+      const existing = variantMap.get(sizeId);
       if (existing) {
         existing.quantity += 1;
       } else {
-        // size_id and size_name are the same value now (just the size string)
-        variantMap.set(matchedSize, {
-          size_id: matchedSize,
-          size_name: matchedSize,
+        // size_id is the size_code (for admin/factory), size_name is the label (for display)
+        variantMap.set(sizeId, {
+          size_id: sizeId,
+          size_name: sizeName,
           quantity: 1,
         });
       }
