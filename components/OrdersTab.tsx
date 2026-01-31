@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Factory, Order } from '@/types/types';
 import { Package, Calendar, Clock } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
-import OrderDetail from './OrderDetail';
 
 // Extended order type with item count from API
 type OrderWithItemCount = Order & {
@@ -12,14 +12,13 @@ type OrderWithItemCount = Order & {
 };
 
 export default function OrdersTab() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const [orders, setOrders] = useState<OrderWithItemCount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
-  const [loadingFactories, setLoadingFactories] = useState(false);
 
   // Track if initial data has been fetched to avoid duplicate fetches
   const initialFetchDone = useRef(false);
@@ -57,7 +56,6 @@ export default function OrdersTab() {
   }, [user?.role, user?.manufacturer_id]);
 
   const fetchFactories = useCallback(async () => {
-    setLoadingFactories(true);
     try {
       const response = await fetch('/api/admin/factories');
       if (!response.ok) {
@@ -69,8 +67,6 @@ export default function OrdersTab() {
     } catch (error) {
       console.error('Error fetching factories:', error);
       setFactories([]);
-    } finally {
-      setLoadingFactories(false);
     }
   }, []);
 
@@ -194,33 +190,15 @@ export default function OrdersTab() {
     return factory?.name || factory?.email || manufacturerId;
   };
 
-  const handleOrderUpdate = (updatedOrder: Order) => {
-    setSelectedOrder(updatedOrder);
-    setOrders((prev) =>
-      prev.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
-    );
-  };
+  const handleOrderClick = useCallback((orderId: string) => {
+    router.push(`/orders/${orderId}`);
+  }, [router]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
-    );
-  }
-
-  if (selectedOrder) {
-    return (
-      <OrderDetail
-        order={selectedOrder}
-        onBack={() => setSelectedOrder(null)}
-        onUpdate={() => fetchOrders(filterStatus)}
-        onOrderUpdate={handleOrderUpdate}
-        factories={factories}
-        canAssign={user?.role === 'admin'}
-        loadingFactories={loadingFactories}
-        isFactoryUser={isFactoryUser}
-      />
     );
   }
 
@@ -336,7 +314,7 @@ export default function OrdersTab() {
               {filteredOrders.map((order) => (
                 <tr
                   key={order.id}
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => handleOrderClick(order.id)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
                   {isFactoryUser ? (
