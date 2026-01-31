@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     // Select only fields needed for the list view, include order_items count
     const selectFields = isFactoryUser
       ? `id, order_category, order_status, deadline, factory_amount, factory_payment_date, factory_payment_status, created_at, order_items(count)`
-      : `id, customer_name, customer_email, order_category, created_at, total_amount, order_status, payment_status, assigned_manufacturer_id, shipping_method, order_items(count)`;
+      : `id, customer_name, customer_email, customer_phone, order_category, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_amount, factory_payment_date, factory_payment_status, notes, order_items(count)`;
 
     let query = adminClient.from('orders').select(selectFields);
 

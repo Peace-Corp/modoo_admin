@@ -373,8 +373,8 @@ export default function OrderDetail({
           </div>
         </div>
 
-        {/* Share Link Button - Admin only */}
-        {canAssign && (
+        {/* Share Link Button - Admin only, requires factory assignment */}
+        {canAssign && order.assigned_manufacturer_id && (
           <div className="flex items-center gap-2">
             {shareUrl ? (
               <>
@@ -698,32 +698,46 @@ export default function OrderDetail({
           )}
 
           {/* Shipping Information - hidden for factory users */}
-          {!isFactoryUser && order.shipping_method !== 'pickup' && (
+          {!isFactoryUser && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="w-5 h-5 text-gray-600" />
                 <h3 className="text-base font-semibold text-gray-900">배송 정보</h3>
               </div>
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600">
-                  {order.shipping_method === 'domestic' ? '국내 배송' : '해외 배송'}
-                </p>
-                {order.shipping_method === 'international' && order.country_code && (
-                  <p className="text-sm font-medium text-gray-900">{order.country_code}</p>
-                )}
-                {order.postal_code && (
-                  <p className="text-sm text-gray-900">[{order.postal_code}]</p>
-                )}
-                {order.state && order.city && (
-                  <p className="text-sm text-gray-900">
-                    {order.state} {order.city}
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-gray-500">배송 방법</p>
+                  <p className="font-medium text-gray-900">
+                    {order.shipping_method === 'pickup' ? '직접 수령' :
+                     order.shipping_method === 'domestic' ? '국내 배송' :
+                     order.shipping_method === 'international' ? '해외 배송' :
+                     order.shipping_method || '-'}
                   </p>
+                </div>
+                {order.shipping_method === 'international' && order.country_code && (
+                  <div>
+                    <p className="text-sm text-gray-500">국가</p>
+                    <p className="font-medium text-gray-900">{order.country_code}</p>
+                  </div>
                 )}
-                {order.address_line_1 && (
-                  <p className="text-sm text-gray-900">{order.address_line_1}</p>
-                )}
-                {order.address_line_2 && (
-                  <p className="text-sm text-gray-900">{order.address_line_2}</p>
+                {(order.postal_code || order.address_line_1 || order.state || order.city) && (
+                  <div>
+                    <p className="text-sm text-gray-500">주소</p>
+                    <div className="font-medium text-gray-900 space-y-1">
+                      {order.postal_code && (
+                        <p>[{order.postal_code}]</p>
+                      )}
+                      {(order.state || order.city) && (
+                        <p>{[order.state, order.city].filter(Boolean).join(' ')}</p>
+                      )}
+                      {order.address_line_1 && (
+                        <p>{order.address_line_1}</p>
+                      )}
+                      {order.address_line_2 && (
+                        <p className="text-gray-600">{order.address_line_2}</p>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

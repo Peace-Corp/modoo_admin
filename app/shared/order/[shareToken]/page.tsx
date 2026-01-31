@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { Package, MapPin, Calendar, Clock } from 'lucide-react';
-import type { OrderItem, Product, ProductSide, CanvasState, CustomFont } from '@/types/types';
-import SingleSideCanvas from '@/components/canvas/SingleSideCanvas';
-import { createClient } from '@/lib/supabase-client';
+import { Package, Calendar, Clock, CreditCard } from 'lucide-react';
+import type { OrderItem, CanvasState, CustomFont } from '@/types/types';
+import OrderItemCanvas from '@/components/OrderItemCanvas';
 
 interface PublicOrder {
   id: string;
@@ -19,6 +18,9 @@ interface PublicOrder {
   address_line_1: string | null;
   address_line_2: string | null;
   deadline: string | null;
+  factory_amount: number | null;
+  factory_payment_date: string | null;
+  factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
   created_at: string;
 }
 
@@ -54,41 +56,6 @@ interface PublicOrderItem {
   created_at: string;
 }
 
-const parseCanvasState = (value: unknown): CanvasState | null => {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
-    }
-  }
-  return value as CanvasState;
-};
-
-const coerceCustomFonts = (value: unknown): CustomFont[] => {
-  const parsed = typeof value === 'string' ? (() => { try { return JSON.parse(value); } catch { return null; } })() : value;
-  if (!Array.isArray(parsed)) return [];
-
-  const fonts: CustomFont[] = [];
-  parsed.forEach((raw) => {
-    if (!raw || typeof raw !== 'object') return;
-    const fontFamily = typeof raw.fontFamily === 'string' ? raw.fontFamily : '';
-    const url = typeof raw.url === 'string' ? raw.url : '';
-    if (!fontFamily || !url) return;
-    fonts.push({
-      fontFamily,
-      fileName: typeof raw.fileName === 'string' ? raw.fileName : `${fontFamily}.ttf`,
-      url,
-      path: typeof raw.path === 'string' ? raw.path : undefined,
-      uploadedAt: typeof raw.uploadedAt === 'string' ? raw.uploadedAt : undefined,
-      format: typeof raw.format === 'string' ? raw.format : undefined,
-    });
-  });
-
-  return fonts;
-};
-
 const orderStatusLabels: Record<string, string> = {
   pending: '대기중',
   processing: '처리중',
@@ -105,7 +72,6 @@ export default function SharedOrderPage() {
   const [items, setItems] = useState<PublicOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [products, setProducts] = useState<Map<string, Product>>(new Map());
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -128,38 +94,11 @@ export default function SharedOrderPage() {
       const { data } = await response.json();
       setOrder(data.order);
       setItems(data.items || []);
-
-      // Fetch product details for each unique product
-      const productIds = [...new Set(data.items.map((item: PublicOrderItem) => item.product_id))] as string[];
-      await fetchProducts(productIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : '주문 정보를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchProducts = async (productIds: string[]) => {
-    const supabase = createClient();
-    const productMap = new Map<string, Product>();
-
-    for (const productId of productIds) {
-      try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', productId)
-          .single();
-
-        if (!error && data) {
-          productMap.set(productId, data);
-        }
-      } catch {
-        console.error('Error fetching product:', productId);
-      }
-    }
-
-    setProducts(productMap);
   };
 
   const formatDate = (dateString: string) => {
@@ -170,88 +109,10 @@ export default function SharedOrderPage() {
     });
   };
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const selectedItem = useMemo(() => {
     if (!selectedItemId) return null;
     return items.find((item) => item.id === selectedItemId) || null;
   }, [items, selectedItemId]);
-
-  const selectedProduct = useMemo(() => {
-    if (!selectedItem) return null;
-    return products.get(selectedItem.product_id) || null;
-  }, [selectedItem, products]);
-
-  const getItemColorHex = useCallback((item: PublicOrderItem) => {
-    const variants = item.item_options?.variants;
-    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
-      return variants[0].color_hex;
-    }
-    return item.item_options?.color_hex || '#FFFFFF';
-  }, []);
-
-  const customFonts = useMemo(() => {
-    if (!selectedItem) return [];
-    return coerceCustomFonts(selectedItem.custom_fonts);
-  }, [selectedItem]);
-
-  // Size quantities for selected item
-  const sizeQuantities = useMemo(() => {
-    if (!selectedItem || !selectedProduct) return new Map<string, number>();
-
-    interface SizeOptionObj {
-      label: string;
-      size_code: string;
-    }
-    const rawSizeOptions = (selectedProduct?.size_options ?? []) as (string | SizeOptionObj)[];
-    const sizeOptions: SizeOptionObj[] = rawSizeOptions.map((opt) =>
-      typeof opt === 'string' ? { label: opt, size_code: opt } : opt
-    );
-
-    if (!sizeOptions.length) return new Map<string, number>();
-
-    const map = new Map<string, number>();
-
-    const findSizeOption = (sizeId?: string, sizeName?: string): SizeOptionObj | undefined => {
-      if (sizeId) {
-        const byCode = sizeOptions.find((opt) => opt.size_code.toLowerCase() === sizeId.toLowerCase());
-        if (byCode) return byCode;
-      }
-      if (sizeName) {
-        const byLabel = sizeOptions.find((opt) => opt.label.toLowerCase() === sizeName.toLowerCase());
-        if (byLabel) return byLabel;
-      }
-      const fallbackLabel = sizeName || sizeId || 'unknown';
-      return { label: fallbackLabel, size_code: sizeId || fallbackLabel };
-    };
-
-    const addQuantity = (sizeId?: string, sizeName?: string, quantity?: number) => {
-      if (!quantity || quantity <= 0) return;
-      const sizeOpt = findSizeOption(sizeId, sizeName);
-      if (!sizeOpt) return;
-      const key = sizeOpt.size_code;
-      map.set(key, (map.get(key) || 0) + quantity);
-    };
-
-    const variants = selectedItem.item_options?.variants ?? [];
-    if (variants.length > 0) {
-      variants.forEach((variant) => {
-        addQuantity(variant.size_id, variant.size_name, variant.quantity);
-      });
-    } else {
-      addQuantity(selectedItem.item_options?.size_id, selectedItem.item_options?.size_name, selectedItem.quantity);
-    }
-
-    return map;
-  }, [selectedItem, selectedProduct]);
 
   if (loading) {
     return (
@@ -273,6 +134,20 @@ export default function SharedOrderPage() {
           </div>
           <h1 className="text-xl font-semibold text-gray-900 mb-2">주문을 찾을 수 없습니다</h1>
           <p className="text-gray-600">{error || '유효하지 않은 링크입니다.'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show full-screen OrderItemCanvas when an item is selected
+  if (selectedItem) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <OrderItemCanvas
+            orderItem={selectedItem as unknown as OrderItem}
+            onBack={() => setSelectedItemId(null)}
+          />
         </div>
       </div>
     );
@@ -339,17 +214,11 @@ export default function SharedOrderPage() {
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <h2 className="text-base font-semibold text-gray-900 mb-4">주문 상품 ({items.length})</h2>
               <div className="space-y-3">
-                {items.map((item) => {
-                  const product = products.get(item.product_id);
-                  return (
+                {items.map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => setSelectedItemId(item.id === selectedItemId ? null : item.id)}
-                      className={`flex gap-4 p-3 border rounded-lg cursor-pointer transition-all ${
-                        item.id === selectedItemId
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
+                      onClick={() => setSelectedItemId(item.id)}
+                      className="flex gap-4 p-3 border border-gray-200 rounded-lg cursor-pointer transition-all hover:border-gray-300 hover:bg-gray-50"
                     >
                       <div className="w-20 h-20 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
                         {item.thumbnail_url ? (
@@ -386,133 +255,18 @@ export default function SharedOrderPage() {
                           )}
                         </div>
                         <p className="text-xs text-blue-600 mt-2">
-                          {item.id === selectedItemId ? '클릭하여 닫기' : '클릭하여 디자인 보기'}
+                          클릭하여 디자인 보기
                         </p>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
-
-            {/* Design Preview - Shows when item is selected */}
-            {selectedItem && selectedProduct && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <h2 className="text-base font-semibold text-gray-900 mb-4">
-                  디자인 미리보기 - {selectedItem.product_title}
-                </h2>
-
-                {/* Size Quantity Table */}
-                {selectedProduct.size_options && selectedProduct.size_options.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">사이즈별 수량</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm border-collapse border border-gray-200 rounded">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            {(selectedProduct.size_options as Array<{ label: string; size_code: string } | string>).map((size) => {
-                              const sizeObj = typeof size === 'string' ? { label: size, size_code: size } : size;
-                              return (
-                                <th key={sizeObj.size_code} className="px-3 py-2 text-center font-medium border border-gray-200">
-                                  {sizeObj.label}
-                                </th>
-                              );
-                            })}
-                            <th className="px-3 py-2 text-center font-medium border border-gray-200 bg-gray-100">합계</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            {(selectedProduct.size_options as Array<{ label: string; size_code: string } | string>).map((size) => {
-                              const sizeObj = typeof size === 'string' ? { label: size, size_code: size } : size;
-                              const quantity = sizeQuantities.get(sizeObj.size_code);
-                              return (
-                                <td key={sizeObj.size_code} className="px-3 py-2 text-center border border-gray-200">
-                                  {quantity && quantity > 0 ? quantity : '-'}
-                                </td>
-                              );
-                            })}
-                            <td className="px-3 py-2 text-center border border-gray-200 bg-gray-100 font-semibold">
-                              {Array.from(sizeQuantities.values()).reduce((sum, qty) => sum + qty, 0) || '-'}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Canvas Previews */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {selectedProduct.configuration.map((side: ProductSide) => {
-                    const canvasState = selectedItem.canvas_state[side.id];
-                    if (!canvasState) return null;
-
-                    return (
-                      <div key={side.id} className="space-y-2">
-                        <h3 className="text-sm font-medium text-gray-700">{side.name}</h3>
-                        <div className="flex justify-center items-center bg-gray-50 rounded-lg p-4 min-h-[400px]">
-                          <SingleSideCanvas
-                            side={side}
-                            canvasState={canvasState}
-                            productColor={getItemColorHex(selectedItem)}
-                            width={350}
-                            height={400}
-                            renderFromCanvasStateOnly
-                            customFonts={customFonts}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Right Column - Shipping Info */}
+          {/* Right Column - Factory Info */}
           <div className="space-y-4">
-            {/* Shipping Address */}
-            {order.shipping_method !== 'pickup' && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <MapPin className="w-5 h-5 text-gray-600" />
-                  <h2 className="text-base font-semibold text-gray-900">배송 정보</h2>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <p className="text-gray-600">
-                    {order.shipping_method === 'domestic' ? '국내 배송' : '해외 배송'}
-                  </p>
-                  {order.shipping_method === 'international' && order.country_code && (
-                    <p className="font-medium text-gray-900">{order.country_code}</p>
-                  )}
-                  {order.postal_code && (
-                    <p className="text-gray-900">[{order.postal_code}]</p>
-                  )}
-                  {order.state && order.city && (
-                    <p className="text-gray-900">{order.state} {order.city}</p>
-                  )}
-                  {order.address_line_1 && (
-                    <p className="text-gray-900">{order.address_line_1}</p>
-                  )}
-                  {order.address_line_2 && (
-                    <p className="text-gray-900">{order.address_line_2}</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {order.shipping_method === 'pickup' && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <MapPin className="w-5 h-5 text-gray-600" />
-                  <h2 className="text-base font-semibold text-gray-900">수령 방법</h2>
-                </div>
-                <p className="text-sm text-gray-600">직접 수령</p>
-              </div>
-            )}
-
-            {/* Order Summary */}
+            {/* Order Summary for Factory */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <h2 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h2>
               <div className="space-y-2 text-sm">
@@ -526,16 +280,46 @@ export default function SharedOrderPage() {
                     {items.reduce((sum, item) => sum + item.quantity, 0)}개
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">주문일시</span>
-                  <span className="font-medium text-gray-900">{formatDateTime(order.created_at)}</span>
-                </div>
                 {order.deadline && (
                   <div className="flex justify-between pt-2 border-t">
                     <span className="text-gray-600">마감일</span>
                     <span className="font-semibold text-red-600">{formatDate(order.deadline)}</span>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Factory Payment Info */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CreditCard className="w-5 h-5 text-gray-600" />
+                <h2 className="text-base font-semibold text-gray-900">결제 정보</h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="text-gray-500">금액</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">결제 예정일</p>
+                  <p className="font-medium text-gray-900">
+                    {order.factory_payment_date ? formatDate(order.factory_payment_date) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500">결제 상태</p>
+                  <p className={`font-medium ${
+                    order.factory_payment_status === 'completed' ? 'text-green-600' :
+                    order.factory_payment_status === 'cancelled' ? 'text-red-600' :
+                    'text-yellow-600'
+                  }`}>
+                    {order.factory_payment_status === 'pending' ? '대기' :
+                     order.factory_payment_status === 'completed' ? '완료' :
+                     order.factory_payment_status === 'cancelled' ? '취소' : '-'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

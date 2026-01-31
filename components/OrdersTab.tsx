@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock } from 'lucide-react';
+import { Package, Calendar, Clock, Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 
 // Extended order type with item count from API
 type OrderWithItemCount = Order & {
@@ -19,6 +20,7 @@ export default function OrdersTab() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
+  const [showOrderCreator, setShowOrderCreator] = useState(false);
 
   // Track if initial data has been fetched to avoid duplicate fetches
   const initialFetchDone = useRef(false);
@@ -211,6 +213,15 @@ export default function OrdersTab() {
           <h2 className="text-xl font-semibold text-gray-900">주문 관리</h2>
           <p className="text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
         </div>
+        {!isFactoryUser && (
+          <button
+            onClick={() => setShowOrderCreator(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>주문 생성</span>
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -442,6 +453,17 @@ export default function OrdersTab() {
           </div>
         )}
       </div>
+
+      {/* Order Creator Modal */}
+      {showOrderCreator && (
+        <AdminOrderCreator
+          onClose={() => setShowOrderCreator(false)}
+          onSuccess={() => {
+            setShowOrderCreator(false);
+            fetchOrders(filterStatus);
+          }}
+        />
+      )}
     </div>
   );
 }

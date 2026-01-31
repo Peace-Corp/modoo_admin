@@ -23,7 +23,7 @@ export async function GET(
     const adminClient = createAdminClient();
 
     // Fetch order by share token
-    // Only select fields safe for factory viewing (exclude sensitive data)
+    // Only select fields safe for factory viewing (exclude sensitive customer/payment data)
     const { data: order, error: orderError } = await adminClient
       .from('orders')
       .select(`
@@ -38,6 +38,9 @@ export async function GET(
         address_line_1,
         address_line_2,
         deadline,
+        factory_amount,
+        factory_payment_date,
+        factory_payment_status,
         created_at
       `)
       .eq('share_token', shareToken)
