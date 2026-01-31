@@ -183,6 +183,9 @@ export interface Order {
   factory_payment_date: string | null;
   factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
 
+  // Shareable link token (generated on demand)
+  share_token: string | null;
+
   created_at: string;
   updated_at: string;
 }

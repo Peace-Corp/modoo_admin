@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download } from 'lucide-react';
+import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off } from 'lucide-react';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -60,6 +60,12 @@ export default function OrderDetail({
   const [loadingCobuyParticipants, setLoadingCobuyParticipants] = useState(false);
   const [cobuyParticipantsError, setCobuyParticipantsError] = useState<string | null>(null);
 
+  // Share link state
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [generatingShareLink, setGeneratingShareLink] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
+
   useEffect(() => {
     fetchOrderItems();
   }, [order.id]);
@@ -84,6 +90,81 @@ export default function OrderDetail({
   useEffect(() => {
     setSelectedFactoryId(order.assigned_manufacturer_id || '');
   }, [order.assigned_manufacturer_id]);
+
+  // Fetch existing share token on mount
+  useEffect(() => {
+    if (canAssign) {
+      fetchShareToken();
+    }
+  }, [order.id, canAssign]);
+
+  const fetchShareToken = async () => {
+    try {
+      const response = await fetch(`/api/admin/orders/share?orderId=${order.id}`);
+      if (response.ok) {
+        const { data } = await response.json();
+        setShareUrl(data?.share_url || null);
+      }
+    } catch (error) {
+      console.error('Error fetching share token:', error);
+    }
+  };
+
+  const handleGenerateShareLink = async () => {
+    setGeneratingShareLink(true);
+    setShareError(null);
+    try {
+      const response = await fetch('/api/admin/orders/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error || '공유 링크 생성에 실패했습니다.');
+      }
+
+      const { data } = await response.json();
+      setShareUrl(data?.share_url || null);
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '공유 링크 생성에 실패했습니다.');
+    } finally {
+      setGeneratingShareLink(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShareLink(true);
+      setTimeout(() => setCopiedShareLink(false), 2000);
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+    }
+  };
+
+  const handleDisableShareLink = async () => {
+    setGeneratingShareLink(true);
+    setShareError(null);
+    try {
+      const response = await fetch(`/api/admin/orders/share?orderId=${order.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error || '공유 링크 비활성화에 실패했습니다.');
+      }
+
+      setShareUrl(null);
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : '공유 링크 비활성화에 실패했습니다.');
+    } finally {
+      setGeneratingShareLink(false);
+    }
+  };
 
   // Sync factory fields when order changes
   useEffect(() => {
@@ -292,8 +373,56 @@ export default function OrderDetail({
           </div>
         </div>
 
-        
+        {/* Share Link Button - Admin only */}
+        {canAssign && (
+          <div className="flex items-center gap-2">
+            {shareUrl ? (
+              <>
+                <button
+                  onClick={handleCopyShareLink}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors"
+                >
+                  {copiedShareLink ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      복사됨
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      공유 링크 복사
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleDisableShareLink}
+                  disabled={generatingShareLink}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors disabled:opacity-60"
+                  title="공유 링크 비활성화"
+                >
+                  <Link2Off className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleGenerateShareLink}
+                disabled={generatingShareLink}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-60"
+              >
+                <Share2 className="w-4 h-4" />
+                {generatingShareLink ? '생성 중...' : '공유 링크 생성'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Share Error */}
+      {shareError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+          {shareError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column - Order Info */}
