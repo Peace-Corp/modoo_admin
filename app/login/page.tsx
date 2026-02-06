@@ -1,21 +1,30 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, signInWithOAuth } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Check for no_account error from OAuth callback
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'no_account') {
+      setErrorMessage('계정이 존재하지 않습니다. 관리자에게 문의해주세요.');
+    }
+  }, [searchParams]);
+
   const handleGoogleLogin = async () => {
     setErrorMessage(null);
-    const result = await signInWithOAuth('google');
+    const result = await signInWithOAuth('google', 'login');
     if (!result.success) {
       setErrorMessage(result.error || '구글 로그인에 실패했습니다');
     }
@@ -23,7 +32,7 @@ export default function LoginPage() {
 
   const handleKakaoLogin = async () => {
     setErrorMessage(null);
-    const result = await signInWithOAuth('kakao');
+    const result = await signInWithOAuth('kakao', 'login');
     if (!result.success) {
       setErrorMessage(result.error || '카카오 로그인에 실패했습니다');
     }

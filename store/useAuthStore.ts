@@ -38,7 +38,7 @@ interface AuthState {
   signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }>;
 
   // Sign in with OAuth provider
-  signInWithOAuth: (provider: 'google' | 'kakao') => Promise<{ success: boolean; error?: string }>;
+  signInWithOAuth: (provider: 'google' | 'kakao', mode?: 'login' | 'signup') => Promise<{ success: boolean; error?: string }>;
 
   // Request password reset email
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -177,15 +177,16 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signInWithOAuth: async (provider: 'google' | 'kakao') => {
+      signInWithOAuth: async (provider: 'google' | 'kakao', mode: 'login' | 'signup' = 'login') => {
         try {
           set({ isLoading: true });
           const supabase = createClient();
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
           const { error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
-              redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+              redirectTo: `${origin}/auth/callback?mode=${mode}`,
             },
           });
 
