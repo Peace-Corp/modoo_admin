@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Settings, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket } from 'lucide-react';
-import { createClient } from '@/lib/supabase-client';
-import { useAuthStore } from '@/store/useAuthStore';
+import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket } from 'lucide-react';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 type AdminRole = 'admin' | 'factory';
 
@@ -26,148 +25,29 @@ const navItems: Array<{
   { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
 ];
 
-const allowedRoutesByRole: Record<AdminRole, string[]> = {
-  admin: ['/dashboard', '/products', '/designs', '/content', '/orders', '/factories', '/cobuy', '/coupons', '/users', '/settings'],
-  factory: ['/orders', '/users'],
-};
-
-const defaultRouteByRole: Record<AdminRole, string> = {
-  admin: '/dashboard',
-  factory: '/orders',
-};
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, setUser, setLoading, logout } = useAuthStore();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
   const isPublicRoute = pathname?.startsWith('/shared/') ?? false;
+  const skipAuth = isLoginRoute || isPublicRoute;
 
-  // Handle zustand hydration - manually rehydrate the persisted store
-  useEffect(() => {
-    useAuthStore.persist.rehydrate();
-    setIsHydrated(true);
-  }, []);
+  const { authStatus, user, logout } = useAdminAuth({ skip: skipAuth });
 
-  useEffect(() => {
-    if (isLoginRoute || isPublicRoute) {
-      setIsCheckingAuth(false);
-      return;
-    }
-
-    let isActive = true;
-
-    const checkAdminAuth = async () => {
-      setLoading(true);
-      setIsCheckingAuth(true);
-      try {
-        const supabase = createClient();
-        const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-
-        if (!supabaseUser) {
-          if (isActive) {
-            setLoading(false);
-            setIsCheckingAuth(false);
-          }
-          router.push('/login');
-          return;
-        }
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role, email, phone_number, manufacturer_id, manufacturer:manufacturers(id, name)')
-          .eq('id', supabaseUser.id)
-          .single();
-
-        if (error || !profile) {
-          console.error('Error fetching profile:', error);
-          // Sign out to prevent redirect loop
-          await logout();
-          if (isActive) {
-            setIsCheckingAuth(false);
-          }
-          router.push('/login');
-          return;
-        }
-
-        if (profile.role !== 'admin' && profile.role !== 'factory') {
-          console.error('User does not have admin or factory role:', profile.role);
-          // Sign out to prevent redirect loop
-          await logout();
-          if (isActive) {
-            setIsCheckingAuth(false);
-          }
-          router.push('/login');
-          return;
-        }
-
-        const manufacturerRecord = Array.isArray(profile.manufacturer)
-          ? profile.manufacturer[0]
-          : profile.manufacturer;
-
-        if (isActive) {
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email || profile.email || '',
-            name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name,
-            avatar_url: supabaseUser.user_metadata?.avatar_url,
-            phone: supabaseUser.phone || profile.phone_number,
-            role: profile.role,
-            manufacturer_id: profile.manufacturer_id ?? null,
-            manufacturer_name: manufacturerRecord?.name ?? null,
-          });
-          setLoading(false);
-          setIsCheckingAuth(false);
-        }
-      } catch (error) {
-        console.error('Error checking admin auth:', error);
-        // Sign out to prevent redirect loop
-        await logout();
-        if (isActive) {
-          setIsCheckingAuth(false);
-        }
-        router.push('/login');
-      }
-    };
-
-    checkAdminAuth();
-
-    return () => {
-      isActive = false;
-    };
-  }, [isLoginRoute, isPublicRoute, router, setUser, setLoading, logout]);
-
+  // Close sidebar on route change
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
-  const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
-
-  useEffect(() => {
-    if (!role || isLoginRoute || isPublicRoute) return;
-
-    const allowedRoutes = allowedRoutesByRole[role] || [];
-    const isAllowed = allowedRoutes.some(
-      (route) => pathname === route || (pathname ?? '').startsWith(`${route}/`)
-    );
-
-    if (!isAllowed) {
-      router.push(defaultRouteByRole[role]);
-    }
-  }, [pathname, role, isLoginRoute, isPublicRoute, router]);
-
-  // Skip layout for login and public routes (no auth required)
-  if (isLoginRoute || isPublicRoute) {
+  // Skip layout for login and public routes
+  if (skipAuth) {
     return <>{children}</>;
   }
 
-  // Only show loading spinner while checking auth or waiting for hydration
-  // Also show spinner if no user after auth check (redirect in progress)
-  if (!isHydrated || isCheckingAuth || !user) {
+  // Show loading while checking auth
+  if (authStatus !== 'authenticated') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -177,6 +57,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+  const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -201,8 +83,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {user?.email}
             </div>
             <button
-              onClick={async () => {
-                await logout();
+              onClick={() => {
+                logout();
                 router.push('/login');
               }}
               className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"

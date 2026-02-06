@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase-client';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+export type AuthStatus = 'idle' | 'hydrating' | 'checking' | 'authenticated' | 'unauthenticated';
+
 export interface UserData {
   id: string;
   email: string;
@@ -18,6 +20,10 @@ interface AuthState {
   user: UserData | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authStatus: AuthStatus;
+
+  // Set auth status
+  setAuthStatus: (status: AuthStatus) => void;
 
   // Set user data and mark as authenticated
   setUser: (user: UserData) => void;
@@ -50,12 +56,17 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: true,
+      authStatus: 'idle' as AuthStatus,
+
+      setAuthStatus: (status: AuthStatus) =>
+        set({ authStatus: status }),
 
       setUser: (user) =>
         set({
           user,
           isAuthenticated: true,
           isLoading: false,
+          authStatus: 'authenticated',
         }),
 
       logout: async () => {
@@ -65,6 +76,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           isAuthenticated: false,
           isLoading: false,
+          authStatus: 'unauthenticated',
         });
       },
 
