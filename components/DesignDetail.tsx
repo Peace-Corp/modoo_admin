@@ -411,7 +411,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
     const canvasStateRaw = design.canvas_state?.[sideId];
     const canvasState = parseCanvasState(canvasStateRaw);
     const stateObjects = Array.isArray(canvasState?.objects) ? canvasState.objects : [];
-    const stateDimensionsById = new Map<string, { widthMm?: number; heightMm?: number }>();
+    const stateDimensionsById = new Map<string, { widthMm?: number; heightMm?: number; printMethod?: string }>();
 
     stateObjects.forEach((stateObj) => {
       if (!stateObj || typeof stateObj !== 'object') return;
@@ -419,7 +419,8 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         objectId?: string;
         widthMm?: number;
         heightMm?: number;
-        data?: { objectId?: string; widthMm?: number; heightMm?: number };
+        printMethod?: string;
+        data?: { objectId?: string; widthMm?: number; heightMm?: number; printMethod?: string };
       };
       const objectId = typedObj.data?.objectId || typedObj.objectId;
       const widthMm = typeof typedObj.widthMm === 'number'
@@ -428,8 +429,10 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       const heightMm = typeof typedObj.heightMm === 'number'
         ? typedObj.heightMm
         : typedObj.data?.heightMm;
-      if (objectId && typeof widthMm === 'number' && typeof heightMm === 'number') {
-        stateDimensionsById.set(objectId, { widthMm, heightMm });
+      // Check both top-level and data.printMethod (fabric objects may store it in either location)
+      const printMethod = typedObj.data?.printMethod || typedObj.printMethod;
+      if (objectId) {
+        stateDimensionsById.set(objectId, { widthMm, heightMm, printMethod });
       }
     });
 
@@ -441,14 +444,27 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       pixelToMmRatio = realDimensions.printAreaWidthMm / printArea.width;
     }
 
+    // Track seen objectIds to prevent duplicates
+    const seenObjectIds = new Set<string>();
+
     objects.forEach((obj) => {
-      const objData = obj as { data?: { id?: string; objectId?: string } };
+      const objData = obj as { data?: { id?: string; objectId?: string; printMethod?: string } };
       if (objData.data?.id === 'background-product-image') {
         return;
       }
 
       const objectId = objData.data?.objectId;
-      const stateDimension = objectId ? stateDimensionsById.get(objectId) : undefined;
+
+      // Skip duplicate objects (same objectId already processed)
+      if (objectId && seenObjectIds.has(objectId)) {
+        return;
+      }
+      if (objectId) {
+        seenObjectIds.add(objectId);
+      }
+
+      const stateInfo = objectId ? stateDimensionsById.get(objectId) : undefined;
+      const printMethod = objData.data?.printMethod || stateInfo?.printMethod;
 
       const fill = obj.fill;
       const colors = new Set<string>();
@@ -530,10 +546,10 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
 
       const objectWidthMm = typeof objWithMm.widthMm === 'number'
         ? objWithMm.widthMm
-        : stateDimension?.widthMm;
+        : stateInfo?.widthMm;
       const objectHeightMm = typeof objWithMm.heightMm === 'number'
         ? objWithMm.heightMm
-        : stateDimension?.heightMm;
+        : stateInfo?.heightMm;
 
       const resolvedWidthMm = typeof objectWidthMm === 'number'
         ? objectWidthMm
@@ -555,6 +571,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         fill: fill && typeof fill === 'string' && fill !== 'transparent' ? fill : undefined,
         colors: colors.size > 0 ? Array.from(colors) : undefined,
         preview: preview || undefined,
+        printMethod: printMethod as ObjectDimensions['printMethod'],
       };
 
       const objTypeLower = (obj.type || '').toLowerCase();
@@ -634,6 +651,32 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
   const isTextObjectType = (rawType?: string | null) => {
     const normalized = (rawType || '').toLowerCase();
     return normalized === 'i-text' || normalized === 'itext' || normalized === 'text' || normalized === 'textbox' || normalized === 'curvedtext';
+  };
+
+  const getPrintMethodName = (method?: string | null): string => {
+    // Default to DTF if no method specified
+    if (!method) return 'DTF';
+    const methodMap: Record<string, string> = {
+      'dtf': 'DTF',
+      'dtg': 'DTG',
+      'screen_printing': '나염',
+      'embroidery': '자수',
+      'applique': '아플리케',
+    };
+    return methodMap[method] || method;
+  };
+
+  const getPrintMethodColor = (method?: string | null): string => {
+    // Default to DTF color if no method specified
+    if (!method) return 'bg-blue-100 text-blue-700';
+    const colorMap: Record<string, string> = {
+      'dtf': 'bg-blue-100 text-blue-700',
+      'dtg': 'bg-blue-100 text-blue-700',
+      'screen_printing': 'bg-green-100 text-green-700',
+      'embroidery': 'bg-purple-100 text-purple-700',
+      'applique': 'bg-amber-100 text-amber-700',
+    };
+    return colorMap[method] || 'bg-gray-100 text-gray-600';
   };
 
   const findTextSvgUrlForObject = (objectId: string, preferredSideId?: string | null) => {
@@ -936,7 +979,7 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('products')
-          .select('*')
+          .select('*, manufacturers(id, name)')
           .eq('id', design.product_id)
           .single();
 
@@ -1293,6 +1336,12 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
                   <span className="text-sm font-mono text-gray-600">{product.product_code}</span>
                 </div>
               )}
+              {product.manufacturers?.name && (
+                <div className="flex items-start gap-2">
+                  <span className="text-sm text-gray-500 shrink-0 w-16">제조사:</span>
+                  <span className="text-sm font-medium text-gray-900">{product.manufacturers.name}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1475,6 +1524,12 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
                               {dimension.heightMm.toFixed(1)} mm
                             </span>
                           </div>
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-xs text-gray-500">인쇄방법:</span>
+                          <span className={`ml-1 text-xs font-medium px-2 py-0.5 rounded ${getPrintMethodColor(dimension.printMethod)}`}>
+                            {getPrintMethodName(dimension.printMethod)}
+                          </span>
                         </div>
                         {dimension.rawType !== 'image' && (
                           dimension.colors && dimension.colors.length > 0 ? (

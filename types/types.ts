@@ -294,6 +294,8 @@ export interface ObjectDimensions {
   lineHeight?: number;
   // CurvedText specific
   curveIntensity?: number;
+  // Print method
+  printMethod?: PrintMethod;
 }
 
 export interface Profile {
