@@ -37,9 +37,6 @@ interface AuthState {
   // Sign up with email and password
   signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }>;
 
-  // Sign in with OAuth provider
-  signInWithOAuth: (provider: 'google' | 'kakao', mode?: 'login' | 'signup') => Promise<{ success: boolean; error?: string }>;
-
   // Request password reset email
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -171,32 +168,6 @@ export const useAuthStore = create<AuthState>()(
 
           set({ isLoading: false });
           return { success: false, error: 'Sign up failed' };
-        } catch (err) {
-          set({ isLoading: false });
-          return { success: false, error: (err as Error).message };
-        }
-      },
-
-      signInWithOAuth: async (provider: 'google' | 'kakao', mode: 'login' | 'signup' = 'login') => {
-        try {
-          set({ isLoading: true });
-          const supabase = createClient();
-          const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
-          const { error } = await supabase.auth.signInWithOAuth({
-            provider,
-            options: {
-              redirectTo: `${origin}/auth/callback?mode=${mode}`,
-            },
-          });
-
-          if (error) {
-            set({ isLoading: false });
-            return { success: false, error: error.message };
-          }
-
-          // OAuth will redirect, so loading state stays true
-          return { success: true };
         } catch (err) {
           set({ isLoading: false });
           return { success: false, error: (err as Error).message };
