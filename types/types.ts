@@ -482,3 +482,46 @@ export interface SavedDesign {
     thumbnail_image_link: string | null;
   } | null;
 }
+
+// ============================================================================
+// Coupon Types
+// ============================================================================
+
+export type CouponDiscountType = 'percentage' | 'fixed_amount';
+
+export interface Coupon {
+  id: string;
+  code: string;
+  display_name: string | null;
+  description: string | null;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  min_order_amount: number;
+  max_discount_amount: number | null;
+  max_uses: number | null;
+  current_uses: number;
+  is_active: boolean;
+  expires_at: string | null;
+  valid_days_after_registration: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CouponUsage {
+  id: string;
+  coupon_id: string;
+  user_id: string;
+  registered_at: string;
+  expires_at: string | null;
+  used_at: string | null;
+  order_id: string | null;
+  discount_applied: number | null;
+  created_at: string;
+  // Joined relations
+  coupon?: Coupon;
+  user?: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+}
