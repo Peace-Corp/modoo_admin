@@ -38,7 +38,13 @@ interface AuthState {
   signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }>;
 
   // Sign in with OAuth provider
-  signInWithOAuth: (provider: 'google') => Promise<{ success: boolean; error?: string }>;
+  signInWithOAuth: (provider: 'google' | 'kakao') => Promise<{ success: boolean; error?: string }>;
+
+  // Request password reset email
+  resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Update password (for authenticated users after reset link)
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -171,7 +177,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signInWithOAuth: async (provider: 'google') => {
+      signInWithOAuth: async (provider: 'google' | 'kakao') => {
         try {
           set({ isLoading: true });
           const supabase = createClient();
@@ -189,6 +195,48 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // OAuth will redirect, so loading state stays true
+          return { success: true };
+        } catch (err) {
+          set({ isLoading: false });
+          return { success: false, error: (err as Error).message };
+        }
+      },
+
+      resetPasswordForEmail: async (email: string) => {
+        try {
+          set({ isLoading: true });
+          const supabase = createClient();
+
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/confirm`,
+          });
+
+          set({ isLoading: false });
+
+          if (error) {
+            return { success: false, error: error.message };
+          }
+
+          return { success: true };
+        } catch (err) {
+          set({ isLoading: false });
+          return { success: false, error: (err as Error).message };
+        }
+      },
+
+      updatePassword: async (newPassword: string) => {
+        try {
+          set({ isLoading: true });
+          const supabase = createClient();
+
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+          set({ isLoading: false });
+
+          if (error) {
+            return { success: false, error: error.message };
+          }
+
           return { success: true };
         } catch (err) {
           set({ isLoading: false });
