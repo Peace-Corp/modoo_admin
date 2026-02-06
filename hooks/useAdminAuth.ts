@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { useAuthStore, type AuthStatus, type UserData } from '@/store/useAuthStore';
@@ -31,21 +31,41 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
   const { skip = false } = options;
   const router = useRouter();
   const pathname = usePathname();
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const { user, authStatus, setUser, setAuthStatus, logout } = useAuthStore();
 
-  // Handle Zustand hydration
+  // Handle Zustand hydration - wait for it to complete
   useEffect(() => {
-    if (skip) return;
+    if (skip) {
+      setIsHydrated(true);
+      return;
+    }
 
-    setAuthStatus('hydrating');
+    // Check if already hydrated
+    if (useAuthStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+      setAuthStatus('checking');
+      return;
+    }
+
+    // Subscribe to hydration completion
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setIsHydrated(true);
+      setAuthStatus('checking');
+    });
+
+    // Trigger rehydration
     useAuthStore.persist.rehydrate();
-    setAuthStatus('checking');
+
+    return () => {
+      unsubscribe();
+    };
   }, [skip, setAuthStatus]);
 
-  // Check admin authentication
+  // Check admin authentication after hydration
   useEffect(() => {
-    if (skip || authStatus === 'idle' || authStatus === 'hydrating') return;
+    if (skip || !isHydrated || authStatus !== 'checking') return;
 
     let isActive = true;
 
@@ -111,7 +131,7 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
     return () => {
       isActive = false;
     };
-  }, [skip, authStatus, router, setUser, setAuthStatus, logout]);
+  }, [skip, isHydrated, authStatus, router, setUser, setAuthStatus, logout]);
 
   // Handle role-based route access
   useEffect(() => {
