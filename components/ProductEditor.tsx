@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor } from '@/types/types';
+import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoAnchor, DefaultLogoPlacement } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
+import LogoPlacementPreview from './LogoPlacementPreview';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -46,6 +47,7 @@ const normalizeSide = (side: Partial<ProductSide>, index: number): ProductSide =
   layers: Array.isArray(side.layers) ? side.layers.map((layer, layerIndex) => normalizeLayer(layer, layerIndex)) : [],
   realLifeDimensions: buildRealLifeDimensions(side.realLifeDimensions),
   zoomScale: typeof side.zoomScale === 'number' ? side.zoomScale : 1.0,
+  defaultLogoPlacement: side.defaultLogoPlacement,
 });
 
 const normalizeSides = (rawSides: ProductSide[] | null | undefined) =>
@@ -120,6 +122,17 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     | { kind: 'side'; sideIndex: number; layerIndex?: number }
     | { kind: 'product'; field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image' };
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null);
+
+  // Tab state
+  type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall';
+  const [activeTab, setActiveTab] = useState<EditorTab>('basic');
+
+  const tabs: { id: EditorTab; label: string }[] = [
+    { id: 'basic', label: '기본 정보' },
+    { id: 'sides', label: '면 & 인쇄 영역' },
+    { id: 'size-color', label: '사이즈 & 색상' },
+    { id: 'partner-mall', label: '파트너몰 설정' },
+  ];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -825,7 +838,28 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="flex space-x-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-white border-t border-l border-r border-gray-200 text-blue-600 -mb-px'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'basic' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left Panel - Basic Info */}
         <div className="space-y-4">
           {/* Basic Information */}
@@ -1143,7 +1177,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {/* Size & Color Tab */}
+      {activeTab === 'size-color' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-4">
           {/* Size Options */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -1315,9 +1356,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           )}
+          </div>
         </div>
+      )}
 
-        {/* Middle Panel - Sides List */}
+      {/* Sides & Print Area Tab */}
+      {activeTab === 'sides' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left - Sides List */}
         <div className="space-y-4">
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -1791,7 +1837,64 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
+
+      {/* Partner Mall Settings Tab */}
+      {activeTab === 'partner-mall' && (
+        <div className="max-w-2xl">
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm mb-4">
+            <h3 className="font-semibold text-gray-900 mb-2">파트너몰 로고 기본 위치 설정</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              파트너몰 생성 시 로고가 자동 배치될 기본 위치를 각 면별로 설정합니다.
+            </p>
+
+            {/* Side selector for partner mall settings */}
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setCurrentSideIndex(Math.max(0, currentSideIndex - 1))}
+                disabled={currentSideIndex === 0}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="flex-1 text-center">
+                <h4 className="font-medium text-gray-900">{currentSide?.name || '면 없음'}</h4>
+                <p className="text-sm text-gray-500">
+                  {currentSideIndex + 1} / {sides.length}
+                </p>
+              </div>
+              <button
+                onClick={() => setCurrentSideIndex(Math.min(sides.length - 1, currentSideIndex + 1))}
+                disabled={currentSideIndex === sides.length - 1}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {currentSide ? (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <LogoPlacementPreview
+                side={currentSide}
+                onPlacementChange={(placement) => {
+                  const newSides = [...sides];
+                  newSides[currentSideIndex] = {
+                    ...newSides[currentSideIndex],
+                    defaultLogoPlacement: placement,
+                  };
+                  setSides(newSides);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center">
+              <p className="text-gray-500">면을 먼저 추가해주세요.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hidden file input */}
       <input

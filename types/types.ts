@@ -58,6 +58,16 @@ export interface ProductConfig {
   sides: ProductSide[];
 }
 
+export type LogoAnchor = 'left-chest' | 'right-chest' | 'center';
+
+export interface DefaultLogoPlacement {
+  x: number;           // Offset from print area origin (percentage or pixels)
+  y: number;
+  width: number;       // Max logo width
+  height: number;      // Max logo height
+  anchor: LogoAnchor;  // Preset position type
+}
+
 export interface ProductSide {
   id: string;
   name: string;
@@ -75,6 +85,7 @@ export interface ProductSide {
     productWidthMm: number;
   };
   zoomScale?: number;
+  defaultLogoPlacement?: DefaultLogoPlacement;
 }
 
 export interface ProductLayer {
@@ -524,4 +535,41 @@ export interface CouponUsage {
     email: string;
     name: string | null;
   };
+}
+
+// ============================================================================
+// Partner Mall Types
+// ============================================================================
+
+export interface LogoPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PartnerMall {
+  id: string;
+  name: string;
+  logo_url: string;
+  original_logo_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  partner_mall_products?: PartnerMallProduct[];
+}
+
+export interface PartnerMallProduct {
+  id: string;
+  partner_mall_id: string;
+  product_id: string;
+  logo_placements: Record<string, LogoPlacement>;  // keyed by side_id
+  canvas_state: Record<string, unknown>;
+  preview_url: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  product?: Product;
+  partner_mall?: PartnerMall;
 }

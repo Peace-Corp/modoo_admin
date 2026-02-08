@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket } from 'lucide-react';
+import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 type AdminRole = 'admin' | 'factory';
@@ -21,6 +21,7 @@ const navItems: Array<{
   { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
   { href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
   { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
+  { href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin'] },
   { href: '/coupons', label: '쿠폰 관리', icon: Ticket, roles: ['admin'] },
   { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
 ];
