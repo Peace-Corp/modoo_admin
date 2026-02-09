@@ -171,6 +171,24 @@ export default function SingleProductPlacementEditor({
       });
   }, [logoUrl, mallProduct.logo_placements, currentSide]);
 
+  // Generate preview image from canvas
+  const generatePreviewImage = useCallback((): string | null => {
+    if (!canvasRef.current) return null;
+
+    const canvas = canvasRef.current;
+
+    // Deselect all objects to remove selection border
+    canvas.discardActiveObject();
+    canvas.renderAll();
+
+    // Generate preview as data URL
+    return canvas.toDataURL({
+      format: 'png',
+      quality: 0.8,
+      multiplier: 1,
+    });
+  }, []);
+
   // Handle save
   const handleSave = async () => {
     if (!currentSide) return;
@@ -185,6 +203,9 @@ export default function SingleProductPlacementEditor({
     setError(null);
 
     try {
+      // Generate preview image
+      const previewUrl = generatePreviewImage();
+
       const response = await fetch('/api/admin/partner-malls/products', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -194,6 +215,7 @@ export default function SingleProductPlacementEditor({
             ...mallProduct.logo_placements,
             [currentSide.id]: placement,
           },
+          preview_url: previewUrl,
         }),
       });
 

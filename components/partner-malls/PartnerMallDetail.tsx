@@ -20,7 +20,7 @@ import PartnerMallInfoEditor from './PartnerMallInfoEditor';
 import SingleProductPlacementEditor from './SingleProductPlacementEditor';
 import AddProductsModal from './AddProductsModal';
 
-// Product preview card with logo overlay
+// Product preview card - uses preview_url if available, falls back to canvas rendering
 function ProductPreviewCard({
   mallProduct,
   logoUrl,
@@ -40,7 +40,9 @@ function ProductPreviewCard({
 }) {
   const [isReady, setIsReady] = useState(false);
   const product = mallProduct.product;
+  const previewUrl = mallProduct.preview_url;
 
+  // Use canvas rendering only if no preview_url
   const handleCanvasReady = useCallback(
     (canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
       if (!placement) {
@@ -86,25 +88,37 @@ function ProductPreviewCard({
   return (
     <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden group">
       <div className="relative aspect-4/5 bg-white">
-        {!isReady && (
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          </div>
-        )}
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ opacity: isReady ? 1 : 0.3 }}
-        >
-          <SingleSideCanvas
-            key={`${mallProduct.id}-${side.id}`}
-            side={side}
-            width={160}
-            height={200}
-            isEdit={false}
-            canvasState={{ objects: [] }}
-            onCanvasReady={handleCanvasReady}
+        {/* If preview_url exists, show image directly */}
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt={product?.title || 'Product preview'}
+            className="w-full h-full object-contain"
+            onLoad={() => setIsReady(true)}
           />
-        </div>
+        ) : (
+          <>
+            {!isReady && (
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            )}
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ opacity: isReady ? 1 : 0.3 }}
+            >
+              <SingleSideCanvas
+                key={`${mallProduct.id}-${side.id}`}
+                side={side}
+                width={160}
+                height={200}
+                isEdit={false}
+                canvasState={{ objects: [] }}
+                onCanvasReady={handleCanvasReady}
+              />
+            </div>
+          </>
+        )}
 
         {/* Hover Actions */}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
