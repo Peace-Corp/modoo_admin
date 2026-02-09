@@ -9,6 +9,7 @@ interface ProductMultiSelectProps {
   onSelectionChange: (productIds: string[]) => void;
   onConfirm: () => void;
   onBack: () => void;
+  excludeProductIds?: string[];
 }
 
 export default function ProductMultiSelect({
@@ -16,6 +17,7 @@ export default function ProductMultiSelect({
   onSelectionChange,
   onConfirm,
   onBack,
+  excludeProductIds = [],
 }: ProductMultiSelectProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,18 +50,25 @@ export default function ProductMultiSelect({
     fetchProducts();
   }, []);
 
-  // Filter products by search query
+  // Filter products by search query and exclude already-added products
   const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
+    let filtered = products;
+
+    // Exclude already-added products
+    if (excludeProductIds.length > 0) {
+      filtered = filtered.filter((p) => !excludeProductIds.includes(p.id));
+    }
+
+    if (!searchQuery.trim()) return filtered;
 
     const query = searchQuery.toLowerCase();
-    return products.filter(
+    return filtered.filter(
       (product) =>
         product.title.toLowerCase().includes(query) ||
         product.product_code?.toLowerCase().includes(query) ||
         product.category?.toLowerCase().includes(query)
     );
-  }, [products, searchQuery]);
+  }, [products, searchQuery, excludeProductIds]);
 
   // Toggle product selection
   const toggleProduct = (productId: string) => {

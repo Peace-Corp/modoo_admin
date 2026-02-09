@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus,
   Loader2,
@@ -15,12 +16,18 @@ import { PartnerMall } from '@/types/types';
 import PartnerMallCreator from './partner-malls/PartnerMallCreator';
 
 export default function PartnerMallsTab() {
+  const router = useRouter();
   const [partnerMalls, setPartnerMalls] = useState<PartnerMall[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Navigate to partner mall detail page
+  const handleRowClick = (mallId: string) => {
+    router.push(`/partner_malls/${mallId}`);
+  };
 
   // Fetch partner malls
   const fetchPartnerMalls = useCallback(async () => {
@@ -206,7 +213,11 @@ export default function PartnerMallsTab() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {partnerMalls.map((mall) => (
-                <tr key={mall.id} className="hover:bg-gray-50">
+                <tr
+                  key={mall.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleRowClick(mall.id)}
+                >
                   {/* Logo */}
                   <td className="px-4 py-3">
                     <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
@@ -240,7 +251,10 @@ export default function PartnerMallsTab() {
                   {/* Status */}
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => toggleActive(mall)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActive(mall);
+                      }}
                       disabled={togglingId === mall.id}
                       className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
                         mall.is_active
@@ -268,7 +282,10 @@ export default function PartnerMallsTab() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => deletePartnerMall(mall)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePartnerMall(mall);
+                        }}
                         disabled={deletingId === mall.id}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="삭제"
