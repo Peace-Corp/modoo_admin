@@ -146,10 +146,47 @@ export default function LogoCapture({ onLogoReady, onCancel }: LogoCaptureProps)
     setMode('select');
   };
 
-  // Confirm selection
-  const handleConfirm = () => {
-    if (processedImage && originalImage) {
-      onLogoReady(processedImage, originalImage);
+  // Confirm selection - upload to storage and return URL
+  const handleConfirm = async () => {
+    if (!processedImage || !originalImage) return;
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Upload processed logo to storage
+      const uploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: processedImage }),
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errorData?.error || '로고 업로드에 실패했습니다.');
+      }
+
+      const uploadResult = await uploadResponse.json();
+
+      // Also upload original image
+      const originalUploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: originalImage }),
+      });
+
+      let originalStorageUrl = originalImage; // fallback to data URL if upload fails
+      if (originalUploadResponse.ok) {
+        const originalUploadResult = await originalUploadResponse.json();
+        originalStorageUrl = originalUploadResult.url;
+      }
+
+      // Return storage URLs
+      onLogoReady(uploadResult.url, originalStorageUrl);
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      setError(err instanceof Error ? err.message : '로고 업로드에 실패했습니다.');
+      setIsProcessing(false);
     }
   };
 

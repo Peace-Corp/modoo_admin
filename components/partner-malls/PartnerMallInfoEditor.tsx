@@ -42,9 +42,9 @@ export default function PartnerMallInfoEditor({
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result as string;
-        setOriginalLogoUrl(base64);
 
         // Process with background removal
+        let processedBase64 = base64;
         try {
           const response = await fetch('/api/admin/remove-background', {
             method: 'POST',
@@ -52,16 +52,57 @@ export default function PartnerMallInfoEditor({
             body: JSON.stringify({ imageBase64: base64 }),
           });
 
-          if (!response.ok) {
-            throw new Error('배경 제거에 실패했습니다.');
+          if (response.ok) {
+            const result = await response.json();
+            processedBase64 = result.processedUrl || base64;
           }
-
-          const result = await response.json();
-          setLogoUrl(result.processedUrl || base64);
         } catch (err) {
           console.error('Background removal error:', err);
-          // Use original if background removal fails
-          setLogoUrl(base64);
+        }
+
+        // Upload processed logo to storage
+        try {
+          const uploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageBase64: processedBase64,
+              partnerMallId: partnerMall.id,
+            }),
+          });
+
+          if (uploadResponse.ok) {
+            const uploadResult = await uploadResponse.json();
+            setLogoUrl(uploadResult.url);
+          } else {
+            // Fallback to data URL if upload fails
+            setLogoUrl(processedBase64);
+          }
+        } catch (err) {
+          console.error('Logo storage upload error:', err);
+          setLogoUrl(processedBase64);
+        }
+
+        // Upload original logo to storage
+        try {
+          const originalUploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageBase64: base64,
+              partnerMallId: `${partnerMall.id}-original`,
+            }),
+          });
+
+          if (originalUploadResponse.ok) {
+            const originalUploadResult = await originalUploadResponse.json();
+            setOriginalLogoUrl(originalUploadResult.url);
+          } else {
+            setOriginalLogoUrl(base64);
+          }
+        } catch (err) {
+          console.error('Original logo storage upload error:', err);
+          setOriginalLogoUrl(base64);
         }
 
         setIsUploading(false);
