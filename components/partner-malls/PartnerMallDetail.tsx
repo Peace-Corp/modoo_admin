@@ -42,7 +42,7 @@ function ProductPreviewCard({
   const product = mallProduct.product;
 
   const handleCanvasReady = useCallback(
-    (canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
+    (canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
       if (!placement) {
         setIsReady(true);
         return;
@@ -60,14 +60,11 @@ function ProductPreviewCard({
             placement.height / (logoImg.height || 100)
           );
 
-          // Scale for preview (160x200 is 0.4x of 400x500)
-          const previewScale = 0.4;
-
           logoImg.set({
-            left: printAreaLeft + placement.x * previewScale,
-            top: printAreaTop + placement.y * previewScale,
-            scaleX: logoScale * previewScale,
-            scaleY: logoScale * previewScale,
+            left: printAreaLeft + placement.x * canvasScale,
+            top: printAreaTop + placement.y * canvasScale,
+            scaleX: logoScale * canvasScale,
+            scaleY: logoScale * canvasScale,
             originX: 'left',
             originY: 'top',
             selectable: false,

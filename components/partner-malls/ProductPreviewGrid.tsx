@@ -45,7 +45,7 @@ function PreviewCard({
   const [isReady, setIsReady] = useState(false);
 
   // Handle canvas ready - add logo
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
     if (!item.placement) {
       setIsReady(true);
       return;
@@ -68,14 +68,11 @@ function PreviewCard({
           placement.height / (logoImg.height || 100)
         );
 
-        // Scale down for preview size (160x200 is 0.4x of 400x500)
-        const previewScale = 0.4;
-
         logoImg.set({
-          left: printAreaLeft + placement.x * previewScale,
-          top: printAreaTop + placement.y * previewScale,
-          scaleX: logoScale * previewScale,
-          scaleY: logoScale * previewScale,
+          left: printAreaLeft + placement.x * canvasScale,
+          top: printAreaTop + placement.y * canvasScale,
+          scaleX: logoScale * canvasScale,
+          scaleY: logoScale * canvasScale,
           originX: 'left',
           originY: 'top',
           selectable: false,
