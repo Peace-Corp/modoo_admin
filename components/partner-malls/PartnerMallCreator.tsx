@@ -1,14 +1,30 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { Product, LogoPlacement } from '@/types/types';
+import { Product, LogoPlacement, ProductSide } from '@/types/types';
 import LogoCapture from './LogoCapture';
 import ProductMultiSelect from './ProductMultiSelect';
-import LogoPlacementEditor from './LogoPlacementEditor';
 import ProductPreviewGrid from './ProductPreviewGrid';
 
-type Step = 'logo' | 'products' | 'placement' | 'preview' | 'save';
+type Step = 'logo' | 'products' | 'preview' | 'save';
+
+// Calculate left-chest placement for a product side
+const getLeftChestPlacement = (side: ProductSide): LogoPlacement => {
+  const { width, height } = side.printArea;
+  return {
+    x: Math.round(width * 0.15),
+    y: Math.round(height * 0.15),
+    width: Math.round(width * 0.2),
+    height: Math.round(height * 0.2),
+  };
+};
+
+// Get first side of a product
+const getFirstSide = (product: Product): ProductSide | null => {
+  const sides = (product.configuration || []) as ProductSide[];
+  return sides.length > 0 ? sides[0] : null;
+};
 
 interface ProductPlacement {
   productId: string;
@@ -31,10 +47,6 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [partnerMallName, setPartnerMallName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // For editing specific product/side from preview
-  const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
-  const [editingSideIndex, setEditingSideIndex] = useState<number | null>(null);
 
   // Fetch products when IDs are selected
   useEffect(() => {
@@ -68,21 +80,29 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
     setCurrentStep('products');
   };
 
-  // Handle product selection confirm
+  // Handle product selection confirm - auto-generate left-chest placements
   const handleProductsConfirm = () => {
-    setCurrentStep('placement');
-  };
+    // Auto-generate placements for all selected products
+    const autoPlacments: ProductPlacement[] = products.map((product) => {
+      const firstSide = getFirstSide(product);
+      if (!firstSide) {
+        return {
+          productId: product.id,
+          placements: {},
+          canvasStates: {},
+        };
+      }
 
-  // Handle placement confirm
-  const handlePlacementConfirm = () => {
+      const placement = getLeftChestPlacement(firstSide);
+      return {
+        productId: product.id,
+        placements: { [firstSide.id]: placement },
+        canvasStates: {},
+      };
+    });
+
+    setPlacements(autoPlacments);
     setCurrentStep('preview');
-  };
-
-  // Handle edit from preview
-  const handleEditProduct = (productIndex: number, sideIndex: number) => {
-    setEditingProductIndex(productIndex);
-    setEditingSideIndex(sideIndex);
-    setCurrentStep('placement');
   };
 
   // Handle save
@@ -157,7 +177,6 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const steps = [
     { id: 'logo', label: '로고 업로드' },
     { id: 'products', label: '제품 선택' },
-    { id: 'placement', label: '로고 배치' },
     { id: 'preview', label: '미리보기' },
     { id: 'save', label: '저장' },
   ];
@@ -234,31 +253,19 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
             />
           )}
 
-          {/* Step 3: Logo Placement */}
-          {currentStep === 'placement' && logoUrl && products.length > 0 && (
-            <LogoPlacementEditor
-              products={products}
-              logoUrl={logoUrl}
-              placements={placements}
-              onPlacementsChange={setPlacements}
-              onConfirm={handlePlacementConfirm}
-              onBack={() => setCurrentStep('products')}
-            />
-          )}
-
-          {/* Step 4: Preview */}
+          {/* Step 3: Preview */}
           {currentStep === 'preview' && logoUrl && products.length > 0 && (
             <ProductPreviewGrid
               products={products}
               logoUrl={logoUrl}
               placements={placements}
-              onEditProduct={handleEditProduct}
+              onEditProduct={() => {}} // No edit in simplified flow
               onConfirm={() => setCurrentStep('save')}
-              onBack={() => setCurrentStep('placement')}
+              onBack={() => setCurrentStep('products')}
             />
           )}
 
-          {/* Step 5: Save */}
+          {/* Step 4: Save */}
           {currentStep === 'save' && (
             <div className="bg-white rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">파트너몰 저장</h2>
