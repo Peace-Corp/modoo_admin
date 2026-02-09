@@ -3,45 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
 import { RotateCcw, Move } from 'lucide-react';
-import { ProductSide, LogoAnchor, DefaultLogoPlacement } from '@/types/types';
+import { ProductSide, DefaultLogoPlacement } from '@/types/types';
 import SingleSideCanvas from '@/components/canvas/SingleSideCanvas';
 
 interface LogoPlacementPreviewProps {
   side: ProductSide;
   onPlacementChange: (placement: DefaultLogoPlacement | undefined) => void;
 }
-
-const ANCHOR_LABELS: Record<LogoAnchor, string> = {
-  'left-chest': '왼쪽 가슴',
-  'right-chest': '오른쪽 가슴',
-  'center': '중앙',
-};
-
-// Calculate position based on anchor type (relative to print area)
-const getAnchorPosition = (
-  anchor: LogoAnchor,
-  printAreaWidth: number,
-  printAreaHeight: number
-): { x: number; y: number } => {
-  switch (anchor) {
-    case 'left-chest':
-      return {
-        x: printAreaWidth * 0.15,
-        y: printAreaHeight * 0.15,
-      };
-    case 'right-chest':
-      return {
-        x: printAreaWidth * 0.65,
-        y: printAreaHeight * 0.15,
-      };
-    case 'center':
-    default:
-      return {
-        x: printAreaWidth * 0.5,
-        y: printAreaHeight * 0.5,
-      };
-  }
-};
 
 export default function LogoPlacementPreview({
   side,
@@ -50,19 +18,15 @@ export default function LogoPlacementPreview({
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const placeholderRef = useRef<fabric.Rect | null>(null);
   const moveIconRef = useRef<fabric.Text | null>(null);
-  const printAreaGuideRef = useRef<fabric.Rect | null>(null);
   const scaleRef = useRef<number>(1);
 
   const [isCanvasReady, setIsCanvasReady] = useState(false);
-  const [selectedAnchor, setSelectedAnchor] = useState<LogoAnchor>(
-    side.defaultLogoPlacement?.anchor || 'center'
-  );
 
   const canvasWidth = 400;
   const canvasHeight = 500;
-  const placeholderSize = 60; // Visual placeholder size
+  const placeholderSize = 60;
 
-  // Update placement from canvas position
+  // Update placement from canvas position (stores absolute x,y within print area)
   const updatePlacementFromCanvas = useCallback(() => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
@@ -70,197 +34,80 @@ export default function LogoPlacementPreview({
     const placeholder = placeholderRef.current;
     const canvasScale = scaleRef.current;
 
-    // Get print area properties from canvas (set by SingleSideCanvas after image loads)
     // @ts-expect-error - Custom property
-    const canvasPrintAreaLeft = canvas.printAreaLeft;
+    const printAreaLeft = canvas.printAreaLeft || 0;
     // @ts-expect-error - Custom property
-    const canvasPrintAreaTop = canvas.printAreaTop;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaWidth = canvas.printAreaWidth;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaHeight = canvas.printAreaHeight;
+    const printAreaTop = canvas.printAreaTop || 0;
 
-    // Calculate fallback values if canvas properties aren't set
-    const scaledPrintW = side.printArea.width * canvasScale;
-    const scaledPrintH = side.printArea.height * canvasScale;
-    const scaledPrintX = side.printArea.x * canvasScale;
-    const scaledPrintY = side.printArea.y * canvasScale;
-
-    // @ts-expect-error - Custom property
-    const originalImageWidth = canvas.originalImageWidth || side.printArea.width * 2;
-    // @ts-expect-error - Custom property
-    const originalImageHeight = canvas.originalImageHeight || side.printArea.height * 2;
-
-    const imageLeft = (canvasWidth / 2) - (originalImageWidth * canvasScale / 2);
-    const imageTop = (canvasHeight / 2) - (originalImageHeight * canvasScale / 2);
-
-    // Use canvas values if valid, otherwise calculate from side config
-    const printAreaLeft = (canvasPrintAreaLeft && canvasPrintAreaLeft > 0) ? canvasPrintAreaLeft : (imageLeft + scaledPrintX);
-    const printAreaTop = (canvasPrintAreaTop && canvasPrintAreaTop > 0) ? canvasPrintAreaTop : (imageTop + scaledPrintY);
-    const printAreaWidth = (canvasPrintAreaWidth && canvasPrintAreaWidth > 0) ? canvasPrintAreaWidth : scaledPrintW;
-    const printAreaHeight = (canvasPrintAreaHeight && canvasPrintAreaHeight > 0) ? canvasPrintAreaHeight : scaledPrintH;
-
-    // Get placeholder center position relative to print area
+    // Get placeholder center position relative to print area origin
     const placeholderCenterX = (placeholder.left || 0) + placeholderSize / 2;
     const placeholderCenterY = (placeholder.top || 0) + placeholderSize / 2;
 
-    // Convert to relative position within print area (0-1 range)
-    const relativeX = (placeholderCenterX - printAreaLeft) / printAreaWidth;
-    const relativeY = (placeholderCenterY - printAreaTop) / printAreaHeight;
+    // Convert canvas position to absolute position in original image coordinates
+    const absoluteX = (placeholderCenterX - printAreaLeft) / canvasScale;
+    const absoluteY = (placeholderCenterY - printAreaTop) / canvasScale;
 
-    // Clamp to valid range
-    const clampedX = Math.max(0, Math.min(1, relativeX));
-    const clampedY = Math.max(0, Math.min(1, relativeY));
+    // Clamp within print area bounds
+    const clampedX = Math.max(0, Math.min(side.printArea.width, absoluteX));
+    const clampedY = Math.max(0, Math.min(side.printArea.height, absoluteY));
 
-    // Store as percentage of print area
     const newPlacement: DefaultLogoPlacement = {
-      x: clampedX * side.printArea.width,
-      y: clampedY * side.printArea.height,
+      x: Math.round(clampedX),
+      y: Math.round(clampedY),
       width: side.defaultLogoPlacement?.width ?? 100,
       height: side.defaultLogoPlacement?.height ?? 100,
-      anchor: selectedAnchor,
     };
 
     onPlacementChange(newPlacement);
-  }, [side, selectedAnchor, onPlacementChange]);
+  }, [side, onPlacementChange]);
 
-  // Apply anchor preset
-  const applyAnchorPreset = useCallback((anchor: LogoAnchor) => {
-    if (!canvasRef.current || !placeholderRef.current) return;
+  // Update placeholder position from input values
+  const updatePlaceholderFromInputs = useCallback((x: number, y: number) => {
+    if (!placeholderRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const placeholder = placeholderRef.current;
     const canvasScale = scaleRef.current;
 
-    // Get print area properties from canvas (set by SingleSideCanvas after image loads)
     // @ts-expect-error - Custom property
-    const canvasPrintAreaLeft = canvas.printAreaLeft;
+    const printAreaLeft = canvas.printAreaLeft || 0;
     // @ts-expect-error - Custom property
-    const canvasPrintAreaTop = canvas.printAreaTop;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaWidth = canvas.printAreaWidth;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaHeight = canvas.printAreaHeight;
+    const printAreaTop = canvas.printAreaTop || 0;
 
-    // Calculate fallback values if canvas properties aren't set
-    const scaledPrintW = side.printArea.width * canvasScale;
-    const scaledPrintH = side.printArea.height * canvasScale;
-    const scaledPrintX = side.printArea.x * canvasScale;
-    const scaledPrintY = side.printArea.y * canvasScale;
+    // Convert absolute position to canvas position
+    const canvasX = printAreaLeft + x * canvasScale - placeholderSize / 2;
+    const canvasY = printAreaTop + y * canvasScale - placeholderSize / 2;
 
-    // @ts-expect-error - Custom property
-    const originalImageWidth = canvas.originalImageWidth || side.printArea.width * 2;
-    // @ts-expect-error - Custom property
-    const originalImageHeight = canvas.originalImageHeight || side.printArea.height * 2;
+    placeholder.set({ left: canvasX, top: canvasY });
 
-    const imageLeft = (canvasWidth / 2) - (originalImageWidth * canvasScale / 2);
-    const imageTop = (canvasHeight / 2) - (originalImageHeight * canvasScale / 2);
-
-    // Use canvas values if valid, otherwise calculate from side config
-    const printAreaLeft = (canvasPrintAreaLeft && canvasPrintAreaLeft > 0) ? canvasPrintAreaLeft : (imageLeft + scaledPrintX);
-    const printAreaTop = (canvasPrintAreaTop && canvasPrintAreaTop > 0) ? canvasPrintAreaTop : (imageTop + scaledPrintY);
-    const printAreaWidth = (canvasPrintAreaWidth && canvasPrintAreaWidth > 0) ? canvasPrintAreaWidth : scaledPrintW;
-    const printAreaHeight = (canvasPrintAreaHeight && canvasPrintAreaHeight > 0) ? canvasPrintAreaHeight : scaledPrintH;
-
-    const anchorPos = getAnchorPosition(anchor, printAreaWidth, printAreaHeight);
-
-    placeholder.set({
-      left: printAreaLeft + anchorPos.x - placeholderSize / 2,
-      top: printAreaTop + anchorPos.y - placeholderSize / 2,
-    });
-
-    // Update move icon position
     if (moveIconRef.current) {
       moveIconRef.current.set({
-        left: printAreaLeft + anchorPos.x,
-        top: printAreaTop + anchorPos.y,
+        left: canvasX + placeholderSize / 2,
+        top: canvasY + placeholderSize / 2,
       });
     }
 
     canvas.renderAll();
-    setSelectedAnchor(anchor);
-
-    // Update placement
-    const newPlacement: DefaultLogoPlacement = {
-      x: anchorPos.x / printAreaWidth * side.printArea.width,
-      y: anchorPos.y / printAreaHeight * side.printArea.height,
-      width: side.defaultLogoPlacement?.width ?? 100,
-      height: side.defaultLogoPlacement?.height ?? 100,
-      anchor,
-    };
-
-    onPlacementChange(newPlacement);
-  }, [side, onPlacementChange]);
+  }, []);
 
   // Handle canvas ready callback from SingleSideCanvas
   const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
     canvasRef.current = canvas;
     scaleRef.current = canvasScale;
 
-    // Get print area properties from canvas (set by SingleSideCanvas after image loads)
     // @ts-expect-error - Custom property
-    const canvasPrintAreaLeft = canvas.printAreaLeft;
+    const printAreaLeft = canvas.printAreaLeft || 0;
     // @ts-expect-error - Custom property
-    const canvasPrintAreaTop = canvas.printAreaTop;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaWidth = canvas.printAreaWidth;
-    // @ts-expect-error - Custom property
-    const canvasPrintAreaHeight = canvas.printAreaHeight;
+    const printAreaTop = canvas.printAreaTop || 0;
 
-    // Calculate fallback values if canvas properties aren't set
-    const scaledPrintW = side.printArea.width * canvasScale;
-    const scaledPrintH = side.printArea.height * canvasScale;
-    const scaledPrintX = side.printArea.x * canvasScale;
-    const scaledPrintY = side.printArea.y * canvasScale;
-
-    // @ts-expect-error - Custom property
-    const originalImageWidth = canvas.originalImageWidth || side.printArea.width * 2;
-    // @ts-expect-error - Custom property
-    const originalImageHeight = canvas.originalImageHeight || side.printArea.height * 2;
-
-    const imageLeft = (canvasWidth / 2) - (originalImageWidth * canvasScale / 2);
-    const imageTop = (canvasHeight / 2) - (originalImageHeight * canvasScale / 2);
-
-    // Use canvas values if valid, otherwise calculate from side config
-    const printAreaLeft = (canvasPrintAreaLeft && canvasPrintAreaLeft > 0) ? canvasPrintAreaLeft : (imageLeft + scaledPrintX);
-    const printAreaTop = (canvasPrintAreaTop && canvasPrintAreaTop > 0) ? canvasPrintAreaTop : (imageTop + scaledPrintY);
-    const printAreaWidth = (canvasPrintAreaWidth && canvasPrintAreaWidth > 0) ? canvasPrintAreaWidth : scaledPrintW;
-    const printAreaHeight = (canvasPrintAreaHeight && canvasPrintAreaHeight > 0) ? canvasPrintAreaHeight : scaledPrintH;
-
-    // Add print area guide (dashed rectangle)
-    const printAreaGuide = new fabric.Rect({
-      left: printAreaLeft,
-      top: printAreaTop,
-      width: printAreaWidth,
-      height: printAreaHeight,
-      fill: 'transparent',
-      stroke: '#3B82F6',
-      strokeWidth: 1,
-      strokeDashArray: [5, 5],
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    });
-    canvas.add(printAreaGuide);
-    printAreaGuideRef.current = printAreaGuide;
-
-    // Calculate placeholder initial position
+    // Calculate placeholder initial position from existing placement or default to center
     const currentPlacement = side.defaultLogoPlacement;
-    let placeholderLeft: number;
-    let placeholderTop: number;
+    const initialX = currentPlacement?.x ?? side.printArea.width / 2;
+    const initialY = currentPlacement?.y ?? side.printArea.height / 2;
 
-    if (currentPlacement) {
-      // Use existing placement - convert from original coordinates to canvas coordinates
-      const relativeX = currentPlacement.x / side.printArea.width;
-      const relativeY = currentPlacement.y / side.printArea.height;
-      placeholderLeft = printAreaLeft + relativeX * printAreaWidth - placeholderSize / 2;
-      placeholderTop = printAreaTop + relativeY * printAreaHeight - placeholderSize / 2;
-    } else {
-      // Default to center of print area
-      const anchorPos = getAnchorPosition('center', printAreaWidth, printAreaHeight);
-      placeholderLeft = printAreaLeft + anchorPos.x - placeholderSize / 2;
-      placeholderTop = printAreaTop + anchorPos.y - placeholderSize / 2;
-    }
+    // Convert to canvas coordinates
+    const placeholderLeft = printAreaLeft + initialX * canvasScale - placeholderSize / 2;
+    const placeholderTop = printAreaTop + initialY * canvasScale - placeholderSize / 2;
 
     // Create draggable placeholder
     const placeholder = new fabric.Rect({
@@ -313,7 +160,6 @@ export default function LogoPlacementPreview({
     canvas.on('object:modified', (e) => {
       const target = e.target as { data?: { id?: string } } | undefined;
       if (target?.data?.id === 'logo-placeholder') {
-        // Update move icon position
         moveIcon.set({
           left: (placeholder.left || 0) + placeholderSize / 2,
           top: (placeholder.top || 0) + placeholderSize / 2,
@@ -332,43 +178,24 @@ export default function LogoPlacementPreview({
     setIsCanvasReady(false);
     placeholderRef.current = null;
     moveIconRef.current = null;
-    printAreaGuideRef.current = null;
-    setSelectedAnchor(side.defaultLogoPlacement?.anchor || 'center');
-  }, [side.id, side.defaultLogoPlacement?.anchor]);
+  }, [side.id]);
 
   // Clear placement
   const clearPlacement = () => {
     onPlacementChange(undefined);
-    // Reset to center
-    applyAnchorPreset('center');
+    // Reset placeholder to center
+    if (isCanvasReady) {
+      updatePlaceholderFromInputs(side.printArea.width / 2, side.printArea.height / 2);
+    }
   };
+
+  const currentX = side.defaultLogoPlacement?.x ?? Math.round(side.printArea.width / 2);
+  const currentY = side.defaultLogoPlacement?.y ?? Math.round(side.printArea.height / 2);
 
   return (
     <div className="space-y-4">
-      {/* Anchor preset buttons */}
-      <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">프리셋 위치</p>
-        <div className="flex gap-2">
-          {(['left-chest', 'center', 'right-chest'] as LogoAnchor[]).map((anchor) => (
-            <button
-              key={anchor}
-              type="button"
-              onClick={() => applyAnchorPreset(anchor)}
-              disabled={!isCanvasReady}
-              className={`flex-1 py-2 px-3 text-xs rounded-lg border transition-colors ${
-                selectedAnchor === anchor
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              } disabled:opacity-50`}
-            >
-              {ANCHOR_LABELS[anchor]}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Canvas */}
-      <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+      <div className="relative rounded-lg overflow-hidden">
         <SingleSideCanvas
           key={side.id}
           side={side}
@@ -386,6 +213,58 @@ export default function LogoPlacementPreview({
         <span>파란색 사각형을 드래그하여 로고 위치를 조정하세요</span>
       </div>
 
+      {/* Position inputs (absolute x, y within print area) */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">X 위치 (px)</label>
+          <input
+            type="number"
+            value={currentX}
+            onChange={(e) => {
+              const x = parseInt(e.target.value) || 0;
+              const clampedX = Math.max(0, Math.min(side.printArea.width, x));
+              onPlacementChange({
+                x: clampedX,
+                y: currentY,
+                width: side.defaultLogoPlacement?.width ?? 100,
+                height: side.defaultLogoPlacement?.height ?? 100,
+              });
+              if (isCanvasReady) {
+                updatePlaceholderFromInputs(clampedX, currentY);
+              }
+            }}
+            min={0}
+            max={side.printArea.width}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+          />
+          <span className="text-xs text-gray-400">최대: {side.printArea.width}</span>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Y 위치 (px)</label>
+          <input
+            type="number"
+            value={currentY}
+            onChange={(e) => {
+              const y = parseInt(e.target.value) || 0;
+              const clampedY = Math.max(0, Math.min(side.printArea.height, y));
+              onPlacementChange({
+                x: currentX,
+                y: clampedY,
+                width: side.defaultLogoPlacement?.width ?? 100,
+                height: side.defaultLogoPlacement?.height ?? 100,
+              });
+              if (isCanvasReady) {
+                updatePlaceholderFromInputs(currentX, clampedY);
+              }
+            }}
+            min={0}
+            max={side.printArea.height}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+          />
+          <span className="text-xs text-gray-400">최대: {side.printArea.height}</span>
+        </div>
+      </div>
+
       {/* Size inputs */}
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -395,13 +274,11 @@ export default function LogoPlacementPreview({
             value={side.defaultLogoPlacement?.width ?? 100}
             onChange={(e) => {
               const width = parseInt(e.target.value) || 100;
-              const currentPlacement = side.defaultLogoPlacement;
               onPlacementChange({
-                x: currentPlacement?.x ?? side.printArea.width * 0.5,
-                y: currentPlacement?.y ?? side.printArea.height * 0.5,
+                x: currentX,
+                y: currentY,
                 width,
-                height: currentPlacement?.height ?? 100,
-                anchor: selectedAnchor,
+                height: side.defaultLogoPlacement?.height ?? 100,
               });
             }}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
@@ -414,13 +291,11 @@ export default function LogoPlacementPreview({
             value={side.defaultLogoPlacement?.height ?? 100}
             onChange={(e) => {
               const height = parseInt(e.target.value) || 100;
-              const currentPlacement = side.defaultLogoPlacement;
               onPlacementChange({
-                x: currentPlacement?.x ?? side.printArea.width * 0.5,
-                y: currentPlacement?.y ?? side.printArea.height * 0.5,
-                width: currentPlacement?.width ?? 100,
+                x: currentX,
+                y: currentY,
+                width: side.defaultLogoPlacement?.width ?? 100,
                 height,
-                anchor: selectedAnchor,
               });
             }}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"

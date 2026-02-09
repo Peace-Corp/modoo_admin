@@ -61,11 +61,11 @@ export interface ProductConfig {
 export type LogoAnchor = 'left-chest' | 'right-chest' | 'center';
 
 export interface DefaultLogoPlacement {
-  x: number;           // Offset from print area origin (percentage or pixels)
-  y: number;
+  x: number;           // Absolute X position within print area (pixels)
+  y: number;           // Absolute Y position within print area (pixels)
   width: number;       // Max logo width
   height: number;      // Max logo height
-  anchor: LogoAnchor;  // Preset position type
+  anchor?: LogoAnchor; // Deprecated: kept for backward compatibility
 }
 
 export interface ProductSide {
