@@ -13,15 +13,12 @@ interface AddProductsModalProps {
   onProductsAdded: () => void;
 }
 
-// Calculate left-chest placement for a product side
-const getLeftChestPlacement = (side: ProductSide): LogoPlacement => {
-  const { width, height } = side.printArea;
-  return {
-    x: Math.round(width * 0.15),
-    y: Math.round(height * 0.15),
-    width: Math.round(width * 0.2),
-    height: Math.round(height * 0.2),
-  };
+// Fixed left-chest placement using absolute pixel values
+const LEFT_CHEST_PLACEMENT: LogoPlacement = {
+  x: 50,
+  y: 50,
+  width: 100,
+  height: 100,
 };
 
 // Get first side of a product
@@ -72,10 +69,9 @@ export default function AddProductsModal({
           };
         }
 
-        const placement = getLeftChestPlacement(firstSide);
         return {
           product_id: product.id,
-          logo_placements: { [firstSide.id]: placement },
+          logo_placements: { [firstSide.id]: LEFT_CHEST_PLACEMENT },
           canvas_state: {},
         };
       });
