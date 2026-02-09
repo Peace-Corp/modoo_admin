@@ -6,6 +6,7 @@ import { Product, LogoPlacement, ProductSide } from '@/types/types';
 import LogoCapture from './LogoCapture';
 import ProductMultiSelect from './ProductMultiSelect';
 import ProductPreviewGrid from './ProductPreviewGrid';
+import LogoPlacementEditor from './LogoPlacementEditor';
 
 type Step = 'logo' | 'products' | 'preview' | 'save';
 
@@ -44,6 +45,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [partnerMallName, setPartnerMallName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
 
   // Fetch products when IDs are selected
   useEffect(() => {
@@ -251,14 +253,36 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
 
           {/* Step 3: Preview */}
           {currentStep === 'preview' && logoUrl && products.length > 0 && (
-            <ProductPreviewGrid
-              products={products}
-              logoUrl={logoUrl}
-              placements={placements}
-              onEditProduct={() => {}} // No edit in simplified flow
-              onConfirm={() => setCurrentStep('save')}
-              onBack={() => setCurrentStep('products')}
-            />
+            editingProductIndex !== null ? (
+              <LogoPlacementEditor
+                products={[products[editingProductIndex]]}
+                logoUrl={logoUrl}
+                placements={placements.filter(p => p.productId === products[editingProductIndex].id)}
+                onPlacementsChange={(updatedPlacements) => {
+                  // Merge the updated placement back into the full placements array
+                  setPlacements(prev => {
+                    const newPlacements = [...prev];
+                    const editedProductId = products[editingProductIndex].id;
+                    const index = newPlacements.findIndex(p => p.productId === editedProductId);
+                    if (index >= 0 && updatedPlacements.length > 0) {
+                      newPlacements[index] = updatedPlacements[0];
+                    }
+                    return newPlacements;
+                  });
+                }}
+                onConfirm={() => setEditingProductIndex(null)}
+                onBack={() => setEditingProductIndex(null)}
+              />
+            ) : (
+              <ProductPreviewGrid
+                products={products}
+                logoUrl={logoUrl}
+                placements={placements}
+                onEditProduct={(productIndex) => setEditingProductIndex(productIndex)}
+                onConfirm={() => setCurrentStep('save')}
+                onBack={() => setCurrentStep('products')}
+              />
+            )
           )}
 
           {/* Step 4: Save */}
