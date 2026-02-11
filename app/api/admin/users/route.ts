@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     }
     const url = new URL(request.url);
     const role = url.searchParams.get('role') || 'all';
+    const search = url.searchParams.get('search')?.trim() || '';
     let manufacturerId = url.searchParams.get('factoryId');
 
     // Factory users can only see users from their own factory
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     let query = adminClient
       .from('profiles')
-      .select('id, email, phone_number, role, manufacturer_id, created_at, updated_at')
+      .select('id, email, name, phone_number, role, manufacturer_id, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (role !== 'all') {
@@ -62,7 +63,11 @@ export async function GET(request: Request) {
     if (manufacturerId) {
       query = query.eq('manufacturer_id', manufacturerId);
     }
-    
+
+    if (search) {
+      query = query.or(`email.ilike.%${search}%,name.ilike.%${search}%,phone_number.ilike.%${search}%`);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -159,7 +164,7 @@ export async function PATCH(request: Request) {
       .from('profiles')
       .update(updateData)
       .eq('id', userId)
-      .select('id, email, phone_number, role, manufacturer_id, created_at, updated_at')
+      .select('id, email, name, phone_number, role, manufacturer_id, created_at, updated_at')
       .single();
 
     if (error) {

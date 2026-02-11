@@ -163,7 +163,7 @@ export async function POST(request: Request) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .select('*')
+      .select('*, manufacturers(id, name)')
       .single();
 
     if (error) {
@@ -299,7 +299,7 @@ export async function PATCH(request: Request) {
       .from('products')
       .update(updateData)
       .eq('id', productId)
-      .select('*')
+      .select('*, manufacturers(id, name)')
       .single();
 
     if (error) {

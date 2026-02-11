@@ -21,6 +21,7 @@ interface SingleSideCanvasProps {
   onCanvasReady?: (canvas: fabric.Canvas, sideId: string, canvasScale: number) => void;
   renderFromCanvasStateOnly?: boolean;
   customFonts?: CustomFont[]; // Custom fonts to load before rendering
+  showScaleBox?: boolean; // whether to show the scale box overlay (default true)
 }
 
 const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
@@ -33,6 +34,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   onCanvasReady,
   renderFromCanvasStateOnly = false,
   customFonts = [],
+  showScaleBox = true,
 }) => {
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -1214,14 +1216,16 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         className="w-full h-full"
         style={{ opacity: isLoading ? 0 : 1, transition: 'opacity 0.3s' }}
       />
-      <ScaleBox
-        x={scaleBoxDimensions.x}
-        y={scaleBoxDimensions.y}
-        width={scaleBoxDimensions.width}
-        height={scaleBoxDimensions.height}
-        position={scaleBoxPosition}
-        visible={scaleBoxVisible}
-      />
+      {showScaleBox && (
+        <ScaleBox
+          x={scaleBoxDimensions.x}
+          y={scaleBoxDimensions.y}
+          width={scaleBoxDimensions.width}
+          height={scaleBoxDimensions.height}
+          position={scaleBoxPosition}
+          visible={scaleBoxVisible}
+        />
+      )}
     </div>
   )
 }

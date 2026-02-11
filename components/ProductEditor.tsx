@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor } from '@/types/types';
+import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
+import LogoPlacementPreview from './LogoPlacementPreview';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -121,6 +122,25 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     | { kind: 'product'; field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image' };
   const [uploadTarget, setUploadTarget] = useState<UploadTarget | null>(null);
 
+  // Partner mall presets
+  const [presets, setPresets] = useState<PartnerMallPreset[]>([]);
+  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<PartnerMallPreset | null>(null);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [showNewPresetInput, setShowNewPresetInput] = useState(false);
+  const [savingPreset, setSavingPreset] = useState(false);
+
+  // Tab state
+  type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall';
+  const [activeTab, setActiveTab] = useState<EditorTab>('basic');
+
+  const tabs: { id: EditorTab; label: string }[] = [
+    { id: 'basic', label: '기본 정보' },
+    { id: 'sides', label: '면 & 인쇄 영역' },
+    { id: 'size-color', label: '사이즈 & 색상' },
+    { id: 'partner-mall', label: '파트너몰 설정' },
+  ];
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentSide = sides[currentSideIndex];
@@ -150,6 +170,86 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     if (hasLayeredItem) return;
     void fetchProductColors(product.id);
   }, [product?.id, hasLayeredItem]);
+
+  // Fetch partner mall presets
+  const fetchPresets = async (productId: string) => {
+    setPresetsLoading(true);
+    try {
+      const response = await fetch(`/api/admin/partner-mall-presets?product_id=${productId}`);
+      if (!response.ok) throw new Error('프리셋을 불러오지 못했습니다.');
+      const result = await response.json();
+      setPresets(result.data || []);
+    } catch (error) {
+      console.error('Error fetching presets:', error);
+    } finally {
+      setPresetsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (product?.id && activeTab === 'partner-mall') {
+      void fetchPresets(product.id);
+    }
+  }, [product?.id, activeTab]);
+
+  const handleCreatePreset = async () => {
+    if (!product?.id || !newPresetName.trim()) return;
+    setSavingPreset(true);
+    try {
+      const response = await fetch('/api/admin/partner-mall-presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.id,
+          name: newPresetName.trim(),
+          placement: { x: 50, y: 50, width: 100, height: 100 },
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.error || '프리셋 생성에 실패했습니다.');
+      }
+      const result = await response.json();
+      setPresets((prev) => [...prev, result.data]);
+      setNewPresetName('');
+      setShowNewPresetInput(false);
+      setEditingPreset(result.data);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '프리셋 생성에 실패했습니다.');
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
+  const handleUpdatePresetPlacement = async (presetId: string, placement: LogoPlacement) => {
+    try {
+      const response = await fetch('/api/admin/partner-mall-presets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: presetId, placement }),
+      });
+      if (!response.ok) throw new Error('프리셋 업데이트에 실패했습니다.');
+      const result = await response.json();
+      setPresets((prev) => prev.map((p) => (p.id === presetId ? result.data : p)));
+      setEditingPreset(result.data);
+    } catch (error) {
+      console.error('Error updating preset:', error);
+    }
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    if (!confirm('이 프리셋을 삭제하시겠습니까?')) return;
+    try {
+      const response = await fetch(`/api/admin/partner-mall-presets?id=${presetId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('프리셋 삭제에 실패했습니다.');
+      setPresets((prev) => prev.filter((p) => p.id !== presetId));
+      if (editingPreset?.id === presetId) setEditingPreset(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '프리셋 삭제에 실패했습니다.');
+    }
+  };
 
   // Fetch manufacturers when component mounts (for both layered and non-layered products)
   useEffect(() => {
@@ -738,8 +838,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     try {
       const configuration = sides.map((side) => {
         const hasLayers = isLayeredSide(side);
+        const { defaultLogoPlacement: _, ...sideData } = side;
         return {
-          ...side,
+          ...sideData,
           imageUrl: hasLayers ? '' : side.imageUrl,
           layers: hasLayers ? side.layers : [],
           printArea: buildPrintArea(side.printArea),
@@ -825,7 +926,28 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="flex space-x-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-white border-t border-l border-r border-gray-200 text-blue-600 -mb-px'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'basic' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left Panel - Basic Info */}
         <div className="space-y-4">
           {/* Basic Information */}
@@ -1143,7 +1265,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {/* Size & Color Tab */}
+      {activeTab === 'size-color' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-4">
           {/* Size Options */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -1315,9 +1444,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           )}
+          </div>
         </div>
+      )}
 
-        {/* Middle Panel - Sides List */}
+      {/* Sides & Print Area Tab */}
+      {activeTab === 'sides' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left - Sides List */}
         <div className="space-y-4">
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -1791,7 +1925,125 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
+
+      {/* Partner Mall Settings Tab */}
+      {activeTab === 'partner-mall' && (
+        <div className="max-w-2xl">
+          {!product?.id ? (
+            <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center shadow-sm">
+              <p className="text-gray-500">제품을 먼저 저장해주세요.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Preset list header */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-900">
+                  로고 배치 프리셋 {!presetsLoading && `(${presets.length})`}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNewPresetInput(true)}
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                >
+                  <Plus className="w-4 h-4" />
+                  새 프리셋
+                </button>
+              </div>
+
+              {/* New preset input */}
+              {showNewPresetInput && (
+                <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPresetName}
+                    onChange={(e) => setNewPresetName(e.target.value)}
+                    placeholder="프리셋 이름 (예: 왼쪽 가슴, 중앙)"
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    onKeyDown={(e) => { if (e.key === 'Enter') void handleCreatePreset(); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCreatePreset()}
+                    disabled={savingPreset || !newPresetName.trim()}
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingPreset ? <Loader2 className="w-4 h-4 animate-spin" /> : '추가'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewPresetInput(false); setNewPresetName(''); }}
+                    className="p-1.5 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Preset list */}
+              {presetsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : presets.length === 0 ? (
+                <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center shadow-sm">
+                  <p className="text-gray-500 text-sm">프리셋이 없습니다. 새 프리셋을 추가해주세요.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {presets.map((preset) => (
+                    <div
+                      key={preset.id}
+                      className={`bg-white border rounded-md p-3 shadow-sm cursor-pointer transition-colors ${
+                        editingPreset?.id === preset.id
+                          ? 'border-blue-400 ring-1 ring-blue-400/30'
+                          : 'border-gray-200/60 hover:border-gray-300'
+                      }`}
+                      onClick={() => setEditingPreset(editingPreset?.id === preset.id ? null : preset)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{preset.name}</span>
+                          <span className="ml-2 text-xs text-gray-400">
+                            x:{preset.placement.x} y:{preset.placement.y} {preset.placement.width}×{preset.placement.height}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleDeletePreset(preset.id); }}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Editing canvas */}
+              {editingPreset && (
+                <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-gray-700">
+                      편집 중: <span className="text-blue-600">{editingPreset.name}</span>
+                    </h4>
+                  </div>
+                  <LogoPlacementPreview
+                    key={editingPreset.id}
+                    sides={sides}
+                    placement={editingPreset.placement}
+                    onPlacementChange={(placement) => {
+                      void handleUpdatePresetPlacement(editingPreset.id, placement);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hidden file input */}
       <input

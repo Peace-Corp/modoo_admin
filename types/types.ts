@@ -58,6 +58,18 @@ export interface ProductConfig {
   sides: ProductSide[];
 }
 
+/** @deprecated Use partner_mall_presets table instead */
+export type LogoAnchor = 'left-chest' | 'right-chest' | 'center';
+
+/** @deprecated Use partner_mall_presets table instead */
+export interface DefaultLogoPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  anchor?: LogoAnchor;
+}
+
 export interface ProductSide {
   id: string;
   name: string;
@@ -75,6 +87,8 @@ export interface ProductSide {
     productWidthMm: number;
   };
   zoomScale?: number;
+  /** @deprecated Use partner_mall_presets table instead */
+  defaultLogoPlacement?: DefaultLogoPlacement;
 }
 
 export interface ProductLayer {
@@ -301,6 +315,7 @@ export interface ObjectDimensions {
 export interface Profile {
   id: string;
   email: string;
+  name: string | null;
   phone_number: string | null;
   role: 'customer' | 'admin' | 'factory';
   manufacturer_id?: string | null;
@@ -524,4 +539,50 @@ export interface CouponUsage {
     email: string;
     name: string | null;
   };
+}
+
+// ============================================================================
+// Partner Mall Types
+// ============================================================================
+
+export interface LogoPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PartnerMall {
+  id: string;
+  name: string;
+  logo_url: string;
+  original_logo_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  partner_mall_products?: PartnerMallProduct[];
+}
+
+export interface PartnerMallProduct {
+  id: string;
+  partner_mall_id: string;
+  product_id: string;
+  logo_placements: Record<string, LogoPlacement>;  // keyed by side_id
+  canvas_state: Record<string, unknown>;
+  preview_url: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined relations
+  product?: Product;
+  partner_mall?: PartnerMall;
+}
+
+export interface PartnerMallPreset {
+  id: string;
+  product_id: string;
+  name: string;
+  placement: LogoPlacement;
+  created_at: string;
+  updated_at: string;
 }
