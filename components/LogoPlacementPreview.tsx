@@ -27,7 +27,6 @@ export default function LogoPlacementPreview({
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const placeholderRef = useRef<fabric.Rect | null>(null);
   const moveIconRef = useRef<fabric.Text | null>(null);
-  const scaleRef = useRef<number>(1);
 
   const [isCanvasReady, setIsCanvasReady] = useState(false);
 
@@ -42,82 +41,50 @@ export default function LogoPlacementPreview({
   const currentWidth = placement?.width ?? DEFAULT_PLACEMENT.width;
   const currentHeight = placement?.height ?? DEFAULT_PLACEMENT.height;
 
+  // Read placement directly from canvas coordinates
   const updatePlacementFromCanvas = useCallback(() => {
-    if (!placeholderRef.current || !canvasRef.current || !frontSide) return;
+    if (!placeholderRef.current || !canvasRef.current) return;
 
-    const canvas = canvasRef.current;
     const placeholder = placeholderRef.current;
-    const canvasScale = scaleRef.current;
-
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
-
-    const placeholderCenterX = (placeholder.left || 0) + placeholderSize / 2;
-    const placeholderCenterY = (placeholder.top || 0) + placeholderSize / 2;
-
-    const absoluteX = (placeholderCenterX - printAreaLeft) / canvasScale;
-    const absoluteY = (placeholderCenterY - printAreaTop) / canvasScale;
-
-    const clampedX = Math.max(0, Math.min(frontSide.printArea.width, absoluteX));
-    const clampedY = Math.max(0, Math.min(frontSide.printArea.height, absoluteY));
 
     onPlacementChange({
-      x: Math.round(clampedX),
-      y: Math.round(clampedY),
+      x: Math.round(placeholder.left || 0),
+      y: Math.round(placeholder.top || 0),
       width: currentWidth,
       height: currentHeight,
     });
-  }, [frontSide, onPlacementChange, currentWidth, currentHeight]);
+  }, [onPlacementChange, currentWidth, currentHeight]);
 
+  // Set placeholder position directly from coordinate values
   const updatePlaceholderFromInputs = useCallback((x: number, y: number) => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const placeholder = placeholderRef.current;
-    const canvasScale = scaleRef.current;
 
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
-
-    const canvasX = printAreaLeft + x * canvasScale - placeholderSize / 2;
-    const canvasY = printAreaTop + y * canvasScale - placeholderSize / 2;
-
-    placeholder.set({ left: canvasX, top: canvasY });
+    placeholder.set({ left: x, top: y });
 
     if (moveIconRef.current) {
       moveIconRef.current.set({
-        left: canvasX + placeholderSize / 2,
-        top: canvasY + placeholderSize / 2,
+        left: x + placeholderSize / 2,
+        top: y + placeholderSize / 2,
       });
     }
 
     canvas.renderAll();
   }, []);
 
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
     if (!frontSide) return;
 
     canvasRef.current = canvas;
-    scaleRef.current = canvasScale;
-
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
 
     const initialX = placement?.x ?? DEFAULT_PLACEMENT.x;
     const initialY = placement?.y ?? DEFAULT_PLACEMENT.y;
 
-    const placeholderLeft = printAreaLeft + initialX * canvasScale - placeholderSize / 2;
-    const placeholderTop = printAreaTop + initialY * canvasScale - placeholderSize / 2;
-
     const placeholder = new fabric.Rect({
-      left: placeholderLeft,
-      top: placeholderTop,
+      left: initialX,
+      top: initialY,
       width: placeholderSize,
       height: placeholderSize,
       fill: 'rgba(59, 130, 246, 0.3)',
@@ -139,8 +106,8 @@ export default function LogoPlacementPreview({
 
     const moveIconSize = 20;
     const moveIcon = new fabric.Text('\u2295', {
-      left: placeholderLeft + placeholderSize / 2,
-      top: placeholderTop + placeholderSize / 2,
+      left: initialX + placeholderSize / 2,
+      top: initialY + placeholderSize / 2,
       fontSize: moveIconSize,
       fill: '#3B82F6',
       originX: 'center',
@@ -237,18 +204,17 @@ export default function LogoPlacementPreview({
             type="number"
             value={currentX}
             onChange={(e) => {
-              const x = parseInt(e.target.value) || 0;
-              const clampedX = Math.max(0, Math.min(frontSide.printArea.width, x));
-              onPlacementChange({ x: clampedX, y: currentY, width: currentWidth, height: currentHeight });
+              const x = Math.max(0, Math.min(canvasWidth, parseInt(e.target.value) || 0));
+              onPlacementChange({ x, y: currentY, width: currentWidth, height: currentHeight });
               if (isCanvasReady) {
-                updatePlaceholderFromInputs(clampedX, currentY);
+                updatePlaceholderFromInputs(x, currentY);
               }
             }}
             min={0}
-            max={frontSide.printArea.width}
+            max={canvasWidth}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
-          <span className="text-xs text-gray-400">최대: {frontSide.printArea.width}</span>
+          <span className="text-xs text-gray-400">최대: {canvasWidth}</span>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Y 위치 (px)</label>
@@ -256,18 +222,17 @@ export default function LogoPlacementPreview({
             type="number"
             value={currentY}
             onChange={(e) => {
-              const y = parseInt(e.target.value) || 0;
-              const clampedY = Math.max(0, Math.min(frontSide.printArea.height, y));
-              onPlacementChange({ x: currentX, y: clampedY, width: currentWidth, height: currentHeight });
+              const y = Math.max(0, Math.min(canvasHeight, parseInt(e.target.value) || 0));
+              onPlacementChange({ x: currentX, y, width: currentWidth, height: currentHeight });
               if (isCanvasReady) {
-                updatePlaceholderFromInputs(currentX, clampedY);
+                updatePlaceholderFromInputs(currentX, y);
               }
             }}
             min={0}
-            max={frontSide.printArea.height}
+            max={canvasHeight}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
-          <span className="text-xs text-gray-400">최대: {frontSide.printArea.height}</span>
+          <span className="text-xs text-gray-400">최대: {canvasHeight}</span>
         </div>
       </div>
 

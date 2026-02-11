@@ -37,7 +37,6 @@ export default function LogoPlacementEditor({
 }: LogoPlacementEditorProps) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const logoRef = useRef<fabric.FabricImage | null>(null);
-  const scaleRef = useRef<number>(1);
 
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
@@ -96,31 +95,22 @@ export default function LogoPlacementEditor({
     [currentProduct, placements, onPlacementsChange]
   );
 
-  // Save current canvas state using absolute coordinates
+  // Save current canvas state using direct canvas coordinates
   const saveCurrentState = useCallback(() => {
     if (!canvasRef.current || !logoRef.current || !currentSide) return;
 
-    const canvas = canvasRef.current;
     const logo = logoRef.current;
-    const canvasScale = scaleRef.current;
 
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
-
-    // Calculate logo position relative to print area in original coordinates
     const logoLeft = logo.left || 0;
     const logoTop = logo.top || 0;
     const logoWidth = (logo.width || 100) * (logo.scaleX || 1);
     const logoHeight = (logo.height || 100) * (logo.scaleY || 1);
 
-    // Convert canvas position to absolute position in original image coordinates
     const placement: LogoPlacement = {
-      x: Math.round((logoLeft - printAreaLeft) / canvasScale),
-      y: Math.round((logoTop - printAreaTop) / canvasScale),
-      width: Math.round(logoWidth / canvasScale),
-      height: Math.round(logoHeight / canvasScale),
+      x: Math.round(logoLeft),
+      y: Math.round(logoTop),
+      width: Math.round(logoWidth),
+      height: Math.round(logoHeight),
     };
 
     // Get canvas state (only logo)
@@ -134,36 +124,24 @@ export default function LogoPlacementEditor({
     updatePlacement(currentSide.id, placement, canvasState);
   }, [currentSide, updatePlacement]);
 
-  // Reset logo to center position
+  // Reset logo to center of canvas
   const resetToCenter = useCallback(() => {
-    if (!canvasRef.current || !logoRef.current || !currentSide) return;
+    if (!canvasRef.current || !logoRef.current) return;
 
     const canvas = canvasRef.current;
     const logo = logoRef.current;
-    const canvasScale = scaleRef.current;
 
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
-
-    // Center position in original coordinates
-    const centerX = currentSide.printArea.width / 2;
-    const centerY = currentSide.printArea.height / 2;
-
-    // Default logo size (20% of print area)
-    const maxLogoWidth = currentSide.printArea.width * 0.2;
-    const maxLogoHeight = currentSide.printArea.height * 0.2;
+    const defaultSize = 80;
     const logoScale = Math.min(
-      maxLogoWidth / (logo.width || 100),
-      maxLogoHeight / (logo.height || 100)
+      defaultSize / (logo.width || 100),
+      defaultSize / (logo.height || 100)
     );
 
     logo.set({
-      left: printAreaLeft + centerX * canvasScale,
-      top: printAreaTop + centerY * canvasScale,
-      scaleX: logoScale * canvasScale,
-      scaleY: logoScale * canvasScale,
+      left: canvasWidth / 2,
+      top: canvasHeight / 2,
+      scaleX: logoScale,
+      scaleY: logoScale,
       angle: 0,
       originX: 'center',
       originY: 'center',
@@ -171,19 +149,13 @@ export default function LogoPlacementEditor({
 
     canvas.renderAll();
     saveCurrentState();
-  }, [currentSide, saveCurrentState]);
+  }, [saveCurrentState]);
 
   // Handle canvas ready callback from SingleSideCanvas
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, sideId: string, canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, sideId: string, _canvasScale: number) => {
     canvasRef.current = canvas;
-    scaleRef.current = canvasScale;
 
     if (!currentSide) return;
-
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
 
     // Load logo image
     fabric.FabricImage.fromURL(logoUrl, { crossOrigin: 'anonymous' })
@@ -192,39 +164,34 @@ export default function LogoPlacementEditor({
         const existingPlacement = productPlacement.placements[sideId];
 
         if (existingPlacement) {
-          // Use existing placement - convert from original coordinates to canvas coordinates
+          // Place logo at exact stored coordinates
           const logoScale = Math.min(
             existingPlacement.width / (logoImg.width || 100),
             existingPlacement.height / (logoImg.height || 100)
           );
 
           logoImg.set({
-            left: printAreaLeft + existingPlacement.x * canvasScale,
-            top: printAreaTop + existingPlacement.y * canvasScale,
-            scaleX: logoScale * canvasScale,
-            scaleY: logoScale * canvasScale,
+            left: existingPlacement.x,
+            top: existingPlacement.y,
+            scaleX: logoScale,
+            scaleY: logoScale,
             originX: 'left',
             originY: 'top',
             data: { id: 'partner-mall-logo' },
           });
         } else {
-          // Default to center of print area
-          const centerX = currentSide.printArea.width / 2;
-          const centerY = currentSide.printArea.height / 2;
-
-          // Default logo size (20% of print area)
-          const maxLogoWidth = currentSide.printArea.width * 0.2;
-          const maxLogoHeight = currentSide.printArea.height * 0.2;
+          // Default to center of canvas
+          const defaultSize = 80;
           const logoScale = Math.min(
-            maxLogoWidth / (logoImg.width || 100),
-            maxLogoHeight / (logoImg.height || 100)
+            defaultSize / (logoImg.width || 100),
+            defaultSize / (logoImg.height || 100)
           );
 
           logoImg.set({
-            left: printAreaLeft + centerX * canvasScale,
-            top: printAreaTop + centerY * canvasScale,
-            scaleX: logoScale * canvasScale,
-            scaleY: logoScale * canvasScale,
+            left: canvasWidth / 2,
+            top: canvasHeight / 2,
+            scaleX: logoScale,
+            scaleY: logoScale,
             originX: 'center',
             originY: 'center',
             data: { id: 'partner-mall-logo' },
