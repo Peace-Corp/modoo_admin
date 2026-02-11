@@ -1,15 +1,17 @@
 'use client';
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Factory, Profile, Coupon } from '@/types/types';
-import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X } from 'lucide-react';
+import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search } from 'lucide-react';
 
 export default function UsersTab() {
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [updatingFactoryId, setUpdatingFactoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,10 +29,15 @@ export default function UsersTab() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     if (currentUser) {
       fetchUsers();
     }
-  }, [filterRole, currentUser]);
+  }, [filterRole, debouncedSearch, currentUser]);
 
   useEffect(() => {
     if (currentUser?.role === 'admin') {
@@ -45,6 +52,9 @@ export default function UsersTab() {
     setError(null);
     try {
       let url = `/api/admin/users?role=${filterRole}`;
+      if (debouncedSearch) {
+        url += `&search=${encodeURIComponent(debouncedSearch)}`;
+      }
       if (currentUser?.role === 'factory' && currentUser.manufacturer_id) {
         url += `&factoryId=${currentUser.manufacturer_id}`;
       }
@@ -336,9 +346,19 @@ export default function UsersTab() {
         </div>
       )}
 
-      {/* Filters */}
-      {currentUser?.role === 'admin' && (
-        <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+      {/* Search & Filters */}
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="이메일, 이름, 전화번호로 검색..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        {currentUser?.role === 'admin' && (
           <div className="flex gap-2 flex-wrap">
             {[
               { value: 'all', label: '전체' },
@@ -359,8 +379,8 @@ export default function UsersTab() {
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Users Table */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
@@ -383,6 +403,9 @@ export default function UsersTab() {
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   이메일
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  이름
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   전화번호
@@ -427,6 +450,9 @@ export default function UsersTab() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{user.name || '-'}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-sm text-gray-900">

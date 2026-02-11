@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as fabric from 'fabric';
 import { Edit2, Check, Loader2, Package } from 'lucide-react';
 import { Product, ProductSide, LogoPlacement } from '@/types/types';
@@ -19,6 +19,7 @@ interface ProductPreviewGridProps {
   onEditProduct: (productIndex: number, sideIndex: number) => void;
   onConfirm: () => void;
   onBack: () => void;
+  onPreviewCaptured?: (productId: string, dataUrl: string) => void;
 }
 
 interface PreviewItem {
@@ -40,10 +41,12 @@ function PreviewCard({
   item,
   logoUrl,
   onEdit,
+  onPreviewCaptured,
 }: {
   item: PreviewItem;
   logoUrl: string;
   onEdit: () => void;
+  onPreviewCaptured?: (productId: string, dataUrl: string) => void;
 }) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +63,7 @@ function PreviewCard({
         try {
           const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
           setPreviewImage(dataUrl);
+          onPreviewCaptured?.(item.productId, dataUrl);
         } catch (err) {
           console.error('Error capturing preview:', err);
         }
@@ -101,7 +105,7 @@ function PreviewCard({
         console.error('Error loading logo for preview:', err);
         captureCanvas();
       });
-  }, [item.placement, logoUrl, scaleRatio]);
+  }, [item.placement, item.productId, logoUrl, scaleRatio, onPreviewCaptured]);
 
   return (
     <div className="relative group">
@@ -168,6 +172,7 @@ export default function ProductPreviewGrid({
   onEditProduct,
   onConfirm,
   onBack,
+  onPreviewCaptured,
 }: ProductPreviewGridProps) {
   const [previews, setPreviews] = useState<PreviewItem[]>([]);
 
@@ -223,6 +228,7 @@ export default function ProductPreviewGrid({
               item={item}
               logoUrl={logoUrl}
               onEdit={() => handleEdit(item.productIndex, item.sideIndex)}
+              onPreviewCaptured={onPreviewCaptured}
             />
           ))
         ) : (

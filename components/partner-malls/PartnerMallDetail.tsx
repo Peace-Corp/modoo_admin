@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import * as fabric from 'fabric';
+import { useState } from 'react';
 import {
   ChevronLeft,
   Building2,
@@ -13,111 +12,42 @@ import {
   Plus,
   Trash2,
   Calendar,
+  ImageOff,
 } from 'lucide-react';
-import { PartnerMall, PartnerMallProduct, Product, ProductSide, LogoPlacement } from '@/types/types';
-import SingleSideCanvas from '@/components/canvas/SingleSideCanvas';
+import { PartnerMall, PartnerMallProduct } from '@/types/types';
 import PartnerMallInfoEditor from './PartnerMallInfoEditor';
 import SingleProductPlacementEditor from './SingleProductPlacementEditor';
 import AddProductsModal from './AddProductsModal';
 
-// Product preview card - uses preview_url if available, falls back to canvas rendering
+// Product preview card - renders preview_url image
 function ProductPreviewCard({
   mallProduct,
-  logoUrl,
-  side,
-  placement,
   onEdit,
   onRemove,
   isDeleting,
 }: {
   mallProduct: PartnerMallProduct;
-  logoUrl: string;
-  side: ProductSide;
-  placement: LogoPlacement | undefined;
   onEdit: () => void;
   onRemove: () => void;
   isDeleting: boolean;
 }) {
-  const [isReady, setIsReady] = useState(false);
   const product = mallProduct.product;
   const previewUrl = mallProduct.preview_url;
-
-  // Use canvas rendering only if no preview_url
-  const handleCanvasReady = useCallback(
-    (canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
-      if (!placement) {
-        setIsReady(true);
-        return;
-      }
-
-      // @ts-expect-error - Custom property
-      const printAreaLeft = canvas.printAreaLeft || 0;
-      // @ts-expect-error - Custom property
-      const printAreaTop = canvas.printAreaTop || 0;
-
-      fabric.FabricImage.fromURL(logoUrl, { crossOrigin: 'anonymous' })
-        .then((logoImg) => {
-          const logoScale = Math.min(
-            placement.width / (logoImg.width || 100),
-            placement.height / (logoImg.height || 100)
-          );
-
-          logoImg.set({
-            left: printAreaLeft + placement.x * canvasScale,
-            top: printAreaTop + placement.y * canvasScale,
-            scaleX: logoScale * canvasScale,
-            scaleY: logoScale * canvasScale,
-            originX: 'left',
-            originY: 'top',
-            selectable: false,
-            evented: false,
-          });
-
-          canvas.add(logoImg);
-          canvas.renderAll();
-          setIsReady(true);
-        })
-        .catch((err) => {
-          console.error('Error loading logo:', err);
-          setIsReady(true);
-        });
-    },
-    [logoUrl, placement]
-  );
 
   return (
     <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden group">
       <div className="relative aspect-4/5 bg-white">
-        {/* If preview_url exists, show image directly */}
         {previewUrl ? (
           <img
             src={previewUrl}
             alt={product?.title || 'Product preview'}
             className="w-full h-full object-contain"
-            onLoad={() => setIsReady(true)}
           />
         ) : (
-          <>
-            {!isReady && (
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
-            )}
-            <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ opacity: isReady ? 1 : 0.3 }}
-            >
-              <SingleSideCanvas
-                key={`${mallProduct.id}-${side.id}`}
-                side={side}
-                width={160}
-                height={200}
-                isEdit={false}
-                canvasState={{ objects: [] }}
-                onCanvasReady={handleCanvasReady}
-              />
-            </div>
-          </>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+            <ImageOff className="w-8 h-8 mb-1" />
+            <span className="text-xs">미리보기 없음</span>
+          </div>
         )}
 
         {/* Hover Actions */}
@@ -229,16 +159,6 @@ export default function PartnerMallDetail({
     }
   };
 
-  // Get first side of a product
-  const getFirstSide = (product: Product) => {
-    const sides = (product.configuration || []) as Array<{
-      id: string;
-      name: string;
-      imageUrl: string;
-      printArea: { x: number; y: number; width: number; height: number };
-    }>;
-    return sides.length > 0 ? sides[0] : null;
-  };
 
   return (
     <div className="p-6">
@@ -291,35 +211,12 @@ export default function PartnerMallDetail({
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {products.map((mallProduct) => {
-                  const product = mallProduct.product;
-                  if (!product) return null;
-
-                  const firstSide = getFirstSide(product);
-                  if (!firstSide) {
-                    return (
-                      <div
-                        key={mallProduct.id}
-                        className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden"
-                      >
-                        <div className="aspect-4/5 bg-white flex items-center justify-center">
-                          <Package className="w-8 h-8 text-gray-300" />
-                        </div>
-                        <div className="p-3">
-                          <p className="text-sm font-medium text-gray-800 truncate">
-                            {product.title}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
+                  if (!mallProduct.product) return null;
 
                   return (
                     <ProductPreviewCard
                       key={mallProduct.id}
                       mallProduct={mallProduct}
-                      logoUrl={partnerMall.logo_url}
-                      side={firstSide}
-                      placement={mallProduct.logo_placements?.[firstSide.id]}
                       onEdit={() => setEditingProduct(mallProduct)}
                       onRemove={() => removeProduct(mallProduct)}
                       isDeleting={deletingProductId === mallProduct.id}

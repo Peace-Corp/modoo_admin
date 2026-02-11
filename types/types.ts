@@ -315,6 +315,7 @@ export interface ObjectDimensions {
 export interface Profile {
   id: string;
   email: string;
+  name: string | null;
   phone_number: string | null;
   role: 'customer' | 'admin' | 'factory';
   manufacturer_id?: string | null;

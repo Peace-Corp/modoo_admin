@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
 import { Product, LogoPlacement, ProductSide, PartnerMallPreset } from '@/types/types';
 import LogoCapture from './LogoCapture';
@@ -45,6 +45,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
+  const previewImagesRef = useRef<Record<string, string>>({});
 
   // Fetch products when IDs are selected
   useEffect(() => {
@@ -156,6 +157,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
           product_id: p.productId,
           logo_placements: p.placements,
           canvas_state: p.canvasStates,
+          preview_url: previewImagesRef.current[p.productId] || null,
         }));
 
         const productsResponse = await fetch('/api/admin/partner-malls/products', {
@@ -292,6 +294,9 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 onEditProduct={(productIndex) => setEditingProductIndex(productIndex)}
                 onConfirm={() => setCurrentStep('save')}
                 onBack={() => setCurrentStep('products')}
+                onPreviewCaptured={(productId, dataUrl) => {
+                  previewImagesRef.current[productId] = dataUrl;
+                }}
               />
             )
           )}
