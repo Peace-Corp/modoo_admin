@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { Product, LogoPlacement, ProductSide } from '@/types/types';
+import { Product, LogoPlacement, ProductSide, PartnerMallPreset } from '@/types/types';
 import ProductMultiSelect from './ProductMultiSelect';
 
 interface AddProductsModalProps {
@@ -13,8 +13,7 @@ interface AddProductsModalProps {
   onProductsAdded: () => void;
 }
 
-// Fixed left-chest placement using absolute pixel values
-const LEFT_CHEST_PLACEMENT: LogoPlacement = {
+const DEFAULT_PLACEMENT: LogoPlacement = {
   x: 50,
   y: 50,
   width: 100,
@@ -38,7 +37,7 @@ export default function AddProductsModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle product selection confirm - auto-generate left-chest placements and save
+  // Handle product selection confirm - fetch presets and auto-generate placements
   const handleSelectionConfirm = useCallback(async () => {
     if (selectedProductIds.length === 0) {
       setError('최소 1개의 제품을 선택해주세요.');
@@ -58,7 +57,20 @@ export default function AddProductsModal({
       const allProducts: Product[] = result.data || [];
       const selectedProducts = allProducts.filter((p) => selectedProductIds.includes(p.id));
 
-      // Auto-generate left-chest placements for all products
+      // Fetch presets for selected products
+      let allPresets: PartnerMallPreset[] = [];
+      try {
+        const productIds = selectedProducts.map((p) => p.id).join(',');
+        const presetsRes = await fetch(`/api/admin/partner-mall-presets?product_ids=${productIds}`);
+        if (presetsRes.ok) {
+          const presetsResult = await presetsRes.json();
+          allPresets = presetsResult.data || [];
+        }
+      } catch (err) {
+        console.error('Error fetching presets:', err);
+      }
+
+      // Auto-generate placements using presets or default
       const productsData = selectedProducts.map((product) => {
         const firstSide = getFirstSide(product);
         if (!firstSide) {
@@ -69,9 +81,12 @@ export default function AddProductsModal({
           };
         }
 
+        const productPresets = allPresets.filter((p) => p.product_id === product.id);
+        const placement = productPresets.length > 0 ? productPresets[0].placement : DEFAULT_PLACEMENT;
+
         return {
           product_id: product.id,
-          logo_placements: { [firstSide.id]: LEFT_CHEST_PLACEMENT },
+          logo_placements: { [firstSide.id]: placement },
           canvas_state: {},
         };
       });
@@ -119,7 +134,7 @@ export default function AddProductsModal({
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div>
             <h3 className="text-lg font-semibold text-gray-800">제품 추가</h3>
-            <p className="text-sm text-gray-500">로고는 왼쪽 가슴 위치에 자동 배치됩니다.</p>
+            <p className="text-sm text-gray-500">로고는 프리셋 위치에 자동 배치됩니다.</p>
           </div>
           <button
             onClick={onClose}

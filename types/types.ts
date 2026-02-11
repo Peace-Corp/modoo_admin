@@ -58,14 +58,16 @@ export interface ProductConfig {
   sides: ProductSide[];
 }
 
+/** @deprecated Use partner_mall_presets table instead */
 export type LogoAnchor = 'left-chest' | 'right-chest' | 'center';
 
+/** @deprecated Use partner_mall_presets table instead */
 export interface DefaultLogoPlacement {
-  x: number;           // Absolute X position within print area (pixels)
-  y: number;           // Absolute Y position within print area (pixels)
-  width: number;       // Max logo width
-  height: number;      // Max logo height
-  anchor?: LogoAnchor; // Deprecated: kept for backward compatibility
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  anchor?: LogoAnchor;
 }
 
 export interface ProductSide {
@@ -85,6 +87,7 @@ export interface ProductSide {
     productWidthMm: number;
   };
   zoomScale?: number;
+  /** @deprecated Use partner_mall_presets table instead */
   defaultLogoPlacement?: DefaultLogoPlacement;
 }
 
@@ -572,4 +575,13 @@ export interface PartnerMallProduct {
   // Joined relations
   product?: Product;
   partner_mall?: PartnerMall;
+}
+
+export interface PartnerMallPreset {
+  id: string;
+  product_id: string;
+  name: string;
+  placement: LogoPlacement;
+  created_at: string;
+  updated_at: string;
 }

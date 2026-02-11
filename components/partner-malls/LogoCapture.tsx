@@ -154,35 +154,40 @@ export default function LogoCapture({ onLogoReady, onCancel }: LogoCaptureProps)
     setError(null);
 
     try {
-      // Upload processed logo to storage
-      const uploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: processedImage }),
-      });
+      // If processedImage is already a storage URL (from remove-background API), use directly
+      let processedStorageUrl = processedImage;
+      if (processedImage.startsWith('data:')) {
+        const uploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: processedImage }),
+        });
 
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({}));
-        throw new Error(errorData?.error || '로고 업로드에 실패했습니다.');
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          throw new Error(errorData?.error || '로고 업로드에 실패했습니다.');
+        }
+
+        const uploadResult = await uploadResponse.json();
+        processedStorageUrl = uploadResult.url;
       }
 
-      const uploadResult = await uploadResponse.json();
+      // If originalImage is already a storage URL, use directly
+      let originalStorageUrl = originalImage;
+      if (originalImage.startsWith('data:')) {
+        const originalUploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: originalImage }),
+        });
 
-      // Also upload original image
-      const originalUploadResponse = await fetch('/api/admin/partner-malls/upload-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: originalImage }),
-      });
-
-      let originalStorageUrl = originalImage; // fallback to data URL if upload fails
-      if (originalUploadResponse.ok) {
-        const originalUploadResult = await originalUploadResponse.json();
-        originalStorageUrl = originalUploadResult.url;
+        if (originalUploadResponse.ok) {
+          const originalUploadResult = await originalUploadResponse.json();
+          originalStorageUrl = originalUploadResult.url;
+        }
       }
 
-      // Return storage URLs
-      onLogoReady(uploadResult.url, originalStorageUrl);
+      onLogoReady(processedStorageUrl, originalStorageUrl);
     } catch (err) {
       console.error('Logo upload error:', err);
       setError(err instanceof Error ? err.message : '로고 업로드에 실패했습니다.');

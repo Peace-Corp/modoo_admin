@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, Check } from 'lucide-react';
-import { Product, LogoPlacement, ProductSide } from '@/types/types';
+import { Product, LogoPlacement, ProductSide, PartnerMallPreset } from '@/types/types';
 import LogoCapture from './LogoCapture';
 import ProductMultiSelect from './ProductMultiSelect';
 import ProductPreviewGrid from './ProductPreviewGrid';
@@ -10,8 +10,7 @@ import LogoPlacementEditor from './LogoPlacementEditor';
 
 type Step = 'logo' | 'products' | 'preview' | 'save';
 
-// Fixed left-chest placement using absolute pixel values
-const LEFT_CHEST_PLACEMENT: LogoPlacement = {
+const DEFAULT_PLACEMENT: LogoPlacement = {
   x: 50,
   y: 50,
   width: 100,
@@ -79,22 +78,34 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
     setCurrentStep('products');
   };
 
-  // Handle product selection confirm - auto-generate left-chest placements
-  const handleProductsConfirm = () => {
-    // Auto-generate placements for all selected products
+  // Handle product selection confirm - fetch presets and auto-generate placements
+  const handleProductsConfirm = async () => {
+    // Fetch presets for all selected products in one batch
+    let allPresets: PartnerMallPreset[] = [];
+    try {
+      const productIds = products.map((p) => p.id).join(',');
+      const response = await fetch(`/api/admin/partner-mall-presets?product_ids=${productIds}`);
+      if (response.ok) {
+        const result = await response.json();
+        allPresets = result.data || [];
+      }
+    } catch (err) {
+      console.error('Error fetching presets:', err);
+    }
+
     const autoPlacments: ProductPlacement[] = products.map((product) => {
       const firstSide = getFirstSide(product);
       if (!firstSide) {
-        return {
-          productId: product.id,
-          placements: {},
-          canvasStates: {},
-        };
+        return { productId: product.id, placements: {}, canvasStates: {} };
       }
+
+      // Use first available preset for this product, or fall back to default
+      const productPresets = allPresets.filter((p) => p.product_id === product.id);
+      const placement = productPresets.length > 0 ? productPresets[0].placement : DEFAULT_PLACEMENT;
 
       return {
         productId: product.id,
-        placements: { [firstSide.id]: LEFT_CHEST_PLACEMENT },
+        placements: { [firstSide.id]: placement },
         canvasStates: {},
       };
     });
