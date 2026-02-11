@@ -189,6 +189,7 @@ export default function LogoPlacementPreview({
           isEdit={true}
           canvasState={{ objects: [] }}
           onCanvasReady={handleCanvasReady}
+          showScaleBox={false}
         />
       </div>
 

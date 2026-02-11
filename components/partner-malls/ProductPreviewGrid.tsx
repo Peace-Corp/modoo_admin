@@ -32,7 +32,10 @@ interface PreviewItem {
   sideIndex: number;
 }
 
-// Individual preview card component that uses SingleSideCanvas
+// Editor canvas width (coordinates are stored at this scale)
+const EDITOR_WIDTH = 400;
+
+// Individual preview card component that captures canvas as a static image
 function PreviewCard({
   item,
   logoUrl,
@@ -42,39 +45,49 @@ function PreviewCard({
   logoUrl: string;
   onEdit: () => void;
 }) {
-  const [isReady, setIsReady] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Handle canvas ready - add logo
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
+  // Preview canvas dimensions (scaled down from editor)
+  const previewWidth = 160;
+  const previewHeight = 200;
+  const scaleRatio = previewWidth / EDITOR_WIDTH;
+
+  // Handle canvas ready - add logo and capture as static image
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
+    const captureCanvas = () => {
+      requestAnimationFrame(() => {
+        try {
+          const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
+          setPreviewImage(dataUrl);
+        } catch (err) {
+          console.error('Error capturing preview:', err);
+        }
+        setIsLoading(false);
+      });
+    };
+
     if (!item.placement) {
-      setIsReady(true);
+      captureCanvas();
       return;
     }
 
-    // Get print area properties from canvas
-    // @ts-expect-error - Custom property
-    const printAreaLeft = canvas.printAreaLeft || 0;
-    // @ts-expect-error - Custom property
-    const printAreaTop = canvas.printAreaTop || 0;
-
-    // Load and add logo
+    // Load and add logo using direct coordinates scaled to preview size
     fabric.FabricImage.fromURL(logoUrl, { crossOrigin: 'anonymous' })
       .then((logoImg) => {
         const placement = item.placement!;
 
-        // Calculate logo scale
+        // Calculate logo scale at editor size, then apply preview scale ratio
         const logoScale = Math.min(
           placement.width / (logoImg.width || 100),
           placement.height / (logoImg.height || 100)
         );
 
         logoImg.set({
-          left: printAreaLeft + placement.x * canvasScale,
-          top: printAreaTop + placement.y * canvasScale,
-          scaleX: logoScale * canvasScale,
-          scaleY: logoScale * canvasScale,
-          originX: 'left',
-          originY: 'top',
+          left: placement.x * scaleRatio,
+          top: placement.y * scaleRatio,
+          scaleX: logoScale * scaleRatio,
+          scaleY: logoScale * scaleRatio,
           selectable: false,
           evented: false,
           data: { id: 'partner-mall-logo' },
@@ -82,38 +95,42 @@ function PreviewCard({
 
         canvas.add(logoImg);
         canvas.renderAll();
-        setIsReady(true);
+        captureCanvas();
       })
       .catch((err) => {
         console.error('Error loading logo for preview:', err);
-        setIsReady(true);
+        captureCanvas();
       });
-  }, [item.placement, logoUrl]);
-
-  // Preview canvas dimensions (scaled down from 400x500)
-  const previewWidth = 160;
-  const previewHeight = 200;
+  }, [item.placement, logoUrl, scaleRatio]);
 
   return (
     <div className="relative group">
-      {/* Preview canvas */}
+      {/* Preview image or canvas (hidden during capture) */}
       <div className="bg-gray-100 rounded-lg overflow-hidden" style={{ width: previewWidth, height: previewHeight }}>
-        {!isReady && (
+        {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         )}
-        <div style={{ opacity: isReady ? 1 : 0.3, transition: 'opacity 0.3s' }}>
-          <SingleSideCanvas
-            key={`${item.productId}-${item.sideId}`}
-            side={item.side}
-            width={previewWidth}
-            height={previewHeight}
-            isEdit={false}
-            canvasState={{ objects: [] }}
-            onCanvasReady={handleCanvasReady}
+        {previewImage ? (
+          <img
+            src={previewImage}
+            alt={item.productTitle}
+            className="w-full h-full object-contain"
           />
-        </div>
+        ) : (
+          <div style={{ opacity: 0 }}>
+            <SingleSideCanvas
+              key={`${item.productId}-${item.sideId}`}
+              side={item.side}
+              width={previewWidth}
+              height={previewHeight}
+              isEdit={false}
+              canvasState={{ objects: [] }}
+              onCanvasReady={handleCanvasReady}
+            />
+          </div>
+        )}
       </div>
 
       {/* Edit overlay */}

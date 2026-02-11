@@ -137,14 +137,15 @@ export default function LogoPlacementEditor({
       defaultSize / (logo.height || 100)
     );
 
+    const scaledW = (logo.width || 100) * logoScale;
+    const scaledH = (logo.height || 100) * logoScale;
+
     logo.set({
-      left: canvasWidth / 2,
-      top: canvasHeight / 2,
+      left: (canvasWidth - scaledW) / 2,
+      top: (canvasHeight - scaledH) / 2,
       scaleX: logoScale,
       scaleY: logoScale,
       angle: 0,
-      originX: 'center',
-      originY: 'center',
     });
 
     canvas.renderAll();
@@ -175,8 +176,6 @@ export default function LogoPlacementEditor({
             top: existingPlacement.y,
             scaleX: logoScale,
             scaleY: logoScale,
-            originX: 'left',
-            originY: 'top',
             data: { id: 'partner-mall-logo' },
           });
         } else {
@@ -187,13 +186,14 @@ export default function LogoPlacementEditor({
             defaultSize / (logoImg.height || 100)
           );
 
+          const scaledW = (logoImg.width || 100) * logoScale;
+          const scaledH = (logoImg.height || 100) * logoScale;
+
           logoImg.set({
-            left: canvasWidth / 2,
-            top: canvasHeight / 2,
+            left: (canvasWidth - scaledW) / 2,
+            top: (canvasHeight - scaledH) / 2,
             scaleX: logoScale,
             scaleY: logoScale,
-            originX: 'center',
-            originY: 'center',
             data: { id: 'partner-mall-logo' },
           });
         }
@@ -299,6 +299,7 @@ export default function LogoPlacementEditor({
           isEdit={true}
           canvasState={{ objects: [] }}
           onCanvasReady={handleCanvasReady}
+          showScaleBox={false}
         />
       </div>
 
