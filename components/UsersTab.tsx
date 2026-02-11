@@ -2,8 +2,8 @@
 
 import { useAuthStore } from '@/store/useAuthStore';
 import { useMemo, useState, useEffect } from 'react';
-import { Factory, Profile } from '@/types/types';
-import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon } from 'lucide-react';
+import { Factory, Profile, Coupon } from '@/types/types';
+import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X } from 'lucide-react';
 
 export default function UsersTab() {
   const { user: currentUser } = useAuthStore();
@@ -15,6 +15,16 @@ export default function UsersTab() {
   const [error, setError] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
   const [loadingFactories, setLoadingFactories] = useState(false);
+
+  // Coupon issuance states
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [couponTargetUserIds, setCouponTargetUserIds] = useState<string[]>([]);
+  const [activeCoupons, setActiveCoupons] = useState<Coupon[]>([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
+  const [issuingCoupon, setIssuingCoupon] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -49,6 +59,7 @@ export default function UsersTab() {
 
       const payload = await response.json();
       setUsers(payload?.data || []);
+      setSelectedUserIds(new Set());
     } catch (error) {
       console.error('Error fetching users:', error);
       setUsers([]);
@@ -188,6 +199,100 @@ export default function UsersTab() {
     });
   };
 
+  // Selection helpers
+  const isAllSelected = users.length > 0 && users.every((u) => selectedUserIds.has(u.id));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedUserIds(new Set());
+    } else {
+      setSelectedUserIds(new Set(users.map((u) => u.id)));
+    }
+  };
+
+  const toggleSelectUser = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  // Coupon modal functions
+  const fetchActiveCoupons = async () => {
+    setLoadingCoupons(true);
+    try {
+      const response = await fetch('/api/admin/coupons');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '쿠폰 목록을 불러오는데 실패했습니다.');
+      }
+      const payload = await response.json();
+      const allCoupons: Coupon[] = payload?.data || [];
+      const now = new Date();
+      setActiveCoupons(
+        allCoupons.filter((c) => c.is_active && (!c.expires_at || new Date(c.expires_at) > now))
+      );
+    } catch (err) {
+      console.error('Error fetching coupons:', err);
+      setActiveCoupons([]);
+      setError(err instanceof Error ? err.message : '쿠폰 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  const openCouponModal = (userIds: string[]) => {
+    setCouponTargetUserIds(userIds);
+    setSelectedCouponId(null);
+    setShowCouponModal(true);
+    fetchActiveCoupons();
+  };
+
+  const handleIssueCoupon = async () => {
+    if (!selectedCouponId || couponTargetUserIds.length === 0) return;
+    setIssuingCoupon(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const response = await fetch('/api/admin/coupons/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          couponId: selectedCouponId,
+          userIds: couponTargetUserIds,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '쿠폰 발급에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const { issued, skipped } = payload.data;
+
+      let msg = `${issued}명에게 쿠폰이 발급되었습니다.`;
+      if (skipped > 0) {
+        msg += ` (${skipped}명 중복 건너뜀)`;
+      }
+      setSuccessMessage(msg);
+      setShowCouponModal(false);
+      setSelectedUserIds(new Set());
+
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error('Error issuing coupon:', err);
+      setError(err instanceof Error ? err.message : '쿠폰 발급에 실패했습니다.');
+    } finally {
+      setIssuingCoupon(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -204,6 +309,15 @@ export default function UsersTab() {
           <h2 className="text-xl font-semibold text-gray-900">사용자 관리</h2>
           <p className="text-sm text-gray-500 mt-1">총 {users.length}명의 사용자</p>
         </div>
+        {currentUser?.role === 'admin' && selectedUserIds.size > 0 && (
+          <button
+            onClick={() => openCouponModal(Array.from(selectedUserIds))}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Ticket className="w-4 h-4" />
+            쿠폰 발급하기 ({selectedUserIds.size}명)
+          </button>
+        )}
       </div>
 
       {/* Error Message */}
@@ -211,6 +325,14 @@ export default function UsersTab() {
         <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
           <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center gap-3">
+          <Ticket className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <p className="text-green-800">{successMessage}</p>
         </div>
       )}
 
@@ -246,6 +368,16 @@ export default function UsersTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                {currentUser?.role === 'admin' && (
+                  <th className="px-4 py-2 w-10">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   사용자 ID
                 </th>
@@ -277,6 +409,16 @@ export default function UsersTab() {
                   key={user.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
+                  {currentUser?.role === 'admin' && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.has(user.id)}
+                        onChange={() => toggleSelectUser(user.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <UserIcon className="w-4 h-4 text-gray-400" />
@@ -342,29 +484,34 @@ export default function UsersTab() {
                   {currentUser?.role === 'admin' && (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={user.role}
-                            onChange={(event) =>
-                              updateUserRole(
-                                user.id,
-                                event.target.value as 'customer' | 'admin' | 'factory'
-                              )
-                            }
-                            disabled={updatingUserId === user.id}
-                            className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
-                          >
-                            <option value="customer">일반 사용자</option>
-                            <option value="factory">공장</option>
-                            <option value="admin">관리자</option>
-                          </select>
-                          {updatingUserId === user.id && (
-                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                              <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
-                              처리중...
-                            </div>
-                          )}
-                        </div>
+                        <select
+                          value={user.role}
+                          onChange={(event) =>
+                            updateUserRole(
+                              user.id,
+                              event.target.value as 'customer' | 'admin' | 'factory'
+                            )
+                          }
+                          disabled={updatingUserId === user.id}
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white text-gray-700 disabled:opacity-50"
+                        >
+                          <option value="customer">일반 사용자</option>
+                          <option value="factory">공장</option>
+                          <option value="admin">관리자</option>
+                        </select>
+                        {updatingUserId === user.id && (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                            처리중...
+                          </div>
+                        )}
+                        <button
+                          onClick={() => openCouponModal([user.id])}
+                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="쿠폰 발급"
+                        >
+                          <Ticket className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   )}
@@ -382,6 +529,99 @@ export default function UsersTab() {
           </div>
         )}
       </div>
+
+      {/* Coupon Selection Modal */}
+      {showCouponModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h3 className="text-lg font-semibold">쿠폰 발급</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {couponTargetUserIds.length}명의 사용자에게 쿠폰을 발급합니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCouponModal(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              {loadingCoupons ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : activeCoupons.length === 0 ? (
+                <div className="text-center py-8">
+                  <Ticket className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500">발급 가능한 활성 쿠폰이 없습니다.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activeCoupons.map((coupon) => (
+                    <label
+                      key={coupon.id}
+                      className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition-colors ${
+                        selectedCouponId === coupon.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="coupon"
+                        value={coupon.id}
+                        checked={selectedCouponId === coupon.id}
+                        onChange={() => setSelectedCouponId(coupon.id)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-medium text-gray-900">
+                            {coupon.code}
+                          </span>
+                          <span className="text-xs text-blue-600 font-medium">
+                            {coupon.discount_type === 'percentage'
+                              ? `${coupon.discount_value}%`
+                              : `${coupon.discount_value.toLocaleString()}원`}
+                          </span>
+                        </div>
+                        {coupon.display_name && (
+                          <p className="text-sm text-gray-500 truncate">{coupon.display_name}</p>
+                        )}
+                        {coupon.max_uses && (
+                          <p className="text-xs text-gray-400">
+                            사용 {coupon.current_uses} / {coupon.max_uses}
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+              <button
+                onClick={() => setShowCouponModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleIssueCoupon}
+                disabled={!selectedCouponId || issuingCoupon}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {issuingCoupon ? '발급 중...' : '발급하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
