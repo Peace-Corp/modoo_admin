@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase-client';
 import { OrderItem, Product, ProductSide, ObjectDimensions, CanvasState, CustomFont } from '@/types/types';
-import { ChevronLeft, Palette, Ruler, Grid3x3, Download, Package } from 'lucide-react';
+import { ChevronLeft, Palette, Ruler, Grid3x3, Download, Package, ZoomIn, ZoomOut, RotateCcw, Pencil, Save } from 'lucide-react';
 import SingleSideCanvas from './canvas/SingleSideCanvas';
-import { Canvas as FabricCanvas } from 'fabric';
+import { Canvas as FabricCanvas, Point as FabricPoint } from 'fabric';
 
 interface OrderItemCanvasProps {
   orderItem: OrderItem;
@@ -291,6 +291,13 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   const [productColors, setProductColors] = useState<Array<{ name: string; hex: string; color_code?: string }>>([]);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Editor mode & zoom state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [zoomLevels, setZoomLevels] = useState<Record<string, number>>({});
+  const canvasRefs = useRef<Record<string, FabricCanvas>>({});
+
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
   const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
 
@@ -338,6 +345,91 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
     }
     return orderItem.item_options?.color_hex || '#FFFFFF';
   }, [orderItem.canvas_state, orderItem.item_options]);
+
+  // Store canvas refs for zoom control and serialization
+  const handleCanvasRef = useCallback((canvas: FabricCanvas, sideId: string) => {
+    canvasRefs.current[sideId] = canvas;
+  }, []);
+
+  const handleZoomChange = useCallback((sideId: string, zoom: number) => {
+    setZoomLevels((prev) => ({ ...prev, [sideId]: zoom }));
+  }, []);
+
+  const handleZoom = useCallback((sideId: string, direction: 'in' | 'out' | 'reset') => {
+    const canvas = canvasRefs.current[sideId];
+    if (!canvas) return;
+
+    const currentZoom = canvas.getZoom();
+    let nextZoom: number;
+
+    if (direction === 'reset') {
+      nextZoom = 1;
+      // Reset viewport pan as well
+      const vpt = canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] = 0;
+        vpt[5] = 0;
+      }
+    } else if (direction === 'in') {
+      nextZoom = Math.min(currentZoom + 0.2, 5);
+    } else {
+      nextZoom = Math.max(currentZoom - 0.2, 0.2);
+    }
+
+    const center = new FabricPoint(canvas.width! / 2, canvas.height! / 2);
+    canvas.zoomToPoint(center, nextZoom);
+    canvas.requestRenderAll();
+    setZoomLevels((prev) => ({ ...prev, [sideId]: nextZoom }));
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!product) return;
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const updatedCanvasState: Record<string, unknown> = { ...orderItem.canvas_state };
+
+      for (const side of product.configuration) {
+        const canvas = canvasRefs.current[side.id];
+        if (!canvas) continue;
+
+        const objects = canvas.getObjects().filter((obj) => {
+          const objData = obj as { data?: { id?: string } };
+          return objData.data?.id !== 'background-product-image';
+        });
+
+        const serializedObjects = objects.map((obj) => obj.toObject(['data', 'objectId', 'widthMm', 'heightMm']));
+
+        const existingState = parseCanvasState(orderItem.canvas_state?.[side.id]);
+        updatedCanvasState[side.id] = {
+          ...existingState,
+          objects: serializedObjects,
+        };
+      }
+
+      const response = await fetch('/api/admin/orders/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderItemId: orderItem.id,
+          canvasState: updatedCanvasState,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '저장에 실패했습니다.');
+      }
+
+      setIsEditMode(false);
+    } catch (error) {
+      console.error('Error saving canvas state:', error);
+      setSaveError(error instanceof Error ? error.message : '저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [product, orderItem.id, orderItem.canvas_state]);
 
   useEffect(() => {
     fetchProduct();
@@ -1210,21 +1302,66 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md">
-            <Grid3x3 className="w-4 h-4" />
-            전체 캔버스 보기
-          </div>
-          <button
-            type="button"
-            onClick={handleDownloadDesignFiles}
-            disabled={isDownloading}
-            className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            {isDownloading ? '다운로드 중...' : '전체 에셋 다운로드'}
-          </button>
+          {isEditMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(false)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 bg-gray-100 px-3 py-2 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 text-sm font-medium text-white bg-green-600 px-3 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
+              >
+                <Save className="w-4 h-4" />
+                {isSaving ? '저장 중...' : '저장'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="flex items-center gap-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-md hover:bg-amber-100 transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+                편집 모드
+              </button>
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md">
+                <Grid3x3 className="w-4 h-4" />
+                전체 캔버스 보기
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadDesignFiles}
+                disabled={isDownloading}
+                className="flex items-center gap-2 text-sm font-medium text-white bg-blue-600 px-3 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" />
+                {isDownloading ? '다운로드 중...' : '전체 에셋 다운로드'}
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Save error */}
+      {saveError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+          {saveError}
+        </div>
+      )}
+
+      {/* Edit mode banner */}
+      {isEditMode && (
+        <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          편집 모드 활성화 — 객체를 선택하여 이동/크기 조절할 수 있습니다. 스크롤로 확대/축소, Space+드래그로 이동할 수 있습니다. 변경사항은 저장 버튼을 눌러야 반영됩니다.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Canvas Preview */}
@@ -1273,17 +1410,56 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
               const canvasState = orderItem.canvas_state[side.id] as CanvasState | string | null;
               if (!canvasState) return null;
 
+              const sideZoom = zoomLevels[side.id] ?? 1;
+
               return (
                 <div key={side.id} className="space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700">{side.name}</h3>
-                  <div className="flex justify-center items-center bg-gray-50 rounded-md p-3 min-h-125">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-700">{side.name}</h3>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleZoom(side.id, 'out')}
+                        className="p-1 text-gray-500 hover:bg-gray-200 rounded transition-colors"
+                        title="축소"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </button>
+                      <span className="text-xs text-gray-500 w-10 text-center tabular-nums">
+                        {Math.round(sideZoom * 100)}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleZoom(side.id, 'in')}
+                        className="p-1 text-gray-500 hover:bg-gray-200 rounded transition-colors"
+                        title="확대"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleZoom(side.id, 'reset')}
+                        className="p-1 text-gray-500 hover:bg-gray-200 rounded transition-colors"
+                        title="초기화"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-center items-center bg-gray-50 rounded-md p-3 min-h-125 overflow-hidden">
                     <SingleSideCanvas
                       side={side}
                       canvasState={canvasState}
                       productColor={getItemColorHex()}
                       width={400}
                       height={500}
-                      onCanvasReady={handleCanvasReady}
+                      isEdit={isEditMode}
+                      enableZoomPan
+                      onZoomChange={(zoom) => handleZoomChange(side.id, zoom)}
+                      onCanvasReady={(canvas, sideId, scale) => {
+                        handleCanvasRef(canvas, sideId);
+                        handleCanvasReady(canvas, sideId, scale);
+                      }}
                       renderFromCanvasStateOnly
                       customFonts={customFonts}
                     />

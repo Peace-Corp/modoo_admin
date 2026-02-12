@@ -21,6 +21,7 @@ export default function OrdersTab() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
   const [showOrderCreator, setShowOrderCreator] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   // Track if initial data has been fetched to avoid duplicate fetches
   const initialFetchDone = useRef(false);
@@ -195,6 +196,29 @@ export default function OrdersTab() {
   const handleOrderClick = useCallback((orderId: string) => {
     router.push(`/orders/${orderId}`);
   }, [router]);
+
+  const handleStatusChange = useCallback(async (orderId: string, newStatus: Order['order_status']) => {
+    setUpdatingStatusId(orderId);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, orderStatus: newStatus }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '주문 상태 변경에 실패했습니다.');
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, order_status: newStatus } : o))
+      );
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      setErrorMessage(error instanceof Error ? error.message : '주문 상태 변경에 실패했습니다.');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -405,14 +429,19 @@ export default function OrdersTab() {
                           {order.total_amount.toLocaleString()}원
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                            order.order_status
-                          )}`}
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={order.order_status}
+                          onChange={(e) => handleStatusChange(order.id, e.target.value as Order['order_status'])}
+                          disabled={updatingStatusId === order.id}
+                          className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(order.order_status)}`}
                         >
-                          {order.order_status}
-                        </span>
+                          <option value="pending">대기중</option>
+                          <option value="processing">처리중</option>
+                          <option value="completed">완료</option>
+                          <option value="cancelled">취소</option>
+                          <option value="refunded">환불</option>
+                        </select>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
