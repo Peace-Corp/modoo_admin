@@ -159,21 +159,21 @@ export default function PartnerMallInfoEditor({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-md w-full mx-4 overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-xl sm:rounded-xl sm:max-w-md w-full sm:mx-4 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800">파트너몰 정보 수정</h3>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-800">파트너몰 정보 수정</h3>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
           {/* Error message */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -186,8 +186,8 @@ export default function PartnerMallInfoEditor({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               로고
             </label>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
                 {isUploading ? (
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                 ) : logoUrl ? (
@@ -233,7 +233,7 @@ export default function PartnerMallInfoEditor({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="파트너몰 이름을 입력하세요"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none"
+              className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none"
             />
           </div>
         </div>
@@ -242,14 +242,14 @@ export default function PartnerMallInfoEditor({
         <div className="flex gap-3 p-4 border-t border-gray-200">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 py-2.5 sm:py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || isUploading}
-            className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 sm:py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {isSaving ? (
               <>

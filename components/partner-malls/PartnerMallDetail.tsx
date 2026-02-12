@@ -50,11 +50,11 @@ function ProductPreviewCard({
           </div>
         )}
 
-        {/* Hover Actions */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+        {/* Actions - always visible on mobile, hover on desktop */}
+        <div className="absolute inset-0 bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-3 sm:pb-0 gap-2 z-20">
           <button
             onClick={onEdit}
-            className="p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2.5 sm:p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
             title="로고 배치 수정"
           >
             <Edit2 className="w-4 h-4 text-gray-700" />
@@ -62,7 +62,7 @@ function ProductPreviewCard({
           <button
             onClick={onRemove}
             disabled={isDeleting}
-            className="p-2 bg-white rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+            className="p-2.5 sm:p-2 bg-white rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
             title="제거"
           >
             {isDeleting ? (
@@ -75,8 +75,8 @@ function ProductPreviewCard({
       </div>
 
       {/* Product Info */}
-      <div className="p-3">
-        <p className="text-sm font-medium text-gray-800 truncate">{product?.title}</p>
+      <div className="p-2 sm:p-3">
+        <p className="text-xs sm:text-sm font-medium text-gray-800 truncate">{product?.title}</p>
         <p className="text-xs text-gray-500 truncate">{product?.product_code}</p>
       </div>
     </div>
@@ -161,9 +161,9 @@ export default function PartnerMallDetail({
 
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={onBack}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -171,17 +171,119 @@ export default function PartnerMallDetail({
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">파트너몰 상세</h1>
-          <p className="text-gray-600">파트너몰 정보를 확인하고 제품을 관리하세요.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">파트너몰 상세</h1>
+          <p className="text-sm sm:text-base text-gray-600">파트너몰 정보를 확인하고 제품을 관리하세요.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Products Section - Left (2 columns) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+      {/* On mobile: Info first (summary), then products. On desktop: products left, info right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Mall Info Section - Shows first on mobile (order-first), right on desktop (order-last) */}
+        <div className="space-y-4 order-first lg:order-last">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800">파트너몰 정보</h2>
+              <button
+                onClick={() => setShowEditInfo(true)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="편집"
+              >
+                <Edit2 className="w-4 h-4 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Mobile: horizontal layout. Desktop: vertical layout */}
+            <div className="flex items-center gap-4 lg:flex-col lg:items-stretch">
+              {/* Logo */}
+              <div className="flex justify-center">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-32 lg:h-32 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                  {partnerMall.logo_url ? (
+                    <img
+                      src={partnerMall.logo_url}
+                      alt={partnerMall.name}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  ) : (
+                    <Building2 className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Info fields - horizontal on mobile, vertical on desktop */}
+              <div className="flex-1 lg:mt-4 space-y-3 sm:space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                    파트너몰명
+                  </label>
+                  <p className="text-base sm:text-lg font-semibold text-gray-800">{partnerMall.name}</p>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                    상태
+                  </label>
+                  <button
+                    onClick={toggleActive}
+                    disabled={togglingActive}
+                    className={`flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-lg text-sm font-medium transition-colors ${
+                      partnerMall.is_active
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {togglingActive ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : partnerMall.is_active ? (
+                      <ToggleRight className="w-4 h-4" />
+                    ) : (
+                      <ToggleLeft className="w-4 h-4" />
+                    )}
+                    {partnerMall.is_active ? '활성' : '비활성'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Extra details - grid on mobile for compact layout */}
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-3 mt-4 pt-4 border-t border-gray-100 lg:border-0 lg:pt-0">
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                  등록 제품
+                </label>
+                <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                  <Package className="w-4 h-4" />
+                  <span>{products.length}개</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                  생성일
+                </label>
+                <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                  <Calendar className="w-4 h-4" />
+                  <span>{new Date(partnerMall.created_at).toLocaleDateString('ko-KR')}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                  수정일
+                </label>
+                <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                  <Calendar className="w-4 h-4" />
+                  <span>{new Date(partnerMall.updated_at).toLocaleDateString('ko-KR')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Products Section */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800">
                 제품 목록
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   ({products.length}개)
@@ -189,7 +291,7 @@ export default function PartnerMallDetail({
               </h2>
               <button
                 onClick={() => setShowAddProducts(true)}
-                className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                className="flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm"
               >
                 <Plus className="w-4 h-4" />
                 제품 추가
@@ -197,9 +299,9 @@ export default function PartnerMallDetail({
             </div>
 
             {products.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 bg-gray-50 rounded-lg">
-                <Package className="w-12 h-12 text-gray-300 mb-3" />
-                <p className="text-gray-500 mb-4">등록된 제품이 없습니다.</p>
+              <div className="flex flex-col items-center justify-center py-8 sm:py-12 bg-gray-50 rounded-lg">
+                <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mb-3" />
+                <p className="text-sm sm:text-base text-gray-500 mb-4">등록된 제품이 없습니다.</p>
                 <button
                   onClick={() => setShowAddProducts(true)}
                   className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -209,7 +311,7 @@ export default function PartnerMallDetail({
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                 {products.map((mallProduct) => {
                   if (!mallProduct.product) return null;
 
@@ -225,103 +327,6 @@ export default function PartnerMallDetail({
                 })}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Mall Info Section - Right (1 column) */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">파트너몰 정보</h2>
-              <button
-                onClick={() => setShowEditInfo(true)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="편집"
-              >
-                <Edit2 className="w-4 h-4 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Logo */}
-            <div className="flex justify-center mb-6">
-              <div className="w-32 h-32 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
-                {partnerMall.logo_url ? (
-                  <img
-                    src={partnerMall.logo_url}
-                    alt={partnerMall.name}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                ) : (
-                  <Building2 className="w-12 h-12 text-gray-400" />
-                )}
-              </div>
-            </div>
-
-            {/* Name */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-500 mb-1">
-                파트너몰명
-              </label>
-              <p className="text-lg font-semibold text-gray-800">{partnerMall.name}</p>
-            </div>
-
-            {/* Status */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-500 mb-1">
-                상태
-              </label>
-              <button
-                onClick={toggleActive}
-                disabled={togglingActive}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  partnerMall.is_active
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {togglingActive ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : partnerMall.is_active ? (
-                  <ToggleRight className="w-4 h-4" />
-                ) : (
-                  <ToggleLeft className="w-4 h-4" />
-                )}
-                {partnerMall.is_active ? '활성' : '비활성'}
-              </button>
-            </div>
-
-            {/* Product Count */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-500 mb-1">
-                등록 제품
-              </label>
-              <div className="flex items-center gap-2 text-gray-800">
-                <Package className="w-4 h-4" />
-                <span>{products.length}개</span>
-              </div>
-            </div>
-
-            {/* Created Date */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-500 mb-1">
-                생성일
-              </label>
-              <div className="flex items-center gap-2 text-gray-800">
-                <Calendar className="w-4 h-4" />
-                <span>{new Date(partnerMall.created_at).toLocaleDateString('ko-KR')}</span>
-              </div>
-            </div>
-
-            {/* Updated Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">
-                수정일
-              </label>
-              <div className="flex items-center gap-2 text-gray-800">
-                <Calendar className="w-4 h-4" />
-                <span>{new Date(partnerMall.updated_at).toLocaleDateString('ko-KR')}</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

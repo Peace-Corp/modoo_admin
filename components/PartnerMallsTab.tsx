@@ -149,138 +149,126 @@ export default function PartnerMallsTab() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">파트너몰 관리</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">파트너몰 관리</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
             파트너몰을 생성하고 제품에 로고를 적용하세요.
           </p>
         </div>
         <button
           onClick={() => setShowCreator(true)}
-          className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
         >
-          <Plus className="w-5 h-5" />
-          파트너몰 생성
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="hidden sm:inline">파트너몰 생성</span>
+          <span className="sm:hidden">생성</span>
         </button>
       </div>
 
       {/* Empty state */}
       {partnerMalls.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg">
-          <Building2 className="w-16 h-16 text-gray-300 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">
+        <div className="flex flex-col items-center justify-center py-12 sm:py-16 bg-gray-50 rounded-lg">
+          <Building2 className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mb-4" />
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-700 mb-2">
             파트너몰이 없습니다
           </h2>
-          <p className="text-gray-500 mb-6">
+          <p className="text-sm sm:text-base text-gray-500 mb-6 text-center px-4">
             새로운 파트너몰을 생성하여 제품에 로고를 적용하세요.
           </p>
           <button
             onClick={() => setShowCreator(true)}
-            className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base"
           >
             <Plus className="w-5 h-5" />
             파트너몰 생성하기
           </button>
         </div>
       ) : (
-        /* Partner mall list */
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                  로고
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                  파트너몰명
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                  제품 수
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                  상태
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                  생성일
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {partnerMalls.map((mall) => (
-                <tr
-                  key={mall.id}
-                  className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => handleRowClick(mall.id)}
-                >
-                  {/* Logo */}
-                  <td className="px-4 py-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
-                      {mall.logo_url ? (
-                        <img
-                          src={mall.logo_url}
-                          alt={mall.name}
-                          className="max-w-full max-h-full object-contain"
-                        />
-                      ) : (
-                        <Building2 className="w-6 h-6 text-gray-400" />
-                      )}
-                    </div>
-                  </td>
-
-                  {/* Name */}
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-gray-800">{mall.name}</span>
-                  </td>
-
-                  {/* Product count */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-gray-600">
-                      <Package className="w-4 h-4" />
-                      <span>
-                        {mall.partner_mall_products?.length || 0}개
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleActive(mall);
-                      }}
-                      disabled={togglingId === mall.id}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
-                        mall.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {togglingId === mall.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : mall.is_active ? (
-                        <ToggleRight className="w-4 h-4" />
-                      ) : (
-                        <ToggleLeft className="w-4 h-4" />
-                      )}
-                      {mall.is_active ? '활성' : '비활성'}
-                    </button>
-                  </td>
-
-                  {/* Created at */}
-                  <td className="px-4 py-3 text-gray-600 text-sm">
-                    {new Date(mall.created_at).toLocaleDateString('ko-KR')}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    로고
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    파트너몰명
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    제품 수
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    상태
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    생성일
+                  </th>
+                  <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">
+                    작업
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {partnerMalls.map((mall) => (
+                  <tr
+                    key={mall.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleRowClick(mall.id)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+                        {mall.logo_url ? (
+                          <img
+                            src={mall.logo_url}
+                            alt={mall.name}
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        ) : (
+                          <Building2 className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-gray-800">{mall.name}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 text-gray-600">
+                        <Package className="w-4 h-4" />
+                        <span>{mall.partner_mall_products?.length || 0}개</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleActive(mall);
+                        }}
+                        disabled={togglingId === mall.id}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
+                          mall.is_active
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {togglingId === mall.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : mall.is_active ? (
+                          <ToggleRight className="w-4 h-4" />
+                        ) : (
+                          <ToggleLeft className="w-4 h-4" />
+                        )}
+                        {mall.is_active ? '활성' : '비활성'}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-sm">
+                      {new Date(mall.created_at).toLocaleDateString('ko-KR')}
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -296,13 +284,85 @@ export default function PartnerMallsTab() {
                           <Trash2 className="w-4 h-4" />
                         )}
                       </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile card list */}
+          <div className="md:hidden space-y-3">
+            {partnerMalls.map((mall) => (
+              <div
+                key={mall.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 active:bg-gray-50 cursor-pointer"
+                onClick={() => handleRowClick(mall.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                    {mall.logo_url ? (
+                      <img
+                        src={mall.logo_url}
+                        alt={mall.name}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    ) : (
+                      <Building2 className="w-6 h-6 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-800 truncate">{mall.name}</p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Package className="w-3.5 h-3.5" />
+                        {mall.partner_mall_products?.length || 0}개
+                      </span>
+                      <span>{new Date(mall.created_at).toLocaleDateString('ko-KR')}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActive(mall);
+                      }}
+                      disabled={togglingId === mall.id}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                        mall.is_active
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {togglingId === mall.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : mall.is_active ? (
+                        <ToggleRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <ToggleLeft className="w-3.5 h-3.5" />
+                      )}
+                      {mall.is_active ? '활성' : '비활성'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deletePartnerMall(mall);
+                      }}
+                      disabled={deletingId === mall.id}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === mall.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Creator modal */}

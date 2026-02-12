@@ -250,58 +250,60 @@ export default function SingleProductPlacementEditor({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-lg w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-xl sm:rounded-xl sm:max-w-lg w-full sm:mx-4 overflow-hidden h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800">로고 배치 수정</h3>
-            <p className="text-sm text-gray-500">{product.title}</p>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
+          <div className="min-w-0">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800">로고 배치 수정</h3>
+            <p className="text-xs sm:text-sm text-gray-500 truncate">{product.title}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-4 overflow-y-auto flex-1">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-3 sm:mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
             </div>
           )}
 
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 mb-3 sm:mb-4">
             로고를 드래그하여 위치를 조정하세요.
           </p>
 
-          {/* Canvas container */}
+          {/* Canvas container - scales down on mobile */}
           <div className="relative bg-gray-100 rounded-lg overflow-hidden flex justify-center">
             {!isCanvasReady && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               </div>
             )}
-            <SingleSideCanvas
-              key={`${mallProduct.id}-${currentSide.id}`}
-              side={currentSide}
-              width={canvasWidth}
-              height={canvasHeight}
-              isEdit={true}
-              canvasState={{ objects: [] }}
-              onCanvasReady={handleCanvasReady}
-            />
+            <div className="w-full overflow-auto flex justify-center">
+              <SingleSideCanvas
+                key={`${mallProduct.id}-${currentSide.id}`}
+                side={currentSide}
+                width={canvasWidth}
+                height={canvasHeight}
+                isEdit={true}
+                canvasState={{ objects: [] }}
+                onCanvasReady={handleCanvasReady}
+              />
+            </div>
           </div>
 
           {/* Reset button */}
-          <div className="mt-4">
+          <div className="mt-3 sm:mt-4">
             <button
               onClick={resetToCenter}
               disabled={!isCanvasReady}
-              className="flex items-center gap-2 py-2 px-4 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 py-2 px-3 sm:px-4 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4" />
               중앙으로 초기화
@@ -313,14 +315,14 @@ export default function SingleProductPlacementEditor({
         <div className="flex gap-3 p-4 border-t border-gray-200">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 py-2.5 sm:py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !isCanvasReady}
-            className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 sm:py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {isSaving ? (
               <>

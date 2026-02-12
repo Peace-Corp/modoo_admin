@@ -260,23 +260,23 @@ export default function LogoPlacementEditor({
   }
 
   return (
-    <div className="bg-white rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-2">로고 배치 조정</h2>
-      <p className="text-gray-600 mb-4">
+    <div className="bg-white rounded-lg p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">로고 배치 조정</h2>
+      <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4">
         로고를 드래그하여 위치를 조정하세요. (앞면만 배치)
       </p>
 
       {/* Progress indicator */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-          <span>
+      <div className="mb-3 sm:mb-4">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 mb-1">
+          <span className="truncate mr-2">
             {currentProduct?.title} - {currentSide?.name || '앞면'}
           </span>
-          <span>
+          <span className="shrink-0">
             {currentItemIndex + 1} / {totalItems}
           </span>
         </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full">
+        <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full">
           <div
             className="h-full bg-blue-500 rounded-full transition-all"
             style={{ width: `${((currentItemIndex + 1) / totalItems) * 100}%` }}
@@ -285,33 +285,36 @@ export default function LogoPlacementEditor({
       </div>
 
       {/* Canvas container */}
-      <div className="relative bg-gray-100 rounded-lg overflow-hidden mb-4 flex justify-center">
+      <div className="relative bg-gray-100 rounded-lg overflow-hidden mb-3 sm:mb-4 flex justify-center">
         {!isCanvasReady && (
           <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         )}
-        <SingleSideCanvas
-          key={`${currentProduct.id}-${currentSide.id}`}
-          side={currentSide}
-          width={canvasWidth}
-          height={canvasHeight}
-          isEdit={true}
-          canvasState={{ objects: [] }}
-          onCanvasReady={handleCanvasReady}
-          showScaleBox={false}
-        />
+        <div className="w-full overflow-auto flex justify-center">
+          <SingleSideCanvas
+            key={`${currentProduct.id}-${currentSide.id}`}
+            side={currentSide}
+            width={canvasWidth}
+            height={canvasHeight}
+            isEdit={true}
+            canvasState={{ objects: [] }}
+            onCanvasReady={handleCanvasReady}
+            showScaleBox={false}
+          />
+        </div>
       </div>
 
       {/* Navigation controls */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
         <button
           onClick={resetToCenter}
           disabled={!isCanvasReady}
-          className="flex items-center gap-2 py-2 px-4 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:px-4 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
         >
           <RotateCcw className="w-4 h-4" />
-          중앙으로 초기화
+          <span className="hidden sm:inline">중앙으로 초기화</span>
+          <span className="sm:hidden">초기화</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -333,18 +336,18 @@ export default function LogoPlacementEditor({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-4">
+      <div className="flex gap-3 sm:gap-4">
         <button
           onClick={onBack}
-          className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
         >
           이전
         </button>
         <button
           onClick={handleConfirm}
-          className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+          className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
         >
-          <Check className="w-5 h-5" />
+          <Check className="w-4 h-4 sm:w-5 sm:h-5" />
           미리보기
         </button>
       </div>

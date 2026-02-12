@@ -195,11 +195,11 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-xl sm:rounded-xl w-full sm:max-w-4xl h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h1 className="text-xl font-semibold">파트너몰 생성</h1>
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+          <h1 className="text-lg sm:text-xl font-semibold">파트너몰 생성</h1>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -209,27 +209,25 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
         </div>
 
         {/* Step indicator */}
-        <div className="px-6 py-4 border-b bg-gray-50">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b bg-gray-50">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                    index < currentStepIndex
-                      ? 'bg-blue-600 text-white'
-                      : index === currentStepIndex
+                  className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium ${
+                    index <= currentStepIndex
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-500'
                   }`}
                 >
                   {index < currentStepIndex ? (
-                    <Check className="w-4 h-4" />
+                    <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   ) : (
                     index + 1
                   )}
                 </div>
                 <span
-                  className={`ml-2 text-sm hidden sm:block ${
+                  className={`ml-1.5 sm:ml-2 text-xs sm:text-sm ${
                     index <= currentStepIndex ? 'text-gray-800' : 'text-gray-400'
                   }`}
                 >
@@ -237,7 +235,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 </span>
                 {index < steps.length - 1 && (
                   <div
-                    className={`w-8 sm:w-16 h-0.5 mx-2 ${
+                    className={`w-4 sm:w-16 h-0.5 mx-1 sm:mx-2 ${
                       index < currentStepIndex ? 'bg-blue-600' : 'bg-gray-200'
                     }`}
                   />
@@ -248,7 +246,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Step 1: Logo Capture */}
           {currentStep === 'logo' && (
             <LogoCapture onLogoReady={handleLogoReady} onCancel={onClose} />
@@ -303,22 +301,22 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
 
           {/* Step 4: Save */}
           {currentStep === 'save' && (
-            <div className="bg-white rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">파트너몰 저장</h2>
-              <p className="text-gray-600 mb-6">
+            <div className="bg-white rounded-lg p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">파트너몰 저장</h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                 파트너몰의 이름을 입력하고 저장하세요.
               </p>
 
               {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <div className="mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                   {error}
                 </div>
               )}
 
               <div className="space-y-4">
                 {/* Logo preview */}
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="w-16 h-16 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+                <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
                     {logoUrl && (
                       <img
                         src={logoUrl}
@@ -345,12 +343,12 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                     value={partnerMallName}
                     onChange={(e) => setPartnerMallName(e.target.value)}
                     placeholder="예: 삼성전자, LG생활건강"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 {/* Summary */}
-                <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="p-3 sm:p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-800">
                     {products.length}개 제품에 로고가 적용됩니다.
                   </p>
@@ -358,27 +356,27 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-4 mt-6">
+              <div className="flex gap-3 sm:gap-4 mt-6">
                 <button
                   onClick={() => setCurrentStep('preview')}
                   disabled={isSaving}
-                  className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base"
                 >
                   이전
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving || !partnerMallName.trim()}
-                  className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                       저장 중...
                     </>
                   ) : (
                     <>
-                      <Check className="w-5 h-5" />
+                      <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                       저장하기
                     </>
                   )}
