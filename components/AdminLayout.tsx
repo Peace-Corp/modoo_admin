@@ -99,7 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex">
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+            className="fixed inset-0 bg-black/20 bg-opacity-50 z-20 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
