@@ -7,6 +7,7 @@ import LogoCapture from './LogoCapture';
 import ProductMultiSelect from './ProductMultiSelect';
 import ProductPreviewGrid from './ProductPreviewGrid';
 import LogoPlacementEditor from './LogoPlacementEditor';
+import ColorSelector, { SelectedColor } from './ColorSelector';
 
 type Step = 'logo' | 'products' | 'preview' | 'save';
 
@@ -46,6 +47,11 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [error, setError] = useState<string | null>(null);
   const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
   const previewImagesRef = useRef<Record<string, string>>({});
+
+  // Per-product color selection
+  const [productColorSelections, setProductColorSelections] = useState<
+    Record<string, SelectedColor | null>
+  >({});
 
   // Fetch products when IDs are selected
   useEffect(() => {
@@ -115,6 +121,19 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
     setCurrentStep('preview');
   };
 
+  // Handle color change for a product
+  const handleProductColorChange = (productId: string, color: SelectedColor | null) => {
+    setProductColorSelections((prev) => ({ ...prev, [productId]: color }));
+  };
+
+  // Build productColors map for canvas rendering (productId -> hex)
+  const productColorsMap: Record<string, string> = {};
+  for (const [productId, color] of Object.entries(productColorSelections)) {
+    if (color) {
+      productColorsMap[productId] = color.hex;
+    }
+  }
+
   // Handle save
   const handleSave = async () => {
     if (!partnerMallName.trim()) {
@@ -151,14 +170,28 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
       const createResult = await createResponse.json();
       const partnerMallId = createResult.data.id;
 
-      // Add products with placements
+      // Add products with placements and color data
       if (placements.length > 0) {
-        const productsData = placements.map((p) => ({
-          product_id: p.productId,
-          logo_placements: p.placements,
-          canvas_state: p.canvasStates,
-          preview_url: previewImagesRef.current[p.productId] || null,
-        }));
+        const productsData = placements.map((p) => {
+          const product = products.find((pr) => pr.id === p.productId);
+          const color = productColorSelections[p.productId] ?? null;
+          const productTitle = product?.title || '';
+          const displayName = color
+            ? `${partnerMallName.trim()} ${productTitle} (${color.name})`
+            : `${partnerMallName.trim()} ${productTitle}`;
+
+          return {
+            product_id: p.productId,
+            logo_placements: p.placements,
+            canvas_state: p.canvasStates,
+            preview_url: previewImagesRef.current[p.productId] || null,
+            display_name: displayName,
+            manufacturer_color_id: color?.id ?? null,
+            color_hex: color?.hex ?? null,
+            color_name: color?.name ?? null,
+            color_code: color?.color_code ?? null,
+          };
+        });
 
         const productsResponse = await fetch('/api/admin/partner-malls/products', {
           method: 'PUT',
@@ -270,7 +303,6 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 logoUrl={logoUrl}
                 placements={placements.filter(p => p.productId === products[editingProductIndex].id)}
                 onPlacementsChange={(updatedPlacements) => {
-                  // Merge the updated placement back into the full placements array
                   setPlacements(prev => {
                     const newPlacements = [...prev];
                     const editedProductId = products[editingProductIndex].id;
@@ -285,17 +317,48 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 onBack={() => setEditingProductIndex(null)}
               />
             ) : (
-              <ProductPreviewGrid
-                products={products}
-                logoUrl={logoUrl}
-                placements={placements}
-                onEditProduct={(productIndex) => setEditingProductIndex(productIndex)}
-                onConfirm={() => setCurrentStep('save')}
-                onBack={() => setCurrentStep('products')}
-                onPreviewCaptured={(productId, dataUrl) => {
-                  previewImagesRef.current[productId] = dataUrl;
-                }}
-              />
+              <div>
+                {/* Color selection per product */}
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-800 mb-3">제품 색상 선택</h3>
+                  <div className="space-y-3">
+                    {products.map((product) => (
+                      <div key={product.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="w-10 h-10 bg-white rounded border border-gray-200 overflow-hidden shrink-0">
+                          {product.thumbnail_image_link && (
+                            <img
+                              src={product.thumbnail_image_link}
+                              alt={product.title}
+                              className="w-full h-full object-contain"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-medium text-gray-800 truncate">{product.title}</p>
+                          <ColorSelector
+                            productId={product.id}
+                            selectedColorId={productColorSelections[product.id]?.id ?? null}
+                            onColorSelect={(color) => handleProductColorChange(product.id, color)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <ProductPreviewGrid
+                  products={products}
+                  logoUrl={logoUrl}
+                  placements={placements}
+                  productColors={productColorsMap}
+                  onEditProduct={(productIndex) => setEditingProductIndex(productIndex)}
+                  onConfirm={() => setCurrentStep('save')}
+                  onBack={() => setCurrentStep('products')}
+                  onPreviewCaptured={(productId, dataUrl) => {
+                    previewImagesRef.current[productId] = dataUrl;
+                  }}
+                />
+              </div>
             )
           )}
 

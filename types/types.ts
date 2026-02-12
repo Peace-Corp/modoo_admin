@@ -558,6 +558,7 @@ export interface PartnerMall {
   logo_url: string;
   original_logo_url: string | null;
   is_active: boolean;
+  share_token: string | null;
   created_at: string;
   updated_at: string;
   // Joined relations
@@ -568,6 +569,11 @@ export interface PartnerMallProduct {
   id: string;
   partner_mall_id: string;
   product_id: string;
+  display_name: string | null;
+  manufacturer_color_id: string | null;
+  color_hex: string | null;
+  color_name: string | null;
+  color_code: string | null;
   logo_placements: Record<string, LogoPlacement>;  // keyed by side_id
   canvas_state: Record<string, unknown>;
   preview_url: string | null;

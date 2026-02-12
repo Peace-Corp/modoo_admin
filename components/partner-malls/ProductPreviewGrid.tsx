@@ -16,6 +16,7 @@ interface ProductPreviewGridProps {
   products: Product[];
   logoUrl: string;
   placements: ProductPlacement[];
+  productColors?: Record<string, string>; // productId -> hex color
   onEditProduct: (productIndex: number, sideIndex: number) => void;
   onConfirm: () => void;
   onBack: () => void;
@@ -40,16 +41,28 @@ const EDITOR_WIDTH = 400;
 function PreviewCard({
   item,
   logoUrl,
+  productColor,
   onEdit,
   onPreviewCaptured,
 }: {
   item: PreviewItem;
   logoUrl: string;
+  productColor?: string;
   onEdit: () => void;
   onPreviewCaptured?: (productId: string, dataUrl: string) => void;
 }) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const prevColorRef = useRef(productColor);
+
+  // Re-render canvas when productColor changes
+  useEffect(() => {
+    if (prevColorRef.current !== productColor) {
+      prevColorRef.current = productColor;
+      setPreviewImage(null);
+      setIsLoading(true);
+    }
+  }, [productColor]);
 
   // Preview canvas dimensions (scaled down from editor)
   const previewWidth = 160;
@@ -125,12 +138,13 @@ function PreviewCard({
         ) : (
           <div style={{ opacity: 0 }}>
             <SingleSideCanvas
-              key={`${item.productId}-${item.sideId}`}
+              key={`${item.productId}-${item.sideId}-${productColor || ''}`}
               side={item.side}
               width={previewWidth}
               height={previewHeight}
               isEdit={false}
               canvasState={{ objects: [] }}
+              productColor={productColor}
               onCanvasReady={handleCanvasReady}
             />
           </div>
@@ -169,6 +183,7 @@ export default function ProductPreviewGrid({
   products,
   logoUrl,
   placements,
+  productColors,
   onEditProduct,
   onConfirm,
   onBack,
@@ -227,6 +242,7 @@ export default function ProductPreviewGrid({
               key={`${item.productId}-${item.sideId}`}
               item={item}
               logoUrl={logoUrl}
+              productColor={productColors?.[item.productId]}
               onEdit={() => handleEdit(item.productIndex, item.sideIndex)}
               onPreviewCaptured={onPreviewCaptured}
             />

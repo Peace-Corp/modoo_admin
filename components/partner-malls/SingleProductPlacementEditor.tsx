@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric';
 import { X, RotateCcw, Check, Loader2 } from 'lucide-react';
 import { PartnerMallProduct, ProductSide, LogoPlacement } from '@/types/types';
 import SingleSideCanvas from '@/components/canvas/SingleSideCanvas';
+import ColorSelector, { SelectedColor } from './ColorSelector';
 
 interface SingleProductPlacementEditorProps {
   mallProduct: PartnerMallProduct;
   logoUrl: string;
+  partnerMallName: string;
   onClose: () => void;
   onSave: () => void;
 }
@@ -24,6 +26,7 @@ const getFirstSide = (mallProduct: PartnerMallProduct): ProductSide | null => {
 export default function SingleProductPlacementEditor({
   mallProduct,
   logoUrl,
+  partnerMallName,
   onClose,
   onSave,
 }: SingleProductPlacementEditorProps) {
@@ -35,11 +38,44 @@ export default function SingleProductPlacementEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Color state
+  const [selectedColor, setSelectedColor] = useState<SelectedColor | null>(
+    mallProduct.manufacturer_color_id && mallProduct.color_hex
+      ? {
+          id: mallProduct.manufacturer_color_id,
+          hex: mallProduct.color_hex,
+          name: mallProduct.color_name || '',
+          color_code: mallProduct.color_code || '',
+        }
+      : null
+  );
+
+  // Display name state
+  const [displayName, setDisplayName] = useState(
+    mallProduct.display_name || ''
+  );
+
+  // Canvas key to force re-render when color changes
+  const [canvasKey, setCanvasKey] = useState(0);
+
   const canvasWidth = 400;
   const canvasHeight = 500;
 
   const currentSide = getFirstSide(mallProduct);
   const product = mallProduct.product;
+
+  // Auto-generate display name when color changes
+  const handleColorSelect = (color: SelectedColor | null) => {
+    setSelectedColor(color);
+    // Auto-generate display name
+    const productTitle = product?.title || '';
+    const newName = color
+      ? `${partnerMallName} ${productTitle} (${color.name})`
+      : `${partnerMallName} ${productTitle}`;
+    setDisplayName(newName);
+    // Re-render canvas with new color
+    setCanvasKey((prev) => prev + 1);
+  };
 
   // Get current placement state
   const getCurrentPlacement = useCallback((): LogoPlacement | null => {
@@ -216,6 +252,11 @@ export default function SingleProductPlacementEditor({
             [currentSide.id]: placement,
           },
           preview_url: previewUrl,
+          display_name: displayName || null,
+          manufacturer_color_id: selectedColor?.id ?? null,
+          color_hex: selectedColor?.hex ?? null,
+          color_name: selectedColor?.name ?? null,
+          color_code: selectedColor?.color_code ?? null,
         }),
       });
 
@@ -255,7 +296,7 @@ export default function SingleProductPlacementEditor({
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
           <div className="min-w-0">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-800">로고 배치 수정</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800">제품 편집</h3>
             <p className="text-xs sm:text-sm text-gray-500 truncate">{product.title}</p>
           </div>
           <button
@@ -274,11 +315,37 @@ export default function SingleProductPlacementEditor({
             </div>
           )}
 
-          <p className="text-sm text-gray-600 mb-3 sm:mb-4">
+          {/* Display name input */}
+          <div className="mb-3 sm:mb-4">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              제품명
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={`${partnerMallName} ${product.title}`}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Color selector */}
+          <div className="mb-3 sm:mb-4">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              색상
+            </label>
+            <ColorSelector
+              productId={mallProduct.product_id}
+              selectedColorId={selectedColor?.id ?? null}
+              onColorSelect={handleColorSelect}
+            />
+          </div>
+
+          <p className="text-xs text-gray-500 mb-3 sm:mb-4">
             로고를 드래그하여 위치를 조정하세요.
           </p>
 
-          {/* Canvas container - scales down on mobile */}
+          {/* Canvas container */}
           <div className="relative bg-gray-100 rounded-lg overflow-hidden flex justify-center">
             {!isCanvasReady && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
@@ -287,13 +354,15 @@ export default function SingleProductPlacementEditor({
             )}
             <div className="w-full overflow-auto flex justify-center">
               <SingleSideCanvas
-                key={`${mallProduct.id}-${currentSide.id}`}
+                key={`${mallProduct.id}-${currentSide.id}-${canvasKey}`}
                 side={currentSide}
                 width={canvasWidth}
                 height={canvasHeight}
                 isEdit={true}
                 canvasState={{ objects: [] }}
+                productColor={selectedColor?.hex}
                 onCanvasReady={handleCanvasReady}
+                showScaleBox={false}
               />
             </div>
           </div>

@@ -84,6 +84,11 @@ export async function POST(request: Request) {
     const logoPlacements = payload?.logo_placements ?? {};
     const canvasState = payload?.canvas_state ?? {};
     const previewUrl = payload?.preview_url ?? null;
+    const displayName = payload?.display_name ?? null;
+    const manufacturerColorId = payload?.manufacturer_color_id ?? null;
+    const colorHex = payload?.color_hex ?? null;
+    const colorName = payload?.color_name ?? null;
+    const colorCode = payload?.color_code ?? null;
 
     if (!partnerMallId || typeof partnerMallId !== 'string') {
       return NextResponse.json({ error: '파트너몰 ID가 필요합니다.' }, { status: 400 });
@@ -110,6 +115,11 @@ export async function POST(request: Request) {
         logo_placements: logoPlacements,
         canvas_state: canvasState,
         preview_url: previewUrl,
+        display_name: displayName,
+        manufacturer_color_id: manufacturerColorId,
+        color_hex: colorHex,
+        color_name: colorName,
+        color_code: colorCode,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -125,10 +135,6 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      // Check for unique constraint violation
-      if (error.code === '23505') {
-        return NextResponse.json({ error: '이 제품은 이미 파트너몰에 추가되어 있습니다.' }, { status: 409 });
-      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -163,12 +169,22 @@ export async function PUT(request: Request) {
       logo_placements?: Record<string, unknown>;
       canvas_state?: Record<string, unknown>;
       preview_url?: string | null;
+      display_name?: string | null;
+      manufacturer_color_id?: string | null;
+      color_hex?: string | null;
+      color_name?: string | null;
+      color_code?: string | null;
     }) => ({
       partner_mall_id: partnerMallId,
       product_id: p.product_id,
       logo_placements: p.logo_placements ?? {},
       canvas_state: p.canvas_state ?? {},
       preview_url: p.preview_url ?? null,
+      display_name: p.display_name ?? null,
+      manufacturer_color_id: p.manufacturer_color_id ?? null,
+      color_hex: p.color_hex ?? null,
+      color_name: p.color_name ?? null,
+      color_code: p.color_code ?? null,
       created_at: now,
       updated_at: now,
     }));
@@ -176,10 +192,7 @@ export async function PUT(request: Request) {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('partner_mall_products')
-      .upsert(insertData, {
-        onConflict: 'partner_mall_id,product_id',
-        ignoreDuplicates: false,
-      })
+      .insert(insertData)
       .select(`
         *,
         product:products (
@@ -236,6 +249,26 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '미리보기 URL 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.preview_url = payload.preview_url ?? null;
+    }
+
+    if (payload?.display_name !== undefined) {
+      updateData.display_name = payload.display_name;
+    }
+
+    if (payload?.manufacturer_color_id !== undefined) {
+      updateData.manufacturer_color_id = payload.manufacturer_color_id;
+    }
+
+    if (payload?.color_hex !== undefined) {
+      updateData.color_hex = payload.color_hex;
+    }
+
+    if (payload?.color_name !== undefined) {
+      updateData.color_name = payload.color_name;
+    }
+
+    if (payload?.color_code !== undefined) {
+      updateData.color_code = payload.color_code;
     }
 
     if (Object.keys(updateData).length === 1) {
