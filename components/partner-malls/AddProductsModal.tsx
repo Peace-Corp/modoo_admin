@@ -128,17 +128,17 @@ export default function AddProductsModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-xl sm:rounded-xl sm:max-w-4xl w-full sm:mx-4 h-[95vh] sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">제품 추가</h3>
-            <p className="text-sm text-gray-500">로고는 프리셋 위치에 자동 배치됩니다.</p>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-800">제품 추가</h3>
+            <p className="text-xs sm:text-sm text-gray-500">로고는 프리셋 위치에 자동 배치됩니다.</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -146,7 +146,7 @@ export default function AddProductsModal({
 
         {/* Error message */}
         {error && (
-          <div className="p-4 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+          <div className="p-3 sm:p-4 bg-red-50 border-b border-red-200 text-red-700 text-sm">
             {error}
           </div>
         )}
