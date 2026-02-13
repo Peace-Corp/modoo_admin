@@ -48,15 +48,19 @@ export async function GET() {
           id,
           product_id,
           display_name,
+          manufacturer_color_id,
           color_hex,
           color_name,
+          color_code,
           logo_placements,
+          canvas_state,
           preview_url,
           product:products (
             id,
             title,
             thumbnail_image_link,
-            product_code
+            product_code,
+            configuration
           )
         )
       `)
