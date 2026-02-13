@@ -55,11 +55,11 @@ function ProductPreviewCard({
           </div>
         )}
 
-        {/* Actions - always visible on mobile, hover on desktop */}
-        <div className="absolute inset-0 bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-end sm:items-center justify-center pb-3 sm:pb-0 gap-2 z-20">
+        {/* Actions - hover overlay on desktop only */}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center justify-center gap-2 z-20">
           <button
             onClick={onEdit}
-            className="p-2.5 sm:p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
             title="편집"
           >
             <Edit2 className="w-4 h-4 text-gray-700" />
@@ -67,7 +67,7 @@ function ProductPreviewCard({
           <button
             onClick={onRemove}
             disabled={isDeleting}
-            className="p-2.5 sm:p-2 bg-white rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+            className="p-2 bg-white rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
             title="제거"
           >
             {isDeleting ? (
@@ -94,6 +94,27 @@ function ProductPreviewCard({
           <p className="text-xs text-gray-500 truncate">
             {mallProduct.color_name || product?.product_code || ''}
           </p>
+        </div>
+        {/* Mobile action buttons */}
+        <div className="flex items-center gap-2 mt-2 sm:hidden">
+          <button
+            onClick={onEdit}
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+          >
+            <Edit2 className="w-3 h-3" />
+            편집
+          </button>
+          <button
+            onClick={onRemove}
+            disabled={isDeleting}
+            className="flex items-center justify-center gap-1 py-1.5 px-2.5 text-xs text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            {isDeleting ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Trash2 className="w-3 h-3" />
+            )}
+          </button>
         </div>
       </div>
     </div>
