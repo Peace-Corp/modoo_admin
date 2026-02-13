@@ -22,6 +22,8 @@ interface SingleSideCanvasProps {
   renderFromCanvasStateOnly?: boolean;
   customFonts?: CustomFont[]; // Custom fonts to load before rendering
   showScaleBox?: boolean; // whether to show the scale box overlay (default true)
+  enableZoomPan?: boolean; // enable mouse wheel zoom and space+drag pan (default false)
+  onZoomChange?: (zoom: number) => void; // callback when zoom changes
 }
 
 const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
@@ -35,6 +37,8 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   renderFromCanvasStateOnly = false,
   customFonts = [],
   showScaleBox = true,
+  enableZoomPan = false,
+  onZoomChange,
 }) => {
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -921,6 +925,129 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
     });
     canvas.requestRenderAll();
   }, [isEdit, side.id, resetZoom]);
+
+  // Effect for mouse wheel zoom and space+drag panning
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !enableZoomPan) return;
+
+    let isPanning = false;
+    let spaceHeld = false;
+    let lastPanPoint: { x: number; y: number } | null = null;
+
+    const handleWheel = (opt: fabric.TEvent<WheelEvent>) => {
+      const e = opt.e;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.deltaY;
+      const currentZoom = canvas.getZoom();
+      const zoomFactor = 0.999 ** delta;
+      let nextZoom = currentZoom * zoomFactor;
+      nextZoom = Math.max(0.2, Math.min(5, nextZoom));
+
+      const point = canvas.getScenePoint(e);
+      canvas.zoomToPoint(point, nextZoom);
+      canvas.requestRenderAll();
+      onZoomChange?.(nextZoom);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !spaceHeld) {
+        spaceHeld = true;
+        if (canvasHostRef.current) {
+          canvasHostRef.current.style.cursor = 'grab';
+        }
+        // Temporarily disable object selection while panning
+        canvas.selection = false;
+        canvas.forEachObject((obj) => {
+          const objData = obj as { data?: { id?: string } };
+          if (objData.data?.id === 'background-product-image') return;
+          obj.evented = false;
+        });
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spaceHeld = false;
+        isPanning = false;
+        lastPanPoint = null;
+        if (canvasHostRef.current) {
+          canvasHostRef.current.style.cursor = '';
+        }
+        // Restore selection state based on edit mode
+        canvas.selection = isEditRef.current;
+        canvas.forEachObject((obj) => {
+          const objData = obj as { data?: { id?: string } };
+          if (objData.data?.id === 'background-product-image') return;
+          obj.evented = isEditRef.current;
+        });
+      }
+    };
+
+    const getClientXY = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
+      if ('clientX' in e) return { x: e.clientX, y: e.clientY };
+      const touch = e.touches?.[0] || e.changedTouches?.[0];
+      return touch ? { x: touch.clientX, y: touch.clientY } : null;
+    };
+
+    const handleMouseDown = (opt: fabric.TEvent<MouseEvent | TouchEvent>) => {
+      if (spaceHeld) {
+        isPanning = true;
+        lastPanPoint = getClientXY(opt.e);
+        if (canvasHostRef.current) {
+          canvasHostRef.current.style.cursor = 'grabbing';
+        }
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+      }
+    };
+
+    const handleMouseMove = (opt: fabric.TEvent<MouseEvent | TouchEvent>) => {
+      if (isPanning && lastPanPoint) {
+        const point = getClientXY(opt.e);
+        if (!point) return;
+        const dx = point.x - lastPanPoint.x;
+        const dy = point.y - lastPanPoint.y;
+        const vpt = canvas.viewportTransform;
+        if (vpt) {
+          vpt[4] += dx;
+          vpt[5] += dy;
+          canvas.setViewportTransform(vpt);
+        }
+        lastPanPoint = point;
+        opt.e.preventDefault();
+        opt.e.stopPropagation();
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isPanning) {
+        isPanning = false;
+        lastPanPoint = null;
+        if (canvasHostRef.current && spaceHeld) {
+          canvasHostRef.current.style.cursor = 'grab';
+        }
+      }
+    };
+
+    canvas.on('mouse:wheel', handleWheel);
+    canvas.on('mouse:down', handleMouseDown);
+    canvas.on('mouse:move', handleMouseMove);
+    canvas.on('mouse:up', handleMouseUp);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      canvas.off('mouse:wheel', handleWheel);
+      canvas.off('mouse:down', handleMouseDown);
+      canvas.off('mouse:move', handleMouseMove);
+      canvas.off('mouse:up', handleMouseUp);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [enableZoomPan, onZoomChange]);
 
   // Effect to apply color filter when productColor changes (legacy single-image mode)
   useEffect(() => {

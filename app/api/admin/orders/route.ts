@@ -121,6 +121,7 @@ export async function PATCH(request: Request) {
     const factoryAmountInput = payload?.factoryAmount ?? null;
     const factoryPaymentDateInput = payload?.factoryPaymentDate ?? null;
     const factoryPaymentStatusInput = payload?.factoryPaymentStatus ?? null;
+    const orderStatusInput = payload?.orderStatus ?? null;
 
     if (!orderId || typeof orderId !== 'string') {
       return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
@@ -128,6 +129,12 @@ export async function PATCH(request: Request) {
 
     if (manufacturerId !== null && typeof manufacturerId !== 'string') {
       return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    // Validate order status
+    const validOrderStatuses = ['pending', 'processing', 'completed', 'cancelled', 'refunded'];
+    if (orderStatusInput !== null && !validOrderStatuses.includes(orderStatusInput)) {
+      return NextResponse.json({ error: '유효하지 않은 주문 상태입니다.' }, { status: 400 });
     }
 
     // Validate factory payment status
@@ -167,6 +174,9 @@ export async function PATCH(request: Request) {
     }
     if (factoryPaymentStatusInput !== undefined) {
       updateData.factory_payment_status = factoryPaymentStatusInput;
+    }
+    if (orderStatusInput !== null) {
+      updateData.order_status = orderStatusInput;
     }
 
     const { data, error } = await adminClient

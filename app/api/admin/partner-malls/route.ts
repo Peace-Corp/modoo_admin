@@ -47,12 +47,16 @@ export async function GET() {
         partner_mall_products (
           id,
           product_id,
+          display_name,
+          color_hex,
+          color_name,
           logo_placements,
           preview_url,
           product:products (
             id,
             title,
-            thumbnail_image_link
+            thumbnail_image_link,
+            product_code
           )
         )
       `)

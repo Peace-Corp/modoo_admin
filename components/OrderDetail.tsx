@@ -47,6 +47,9 @@ export default function OrderDetail({
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
+  // Order status (admin can change)
+  const [orderStatus, setOrderStatus] = useState<string>(order.order_status || 'pending');
+
   // Factory-specific fields (admin can set these)
   const [deadline, setDeadline] = useState<string>(order.deadline ? order.deadline.split('T')[0] : '');
   const [factoryAmount, setFactoryAmount] = useState<string>(order.factory_amount?.toString() || '');
@@ -168,11 +171,12 @@ export default function OrderDetail({
 
   // Sync factory fields when order changes
   useEffect(() => {
+    setOrderStatus(order.order_status || 'pending');
     setDeadline(order.deadline ? order.deadline.split('T')[0] : '');
     setFactoryAmount(order.factory_amount?.toString() || '');
     setFactoryPaymentDate(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
     setFactoryPaymentStatus(order.factory_payment_status || 'pending');
-  }, [order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
+  }, [order.order_status, order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -326,6 +330,7 @@ export default function OrderDetail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: order.id,
+          orderStatus: orderStatus || null,
           factoryId: selectedFactoryId || null,
           deadline: deadline || null,
           factoryAmount: factoryAmount ? parseFloat(factoryAmount) : null,
@@ -587,6 +592,22 @@ export default function OrderDetail({
 
               {canAssign && (
                 <>
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">주문 상태</label>
+                    <select
+                      value={orderStatus}
+                      onChange={(event) => setOrderStatus(event.target.value)}
+                      disabled={assigning}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                    >
+                      <option value="pending">대기중</option>
+                      <option value="processing">처리중</option>
+                      <option value="completed">완료</option>
+                      <option value="cancelled">취소</option>
+                      <option value="refunded">환불</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
                     <select

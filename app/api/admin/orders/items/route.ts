@@ -82,3 +82,63 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 401 });
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    }
+
+    const payload = await request.json().catch(() => null);
+    const orderItemId = payload?.orderItemId;
+    const canvasState = payload?.canvasState;
+
+    if (!orderItemId || typeof orderItemId !== 'string') {
+      return NextResponse.json({ error: '주문 상품 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    if (!canvasState || typeof canvasState !== 'object') {
+      return NextResponse.json({ error: 'canvas_state가 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('order_items')
+      .update({
+        canvas_state: canvasState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderItemId)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '주문 상품 수정에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

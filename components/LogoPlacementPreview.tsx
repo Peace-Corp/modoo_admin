@@ -26,13 +26,11 @@ export default function LogoPlacementPreview({
 }: LogoPlacementPreviewProps) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const placeholderRef = useRef<fabric.Rect | null>(null);
-  const moveIconRef = useRef<fabric.Text | null>(null);
 
   const [isCanvasReady, setIsCanvasReady] = useState(false);
 
   const canvasWidth = 400;
   const canvasHeight = 500;
-  const placeholderSize = 60;
 
   const frontSide = sides.length > 0 ? sides[0] : null;
 
@@ -41,35 +39,38 @@ export default function LogoPlacementPreview({
   const currentWidth = placement?.width ?? DEFAULT_PLACEMENT.width;
   const currentHeight = placement?.height ?? DEFAULT_PLACEMENT.height;
 
-  // Read placement directly from canvas coordinates
+  // Read placement (position + size) directly from canvas
   const updatePlacementFromCanvas = useCallback(() => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
-    const placeholder = placeholderRef.current;
+    const ph = placeholderRef.current;
+    const scaledW = (ph.width || 100) * (ph.scaleX || 1);
+    const scaledH = (ph.height || 100) * (ph.scaleY || 1);
 
     onPlacementChange({
-      x: Math.round(placeholder.left || 0),
-      y: Math.round(placeholder.top || 0),
-      width: currentWidth,
-      height: currentHeight,
+      x: Math.round(ph.left || 0),
+      y: Math.round(ph.top || 0),
+      width: Math.round(scaledW),
+      height: Math.round(scaledH),
     });
-  }, [onPlacementChange, currentWidth, currentHeight]);
+  }, [onPlacementChange]);
 
-  // Set placeholder position directly from coordinate values
-  const updatePlaceholderFromInputs = useCallback((x: number, y: number) => {
+  // Sync placeholder rect from external values (inputs)
+  const syncPlaceholderFromValues = useCallback((x: number, y: number, w: number, h: number) => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const placeholder = placeholderRef.current;
+    const ph = placeholderRef.current;
 
-    placeholder.set({ left: x, top: y });
-
-    if (moveIconRef.current) {
-      moveIconRef.current.set({
-        left: x + placeholderSize / 2,
-        top: y + placeholderSize / 2,
-      });
-    }
+    // Reset scale to 1 and set actual dimensions
+    ph.set({
+      left: x,
+      top: y,
+      width: w,
+      height: h,
+      scaleX: 1,
+      scaleY: 1,
+    });
 
     canvas.renderAll();
   }, []);
@@ -81,58 +82,43 @@ export default function LogoPlacementPreview({
 
     const initialX = placement?.x ?? DEFAULT_PLACEMENT.x;
     const initialY = placement?.y ?? DEFAULT_PLACEMENT.y;
+    const initialW = placement?.width ?? DEFAULT_PLACEMENT.width;
+    const initialH = placement?.height ?? DEFAULT_PLACEMENT.height;
 
     const placeholder = new fabric.Rect({
       left: initialX,
       top: initialY,
-      width: placeholderSize,
-      height: placeholderSize,
-      fill: 'rgba(59, 130, 246, 0.3)',
+      width: initialW,
+      height: initialH,
+      fill: 'rgba(59, 130, 246, 0.15)',
       stroke: '#3B82F6',
       strokeWidth: 2,
+      strokeDashArray: [6, 3],
       rx: 4,
       ry: 4,
       selectable: true,
-      hasControls: false,
+      hasControls: true,
       hasBorders: true,
-      lockScalingX: true,
-      lockScalingY: true,
       lockRotation: true,
+      cornerColor: '#3B82F6',
+      cornerStrokeColor: '#fff',
+      cornerSize: 10,
+      cornerStyle: 'circle',
+      transparentCorners: false,
       data: { id: 'logo-placeholder' },
     });
 
+    // Hide rotation control
+    placeholder.setControlVisible('mtr', false);
+
     placeholderRef.current = placeholder;
     canvas.add(placeholder);
+    canvas.setActiveObject(placeholder);
 
-    const moveIconSize = 20;
-    const moveIcon = new fabric.Text('\u2295', {
-      left: initialX + placeholderSize / 2,
-      top: initialY + placeholderSize / 2,
-      fontSize: moveIconSize,
-      fill: '#3B82F6',
-      originX: 'center',
-      originY: 'center',
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    });
-    canvas.add(moveIcon);
-    moveIconRef.current = moveIcon;
-
-    placeholder.on('moving', () => {
-      moveIcon.set({
-        left: (placeholder.left || 0) + placeholderSize / 2,
-        top: (placeholder.top || 0) + placeholderSize / 2,
-      });
-    });
-
+    // Update placement on move or scale
     canvas.on('object:modified', (e) => {
-      const target = e.target as { data?: { id?: string } } | undefined;
+      const target = e.target as fabric.FabricObject & { data?: { id?: string } };
       if (target?.data?.id === 'logo-placeholder') {
-        moveIcon.set({
-          left: (placeholder.left || 0) + placeholderSize / 2,
-          top: (placeholder.top || 0) + placeholderSize / 2,
-        });
         canvas.renderAll();
         updatePlacementFromCanvas();
       }
@@ -145,21 +131,16 @@ export default function LogoPlacementPreview({
   useEffect(() => {
     setIsCanvasReady(false);
     placeholderRef.current = null;
-    moveIconRef.current = null;
   }, [frontSide?.id]);
 
   const resetToDefault = () => {
     if (!frontSide) return;
 
-    onPlacementChange({
-      x: DEFAULT_PLACEMENT.x,
-      y: DEFAULT_PLACEMENT.y,
-      width: currentWidth,
-      height: currentHeight,
-    });
+    const newPlacement = { ...DEFAULT_PLACEMENT };
+    onPlacementChange(newPlacement);
 
     if (isCanvasReady) {
-      updatePlaceholderFromInputs(DEFAULT_PLACEMENT.x, DEFAULT_PLACEMENT.y);
+      syncPlaceholderFromValues(newPlacement.x, newPlacement.y, newPlacement.width, newPlacement.height);
     }
   };
 
@@ -195,7 +176,7 @@ export default function LogoPlacementPreview({
 
       <div className="flex items-center gap-2 text-xs text-gray-500">
         <Move className="w-4 h-4" />
-        <span>파란색 사각형을 드래그하여 로고 위치를 조정하세요</span>
+        <span>사각형을 드래그하여 위치를, 모서리를 드래그하여 크기를 조정하세요</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -208,14 +189,13 @@ export default function LogoPlacementPreview({
               const x = Math.max(0, Math.min(canvasWidth, parseInt(e.target.value) || 0));
               onPlacementChange({ x, y: currentY, width: currentWidth, height: currentHeight });
               if (isCanvasReady) {
-                updatePlaceholderFromInputs(x, currentY);
+                syncPlaceholderFromValues(x, currentY, currentWidth, currentHeight);
               }
             }}
             min={0}
             max={canvasWidth}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
-          <span className="text-xs text-gray-400">최대: {canvasWidth}</span>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Y 위치 (px)</label>
@@ -226,14 +206,13 @@ export default function LogoPlacementPreview({
               const y = Math.max(0, Math.min(canvasHeight, parseInt(e.target.value) || 0));
               onPlacementChange({ x: currentX, y, width: currentWidth, height: currentHeight });
               if (isCanvasReady) {
-                updatePlaceholderFromInputs(currentX, y);
+                syncPlaceholderFromValues(currentX, y, currentWidth, currentHeight);
               }
             }}
             min={0}
             max={canvasHeight}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
-          <span className="text-xs text-gray-400">최대: {canvasHeight}</span>
         </div>
       </div>
 
@@ -244,9 +223,13 @@ export default function LogoPlacementPreview({
             type="number"
             value={currentWidth}
             onChange={(e) => {
-              const width = parseInt(e.target.value) || DEFAULT_PLACEMENT.width;
+              const width = Math.max(1, parseInt(e.target.value) || DEFAULT_PLACEMENT.width);
               onPlacementChange({ x: currentX, y: currentY, width, height: currentHeight });
+              if (isCanvasReady) {
+                syncPlaceholderFromValues(currentX, currentY, width, currentHeight);
+              }
             }}
+            min={1}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
         </div>
@@ -256,9 +239,13 @@ export default function LogoPlacementPreview({
             type="number"
             value={currentHeight}
             onChange={(e) => {
-              const height = parseInt(e.target.value) || DEFAULT_PLACEMENT.height;
+              const height = Math.max(1, parseInt(e.target.value) || DEFAULT_PLACEMENT.height);
               onPlacementChange({ x: currentX, y: currentY, width: currentWidth, height });
+              if (isCanvasReady) {
+                syncPlaceholderFromValues(currentX, currentY, currentWidth, height);
+              }
             }}
+            min={1}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
           />
         </div>

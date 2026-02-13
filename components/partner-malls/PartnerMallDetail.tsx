@@ -13,11 +13,16 @@ import {
   Trash2,
   Calendar,
   ImageOff,
+  Link2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { PartnerMall, PartnerMallProduct } from '@/types/types';
 import PartnerMallInfoEditor from './PartnerMallInfoEditor';
 import SingleProductPlacementEditor from './SingleProductPlacementEditor';
 import AddProductsModal from './AddProductsModal';
+
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modoo-app.vercel.app';
 
 // Product preview card - renders preview_url image
 function ProductPreviewCard({
@@ -40,7 +45,7 @@ function ProductPreviewCard({
         {previewUrl ? (
           <img
             src={previewUrl}
-            alt={product?.title || 'Product preview'}
+            alt={mallProduct.display_name || product?.title || 'Product preview'}
             className="w-full h-full object-contain"
           />
         ) : (
@@ -55,7 +60,7 @@ function ProductPreviewCard({
           <button
             onClick={onEdit}
             className="p-2.5 sm:p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
-            title="로고 배치 수정"
+            title="편집"
           >
             <Edit2 className="w-4 h-4 text-gray-700" />
           </button>
@@ -76,8 +81,20 @@ function ProductPreviewCard({
 
       {/* Product Info */}
       <div className="p-2 sm:p-3">
-        <p className="text-xs sm:text-sm font-medium text-gray-800 truncate">{product?.title}</p>
-        <p className="text-xs text-gray-500 truncate">{product?.product_code}</p>
+        <p className="text-xs sm:text-sm font-medium text-gray-800 truncate">
+          {mallProduct.display_name || product?.title}
+        </p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {mallProduct.color_hex && (
+            <span
+              className="w-3 h-3 rounded-full border border-gray-300 shrink-0"
+              style={{ backgroundColor: mallProduct.color_hex }}
+            />
+          )}
+          <p className="text-xs text-gray-500 truncate">
+            {mallProduct.color_name || product?.product_code || ''}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -101,6 +118,8 @@ export default function PartnerMallDetail({
   const [showAddProducts, setShowAddProducts] = useState(false);
   const [editingProduct, setEditingProduct] = useState<PartnerMallProduct | null>(null);
   const [showEditInfo, setShowEditInfo] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const products = partnerMall.partner_mall_products || [];
 
@@ -159,6 +178,51 @@ export default function PartnerMallDetail({
     }
   };
 
+  // Generate share link
+  const generateShareLink = async () => {
+    try {
+      setGeneratingLink(true);
+
+      const response = await fetch('/api/admin/partner-malls/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: partnerMall.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error('링크 생성에 실패했습니다.');
+      }
+
+      const result = await response.json();
+      onMallUpdate({ ...partnerMall, share_token: result.data.share_token });
+    } catch (err) {
+      console.error('Generate link error:', err);
+      alert(err instanceof Error ? err.message : '링크 생성에 실패했습니다.');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  // Copy share link
+  const copyShareLink = async () => {
+    if (!partnerMall.share_token) return;
+    const url = `${APP_BASE_URL}/mall/${partnerMall.share_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6">
@@ -244,6 +308,47 @@ export default function PartnerMallDetail({
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Share Link */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <label className="block text-xs sm:text-sm font-medium text-gray-500 mb-1.5">
+                <Link2 className="w-3.5 h-3.5 inline mr-1" />
+                공유 링크
+              </label>
+              {partnerMall.share_token ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={`${APP_BASE_URL}/mall/${partnerMall.share_token}`}
+                    className="flex-1 text-xs px-2.5 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 truncate"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className="shrink-0 p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                    title="복사"
+                  >
+                    {linkCopied ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={generateShareLink}
+                  disabled={generatingLink}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {generatingLink ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link2 className="w-4 h-4" />
+                  )}
+                  링크 생성
+                </button>
+              )}
             </div>
 
             {/* Extra details - grid on mobile for compact layout */}
@@ -347,7 +452,7 @@ export default function PartnerMallDetail({
       {showAddProducts && (
         <AddProductsModal
           partnerMallId={partnerMall.id}
-          existingProductIds={products.map((p) => p.product_id)}
+          partnerMallName={partnerMall.name}
           logoUrl={partnerMall.logo_url}
           onClose={() => setShowAddProducts(false)}
           onProductsAdded={() => {
@@ -362,6 +467,7 @@ export default function PartnerMallDetail({
         <SingleProductPlacementEditor
           mallProduct={editingProduct}
           logoUrl={partnerMall.logo_url}
+          partnerMallName={partnerMall.name}
           onClose={() => setEditingProduct(null)}
           onSave={() => {
             setEditingProduct(null);
