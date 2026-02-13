@@ -22,7 +22,7 @@ import PartnerMallInfoEditor from './PartnerMallInfoEditor';
 import SingleProductPlacementEditor from './SingleProductPlacementEditor';
 import AddProductsModal from './AddProductsModal';
 
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modoo-app.vercel.app';
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modoouniform.com';
 
 // Product preview card - renders preview_url image
 function ProductPreviewCard({
