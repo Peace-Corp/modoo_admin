@@ -24,6 +24,10 @@ interface EditorCanvasProps {
   productColor?: string;
   customFonts?: CustomFont[];
   onCanvasReady?: (canvas: fabric.Canvas, sideId: string, scale: number) => void;
+  /** Width of the right panel overlay (px), used to center the grid in the visible area */
+  rightPanelWidth?: number;
+  /** Width of the left toolbar overlay (px) */
+  leftToolbarWidth?: number;
 }
 
 export default function EditorCanvas({
@@ -33,6 +37,8 @@ export default function EditorCanvas({
   productColor,
   customFonts,
   onCanvasReady,
+  rightPanelWidth = 0,
+  leftToolbarWidth = 0,
 }: EditorCanvasProps) {
   const { activeSideId, setActiveSide } = useCanvasStore();
   const hasCanvasStates = canvasStates && Object.keys(canvasStates).length > 0;
@@ -50,22 +56,26 @@ export default function EditorCanvas({
   const gridW = cols * CANVAS_W + (cols - 1) * GAP;
   const gridH = rows * (CANVAS_H + LABEL_H) + (rows - 1) * GAP;
 
-  // Fit all canvases centered on mount
+  // Fit all canvases centered in the visible area (accounting for overlays)
   useEffect(() => {
     const el = containerRef.current;
     if (!el || sides.length === 0) return;
 
     const rect = el.getBoundingClientRect();
-    const sx = (rect.width - FIT_PADDING * 2) / gridW;
-    const sy = (rect.height - FIT_PADDING * 2) / gridH;
+    // Visible area = full width minus left toolbar and right panel
+    const visibleW = rect.width - leftToolbarWidth - rightPanelWidth;
+    const visibleH = rect.height;
+
+    const sx = (visibleW - FIT_PADDING * 2) / gridW;
+    const sy = (visibleH - FIT_PADDING * 2) / gridH;
     const scale = Math.min(sx, sy, 1);
 
     setView({
-      x: (rect.width - gridW * scale) / 2,
-      y: (rect.height - gridH * scale) / 2,
+      x: leftToolbarWidth + (visibleW - gridW * scale) / 2,
+      y: (visibleH - gridH * scale) / 2,
       scale,
     });
-  }, [sides.length, gridW, gridH]);
+  }, [sides.length, gridW, gridH, rightPanelWidth, leftToolbarWidth]);
 
   // Space key for panning mode
   useEffect(() => {
@@ -90,16 +100,35 @@ export default function EditorCanvas({
     };
   }, []);
 
-  // Block fabric events while space held
+  // Block fabric events while space held or middle-click panning
   useEffect(() => {
     const el = contentRef.current;
-    if (el) el.style.pointerEvents = spaceHeld ? 'none' : 'auto';
-  }, [spaceHeld]);
+    if (el) el.style.pointerEvents = spaceHeld || isPanning && middlePanRef.current ? 'none' : 'auto';
+  }, [spaceHeld, isPanning]);
 
-  // Pointer handlers for panning
+  // Prevent default middle-click auto-scroll
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const prevent = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
+    el.addEventListener('mousedown', prevent);
+    return () => el.removeEventListener('mousedown', prevent);
+  }, []);
+
+  // Track whether pan was initiated by middle mouse button
+  const middlePanRef = useRef(false);
+
+  // Pointer handlers for panning (Space+drag or middle mouse button)
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!spaceHeld) return;
+      const isMiddle = e.button === 1;
+      if (!spaceHeld && !isMiddle) return;
+      if (isMiddle) {
+        e.preventDefault();
+        middlePanRef.current = true;
+      }
       setIsPanning(true);
       lastPointer.current = { x: e.clientX, y: e.clientY };
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -118,7 +147,10 @@ export default function EditorCanvas({
     [isPanning],
   );
 
-  const onPointerUp = useCallback(() => setIsPanning(false), []);
+  const onPointerUp = useCallback(() => {
+    setIsPanning(false);
+    middlePanRef.current = false;
+  }, []);
 
   // Wheel zoom toward cursor
   useEffect(() => {
@@ -150,7 +182,7 @@ export default function EditorCanvas({
     <div
       ref={containerRef}
       className="absolute inset-0 bg-neutral-700 overflow-hidden"
-      style={{ cursor: spaceHeld ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
+      style={{ cursor: isPanning ? 'grabbing' : spaceHeld ? 'grab' : 'default' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

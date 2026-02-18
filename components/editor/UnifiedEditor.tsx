@@ -384,6 +384,13 @@ export default function UnifiedEditor({
     ? isEditing
     : modeConfig.showToolbar;
 
+  // Overlay widths for canvas centering
+  const TOOLBAR_W = 36; // w-9
+  const PANEL_W_NARROW = 288; // w-72
+  const PANEL_W_WIDE = 480; // w-120
+  const rightPanelWidth = mode === 'order' && !isEditing ? PANEL_W_WIDE : PANEL_W_NARROW;
+  const leftToolbarWidth = showToolbar && isEditing ? TOOLBAR_W : 0;
+
   return (
     <div className="h-screen relative overflow-hidden bg-neutral-700">
       {/* Full-screen canvas workspace */}
@@ -393,6 +400,8 @@ export default function UnifiedEditor({
         canvasStates={mode !== 'design' ? canvasStates : undefined}
         productColor={mode === 'order' ? editorData.productColor : undefined}
         customFonts={editorData.customFonts.length > 0 ? editorData.customFonts : undefined}
+        rightPanelWidth={rightPanelWidth}
+        leftToolbarWidth={leftToolbarWidth}
       />
 
       {/* Floating UI overlay */}

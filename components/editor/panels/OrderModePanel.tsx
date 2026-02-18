@@ -167,7 +167,7 @@ export default function OrderModePanel({
     return dimensions;
   }, [product, orderItem.canvas_state]);
 
-  // Generate object previews from live canvas
+  // Generate object previews from live canvas using per-object toDataURL
   const objectPreviews = useMemo(() => {
     const previews: Record<string, string> = {};
     const sides = product.configuration || [];
@@ -189,16 +189,10 @@ export default function OrderModePanel({
         if (!objectId) continue;
 
         try {
-          const bounds = obj.getBoundingRect();
-          const padding = 12;
-          previews[objectId] = canvas.toDataURL({
+          previews[objectId] = obj.toDataURL({
             format: 'png',
-            quality: 0.8,
+            quality: 0.9,
             multiplier: 1,
-            left: Math.max(0, bounds.left - padding),
-            top: Math.max(0, bounds.top - padding),
-            width: bounds.width + padding * 2,
-            height: bounds.height + padding * 2,
           });
         } catch {
           // skip
@@ -483,13 +477,13 @@ export default function OrderModePanel({
               return (
                 <div key={side.id}>
                   <div className="text-[11px] font-bold text-gray-700 mb-2 pb-1 border-b border-gray-100">[{side.name}]</div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {sideObjects.map((dim, index) => {
                       const preview = dim.objectId ? objectPreviews[dim.objectId] : undefined;
                       return (
-                        <div key={index} className="flex gap-2.5 p-2 border border-gray-200 rounded-lg bg-gray-50/50">
-                          {/* Preview thumbnail */}
-                          <div className="w-20 h-20 bg-white border border-gray-200 rounded flex items-center justify-center shrink-0 overflow-hidden">
+                        <div key={index} className="border border-gray-200 rounded-lg bg-gray-50/50 overflow-hidden">
+                          {/* Preview image */}
+                          <div className="w-full aspect-square bg-white flex items-center justify-center p-3 border-b border-gray-100">
                             {preview ? (
                               <img
                                 src={preview}
@@ -499,17 +493,17 @@ export default function OrderModePanel({
                             ) : (
                               <div className="text-gray-300">
                                 {isTextObjectType((dim.rawType || '').toLowerCase()) ? (
-                                  <Type className="w-6 h-6" />
+                                  <Type className="w-10 h-10" />
                                 ) : (
-                                  <ImageIcon className="w-6 h-6" />
+                                  <ImageIcon className="w-10 h-10" />
                                 )}
                               </div>
                             )}
                           </div>
 
                           {/* Object details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-1">
+                          <div className="p-2.5">
+                            <div className="flex items-start justify-between mb-1.5">
                               <span className="text-[11px] font-semibold text-gray-800 leading-tight">
                                 {dim.text || dim.objectType}
                               </span>
