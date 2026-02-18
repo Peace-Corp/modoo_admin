@@ -48,7 +48,7 @@ export default function OrderModePanel({
   productColors,
 }: OrderModePanelProps) {
   const [isDownloading, setIsDownloading] = useState(false);
-  const { canvasMap } = useCanvasStore();
+  const { canvasMap, canvasVersion } = useCanvasStore();
 
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
   const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
@@ -201,7 +201,9 @@ export default function OrderModePanel({
     }
 
     return previews;
-  }, [canvasMap, product.configuration]);
+    // canvasVersion triggers regeneration when objects finish loading
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasMap, product.configuration, canvasVersion]);
 
   const mockupColorInfo = useMemo(() => {
     if (!product) return [];
