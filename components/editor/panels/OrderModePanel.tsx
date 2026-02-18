@@ -26,8 +26,6 @@ import {
   buildFilename,
   sanitizeFilenameSegment,
   isTextObjectType,
-  getPrintMethodName,
-  getPrintMethodColor,
   downloadBlob,
   downloadDataUrl,
   downloadUrl,
@@ -35,6 +33,18 @@ import {
   ImageUrlsBySide,
   TextSvgObjectUrlsBySide,
 } from '@/lib/downloadUtils';
+import { normalizePrintMethod, getPrintMethodDisplayName } from '@/lib/printPricingConfig';
+
+const printMethodColorClass = (method?: string | null): string => {
+  const colorMap: Record<string, string> = {
+    dtf: 'bg-blue-100 text-blue-700',
+    dtg: 'bg-cyan-100 text-cyan-700',
+    screen_printing: 'bg-green-100 text-green-700',
+    embroidery: 'bg-purple-100 text-purple-700',
+    applique: 'bg-amber-100 text-amber-700',
+  };
+  return (method && colorMap[method]) || 'bg-gray-100 text-gray-600';
+};
 
 interface OrderModePanelProps {
   product: Product;
@@ -104,7 +114,8 @@ export default function OrderModePanel({
         if (obj.data?.id === 'background-product-image') continue;
 
         const objectId = obj.data?.objectId || obj.objectId;
-        const printMethod = obj.data?.printMethod || obj.printMethod;
+        const rawPrintMethod = obj.data?.printMethod || obj.printMethod;
+        const printMethod = normalizePrintMethod(rawPrintMethod) || rawPrintMethod;
 
         const colors: string[] = [];
         const addColor = (v: unknown) => {
@@ -485,19 +496,19 @@ export default function OrderModePanel({
                       return (
                         <div key={index} className="border border-gray-200 rounded-lg bg-gray-50/50 overflow-hidden">
                           {/* Preview image */}
-                          <div className="w-full aspect-square bg-white flex items-center justify-center p-3 border-b border-gray-100">
+                          <div className="bg-white flex items-center justify-center p-3 border-b border-gray-100 max-h-52">
                             {preview ? (
                               <img
                                 src={preview}
                                 alt={dim.text || dim.objectType}
-                                className="max-w-full max-h-full object-contain"
+                                className="max-w-full max-h-44 object-contain"
                               />
                             ) : (
-                              <div className="text-gray-300">
+                              <div className="text-gray-300 py-4">
                                 {isTextObjectType((dim.rawType || '').toLowerCase()) ? (
-                                  <Type className="w-10 h-10" />
+                                  <Type className="w-8 h-8" />
                                 ) : (
-                                  <ImageIcon className="w-10 h-10" />
+                                  <ImageIcon className="w-8 h-8" />
                                 )}
                               </div>
                             )}
@@ -519,8 +530,8 @@ export default function OrderModePanel({
                             <div className="space-y-0.5 text-[10px]">
                               <div className="flex gap-1">
                                 <span className="text-gray-400 shrink-0 w-7">방식</span>
-                                <span className={`font-medium px-1 rounded ${getPrintMethodColor(dim.printMethod)}`}>
-                                  {getPrintMethodName(dim.printMethod)}
+                                <span className={`font-medium px-1 rounded ${printMethodColorClass(dim.printMethod)}`}>
+                                  {getPrintMethodDisplayName(dim.printMethod || 'dtf')}
                                 </span>
                               </div>
                               <div className="flex gap-1">

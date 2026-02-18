@@ -1,10 +1,29 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Package, Calendar, Clock, CreditCard } from 'lucide-react';
-import type { OrderItem, CanvasState, CustomFont } from '@/types/types';
-import OrderItemCanvas from '@/components/OrderItemCanvas';
+import { Package, Calendar, Clock, CreditCard, ArrowLeft, Download } from 'lucide-react';
+import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
+import EditorCanvas from '@/components/editor/EditorCanvas';
+import EditorRightPanel from '@/components/editor/EditorRightPanel';
+import OrderModePanel from '@/components/editor/panels/OrderModePanel';
+import { useCanvasStore } from '@/store/useCanvasStore';
+import {
+  parseCanvasState,
+  coerceImageUrlsBySide,
+  coerceTextSvgExports,
+  coerceTextSvgObjectUrlsBySide,
+  coerceCustomFonts,
+  getTextSvgFromCanvasState,
+  getFileExtensionFromName,
+  getFileExtensionFromUrl,
+  getFileExtensionFromType,
+  buildFilename,
+  sanitizeFilenameSegment,
+  downloadBlob,
+  downloadUrl,
+  sleep,
+} from '@/lib/downloadUtils';
 
 interface PublicOrder {
   id: string;
@@ -31,28 +50,19 @@ interface PublicOrderItem {
   quantity: number;
   canvas_state: Record<string, CanvasState>;
   color_selections: Record<string, unknown>;
-  item_options: {
-    size_id?: string;
-    size_name?: string;
-    color_id?: string;
-    color_name?: string;
-    color_hex?: string;
-    color_code?: string;
-    variants?: Array<{
-      size_id?: string;
-      size_name?: string;
-      color_id?: string;
-      color_name?: string;
-      color_hex?: string;
-      color_code?: string;
-      quantity?: number;
-    }>;
-  };
+  item_options: OrderItem['item_options'];
   thumbnail_url: string | null;
-  image_urls?: Record<string, Array<{ url: string; path?: string; uploadedAt?: string }>> | string | null;
-  text_svg_exports?: Record<string, unknown> | string | null;
+  image_urls?: OrderItem['image_urls'];
+  text_svg_exports?: OrderItem['text_svg_exports'];
   custom_fonts?: CustomFont[] | string | null;
-  products?: { product_code: string | null } | null;
+  products?: {
+    product_code: string | null;
+    title: string;
+    configuration: Product['configuration'];
+    size_options: Product['size_options'];
+    base_price: number;
+    manufacturers?: { id: string; name: string } | null;
+  } | null;
   created_at: string;
 }
 
@@ -64,12 +74,252 @@ const orderStatusLabels: Record<string, string> = {
   refunded: '환불',
 };
 
+// Shared item detail view — full-screen editor-like UI (read-only)
+function SharedItemView({
+  item,
+  productColors,
+  onBack,
+}: {
+  item: PublicOrderItem;
+  productColors: ProductColor[];
+  onBack: () => void;
+}) {
+  const { setActiveSide } = useCanvasStore();
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // Build a Product-like object from the joined data
+  const product = useMemo<Product | null>(() => {
+    if (!item.products) return null;
+    return {
+      id: item.product_id,
+      title: item.products.title || item.product_title,
+      base_price: item.products.base_price ?? 0,
+      configuration: item.products.configuration || [],
+      size_options: item.products.size_options || null,
+      product_code: item.products.product_code,
+      manufacturers: item.products.manufacturers,
+      is_active: true,
+      created_at: item.created_at,
+      updated_at: item.created_at,
+      category: null,
+    };
+  }, [item]);
+
+  // Build OrderItem-like from PublicOrderItem
+  const orderItem = useMemo<OrderItem>(() => item as unknown as OrderItem, [item]);
+
+  const sides = product?.configuration || [];
+
+  // Extract product color from canvas state
+  const productColor = useMemo(() => {
+    const states = Object.values(item.canvas_state || {});
+    for (const stateRaw of states) {
+      const state = parseCanvasState(stateRaw);
+      if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
+        return state.productColor;
+      }
+    }
+    const variants = item.item_options?.variants;
+    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
+      return variants[0].color_hex;
+    }
+    return item.item_options?.color_hex || '#FFFFFF';
+  }, [item.canvas_state, item.item_options]);
+
+  const customFonts = useMemo(() => coerceCustomFonts(item.custom_fonts), [item.custom_fonts]);
+
+  // Set initial active side
+  useEffect(() => {
+    if (sides.length > 0) {
+      setActiveSide(sides[0].id);
+    }
+  }, [sides, setActiveSide]);
+
+  // Download all handler
+  const handleDownloadAll = useCallback(async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+      const imageUrlsBySide = coerceImageUrlsBySide(item.image_urls);
+      const fonts = coerceCustomFonts(item.custom_fonts);
+      const textSvgExports = coerceTextSvgExports(item.text_svg_exports);
+      const textSvgSideUrls: Record<string, string> = {};
+      Object.entries(textSvgExports).forEach(([sideId, value]) => {
+        if (sideId === '__objects') return;
+        if (typeof value !== 'string' || !value) return;
+        textSvgSideUrls[sideId] = value;
+      });
+      const textSvgObjectUrlsBySide = coerceTextSvgObjectUrlsBySide(textSvgExports.__objects);
+
+      const files: Array<{ type: 'blob'; blob: Blob; filename: string } | { type: 'url'; url: string; filename: string }> = [];
+      const seenUrls = new Set<string>();
+      const prefix = `order-${item.id}`;
+
+      // Image URLs
+      Object.entries(imageUrlsBySide).forEach(([sideId, images]) => {
+        images.forEach((image, index) => {
+          if (!image?.url || seenUrls.has(image.url)) return;
+          seenUrls.add(image.url);
+          const ext = getFileExtensionFromName(image.path?.split('/').pop()) || getFileExtensionFromUrl(image.url) || 'jpg';
+          files.push({ type: 'url', url: image.url, filename: buildFilename(`${prefix}-${sideId}-image-${index + 1}`, ext) });
+        });
+      });
+
+      // Text SVG URLs
+      Object.entries(textSvgSideUrls).forEach(([sideId, url]) => {
+        if (!url || seenUrls.has(url)) return;
+        seenUrls.add(url);
+        files.push({ type: 'url', url, filename: `${prefix}-${sideId}-text.svg` });
+      });
+
+      Object.entries(textSvgObjectUrlsBySide).forEach(([sideId, objectMap]) => {
+        Object.entries(objectMap).forEach(([objectId, url]) => {
+          if (!url || seenUrls.has(url)) return;
+          seenUrls.add(url);
+          files.push({ type: 'url', url, filename: `${prefix}-${sideId}-text-${sanitizeFilenameSegment(objectId)}.svg` });
+        });
+      });
+
+      // Fallback: generate SVGs from canvas state
+      const hasTrackedSvgs = Object.keys(textSvgSideUrls).length > 0 || Object.keys(textSvgObjectUrlsBySide).length > 0;
+      if (!hasTrackedSvgs) {
+        Object.entries(item.canvas_state || {}).forEach(([sideId, stateRaw]) => {
+          const state = parseCanvasState(stateRaw);
+          if (!state || !Array.isArray(state.objects)) return;
+          const svg = getTextSvgFromCanvasState(state, sideId);
+          if (!svg) return;
+          files.push({ type: 'blob', blob: new Blob([svg], { type: 'image/svg+xml' }), filename: `${prefix}-${sideId}-text.svg` });
+        });
+      }
+
+      // Fallback: extract image URLs from canvas state
+      const hasTrackedImages = Object.keys(imageUrlsBySide).length > 0;
+      if (!hasTrackedImages) {
+        Object.entries(item.canvas_state || {}).forEach(([sideId, stateRaw]) => {
+          const state = parseCanvasState(stateRaw);
+          if (!state || !Array.isArray(state.objects)) return;
+          let imageIndex = 0;
+          state.objects.forEach((obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (obj.data?.id === 'background-product-image') return;
+            const objectType = typeof obj.type === 'string' ? obj.type.toLowerCase() : '';
+            if (objectType !== 'image') return;
+            imageIndex++;
+            const data = obj.data as { supabaseUrl?: string; originalFileUrl?: string; originalFileName?: string; fileType?: string } | undefined;
+            const url = data?.supabaseUrl || data?.originalFileUrl || obj.src;
+            if (url && !seenUrls.has(url)) {
+              seenUrls.add(url);
+              const ext = getFileExtensionFromName(data?.originalFileName) || getFileExtensionFromUrl(url) || getFileExtensionFromType(data?.fileType) || 'png';
+              files.push({ type: 'url', url, filename: buildFilename(`${prefix}-${sideId}-image-${imageIndex}`, ext) });
+            }
+          });
+        });
+      }
+
+      // Custom fonts
+      fonts.forEach((font) => {
+        if (!font.url || seenUrls.has(font.url)) return;
+        seenUrls.add(font.url);
+        const ext = font.format || getFileExtensionFromUrl(font.url) || 'ttf';
+        files.push({ type: 'url', url: font.url, filename: buildFilename(`${prefix}-font-${sanitizeFilenameSegment(font.fontFamily)}`, ext) });
+      });
+
+      if (files.length === 0) {
+        alert('다운로드할 파일이 없습니다.');
+        return;
+      }
+
+      for (const file of files) {
+        if (file.type === 'blob') {
+          downloadBlob(file.blob, file.filename);
+        } else {
+          await downloadUrl(file.url, file.filename);
+        }
+        await sleep(120);
+      }
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [item, isDownloading]);
+
+  if (!product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-600">제품 정보를 불러올 수 없습니다.</p>
+      </div>
+    );
+  }
+
+  const PANEL_W = 480;
+
+  return (
+    <div className="h-screen relative overflow-hidden bg-neutral-700">
+      {/* Full-screen canvas workspace */}
+      <EditorCanvas
+        sides={sides}
+        isEditing={false}
+        canvasStates={item.canvas_state}
+        productColor={productColor}
+        customFonts={customFonts.length > 0 ? customFonts : undefined}
+        rightPanelWidth={PANEL_W}
+      />
+
+      {/* Floating UI overlay */}
+      <div className="relative z-10 h-full flex flex-col pointer-events-none">
+        {/* Header */}
+        <div className="pointer-events-auto shrink-0">
+          <div className="h-10 bg-white/95 backdrop-blur-sm border-b border-gray-200 flex items-center px-3 gap-3">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              목록으로
+            </button>
+            <div className="h-4 w-px bg-gray-300" />
+            <span className="text-xs font-medium text-gray-800 truncate">{item.product_title}</span>
+            <div className="flex-1" />
+            <button
+              onClick={() => void handleDownloadAll()}
+              disabled={isDownloading}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+            >
+              {isDownloading ? (
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Download className="w-3 h-3" />
+              )}
+              전체 다운로드
+            </button>
+          </div>
+        </div>
+
+        {/* Workspace area */}
+        <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1" />
+          <div className="pointer-events-auto flex">
+            <EditorRightPanel wide>
+              <OrderModePanel
+                product={product}
+                orderItem={orderItem}
+                productColors={productColors}
+              />
+            </EditorRightPanel>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SharedOrderPage() {
   const params = useParams();
   const shareToken = params?.shareToken as string;
 
   const [order, setOrder] = useState<PublicOrder | null>(null);
   const [items, setItems] = useState<PublicOrderItem[]>([]);
+  const [productColorsMap, setProductColorsMap] = useState<Record<string, ProductColor[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -77,6 +327,7 @@ export default function SharedOrderPage() {
   useEffect(() => {
     if (!shareToken) return;
     fetchOrderData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareToken]);
 
   const fetchOrderData = async () => {
@@ -94,6 +345,7 @@ export default function SharedOrderPage() {
       const { data } = await response.json();
       setOrder(data.order);
       setItems(data.items || []);
+      setProductColorsMap(data.productColors || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : '주문 정보를 불러오지 못했습니다.');
     } finally {
@@ -139,17 +391,14 @@ export default function SharedOrderPage() {
     );
   }
 
-  // Show full-screen OrderItemCanvas when an item is selected
+  // Show full-screen editor-like view when an item is selected
   if (selectedItem) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <OrderItemCanvas
-            orderItem={selectedItem as unknown as OrderItem}
-            onBack={() => setSelectedItemId(null)}
-          />
-        </div>
-      </div>
+      <SharedItemView
+        item={selectedItem}
+        productColors={(productColorsMap[selectedItem.product_id] || []) as ProductColor[]}
+        onBack={() => setSelectedItemId(null)}
+      />
     );
   }
 

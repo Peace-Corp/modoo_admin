@@ -66,7 +66,7 @@ export async function GET(
         image_urls,
         text_svg_exports,
         custom_fonts,
-        products(product_code),
+        products(product_code, title, configuration, size_options, base_price, manufacturers(id, name)),
         created_at
       `)
       .eq('order_id', order.id)
@@ -76,10 +76,24 @@ export async function GET(
       return NextResponse.json({ error: itemsError.message }, { status: 500 });
     }
 
+    // Fetch product colors for each unique product
+    const productIds = [...new Set((items || []).map((item) => item.product_id))];
+    const productColorsMap: Record<string, unknown[]> = {};
+    for (const productId of productIds) {
+      const { data: colors } = await adminClient
+        .from('product_colors')
+        .select(`*, manufacturer_colors(id, name, hex, color_code, label)`)
+        .eq('product_id', productId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      productColorsMap[productId] = colors || [];
+    }
+
     return NextResponse.json({
       data: {
         order,
         items: items || [],
+        productColors: productColorsMap,
       },
     });
   } catch (error) {
