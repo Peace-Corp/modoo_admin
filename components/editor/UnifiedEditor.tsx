@@ -435,7 +435,7 @@ export default function UnifiedEditor({
 
           {/* Right panel */}
           <div className="pointer-events-auto flex">
-            <EditorRightPanel>
+            <EditorRightPanel wide={mode === 'order' && !isEditing}>
               {mode === 'design' && (
                 <DesignModePanel
                   product={product}
@@ -461,6 +461,7 @@ export default function UnifiedEditor({
                   <OrderModePanel
                     product={product}
                     orderItem={editorData.orderItem}
+                    productColors={editorData.productColors}
                   />
                 )
               )}

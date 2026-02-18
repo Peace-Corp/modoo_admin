@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { Package, Palette, Ruler, Download } from 'lucide-react';
+import { Package, Palette, Ruler, Download, Type, ImageIcon } from 'lucide-react';
 import {
   Product,
   ProductSide,
+  ProductColor,
   OrderItem,
   ObjectDimensions,
   CanvasState,
   CustomFont,
 } from '@/types/types';
+import { useCanvasStore } from '@/store/useCanvasStore';
 import {
   parseCanvasState,
   normalizeColorToHex,
@@ -37,14 +39,16 @@ import {
 interface OrderModePanelProps {
   product: Product;
   orderItem: OrderItem;
-  onObjectDimensionsReady?: (dimensions: ObjectDimensions[]) => void;
+  productColors: ProductColor[];
 }
 
 export default function OrderModePanel({
   product,
   orderItem,
+  productColors,
 }: OrderModePanelProps) {
   const [isDownloading, setIsDownloading] = useState(false);
+  const { canvasMap } = useCanvasStore();
 
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
   const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
@@ -144,7 +148,7 @@ export default function OrderModePanel({
         const typeLower = (obj.type || '').toLowerCase();
         if (isTextObjectType(typeLower)) {
           const text = obj.text || '';
-          dimension.text = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+          dimension.text = text.substring(0, 30) + (text.length > 30 ? '...' : '');
           dimension.fontFamily = obj.fontFamily;
           dimension.fontSize = obj.fontSize;
           dimension.fontWeight = obj.fontWeight;
@@ -163,16 +167,64 @@ export default function OrderModePanel({
     return dimensions;
   }, [product, orderItem.canvas_state]);
 
+  // Generate object previews from live canvas
+  const objectPreviews = useMemo(() => {
+    const previews: Record<string, string> = {};
+    const sides = product.configuration || [];
+
+    for (const side of sides) {
+      const canvas = canvasMap[side.id];
+      if (!canvas) continue;
+
+      const objects = canvas.getObjects().filter((obj) => {
+        if (obj.excludeFromExport) return false;
+        const d = obj as { data?: { id?: string; objectId?: string } };
+        if (d.data?.id === 'background-product-image') return false;
+        return true;
+      });
+
+      for (const obj of objects) {
+        const d = obj as { data?: { objectId?: string } };
+        const objectId = d.data?.objectId;
+        if (!objectId) continue;
+
+        try {
+          const bounds = obj.getBoundingRect();
+          const padding = 12;
+          previews[objectId] = canvas.toDataURL({
+            format: 'png',
+            quality: 0.8,
+            multiplier: 1,
+            left: Math.max(0, bounds.left - padding),
+            top: Math.max(0, bounds.top - padding),
+            width: bounds.width + padding * 2,
+            height: bounds.height + padding * 2,
+          });
+        } catch {
+          // skip
+        }
+      }
+    }
+
+    return previews;
+  }, [canvasMap, product.configuration]);
+
   const mockupColorInfo = useMemo(() => {
     if (!product) return [];
     const appliedColorHex = getAppliedProductColorHex();
     if (appliedColorHex) {
-      const colorName = orderItem.item_options?.variants?.[0]?.color_name || orderItem.item_options?.color_name || 'Selected Color';
-      const colorCode = orderItem.item_options?.variants?.[0]?.color_code || orderItem.item_options?.color_code;
-      return [{ name: colorName, hex: appliedColorHex, colorCode }];
+      // Try to find matching manufacturer color from productColors for richer data
+      const matchingPc = productColors.find(
+        (pc) => pc.manufacturer_colors?.hex === appliedColorHex
+      );
+      const mc = matchingPc?.manufacturer_colors;
+      const colorName = mc?.name || orderItem.item_options?.variants?.[0]?.color_name || orderItem.item_options?.color_name || 'Selected Color';
+      const colorCode = mc?.color_code || orderItem.item_options?.variants?.[0]?.color_code || orderItem.item_options?.color_code;
+      const colorLabel = mc?.label;
+      return [{ name: colorName, hex: appliedColorHex, colorCode, colorLabel }];
     }
     return [];
-  }, [product, getAppliedProductColorHex, orderItem.item_options]);
+  }, [product, productColors, getAppliedProductColorHex, orderItem.item_options]);
 
   interface SizeOptionObj { label: string; size_code: string }
   const rawSizeOptions = (product?.size_options ?? []) as (string | SizeOptionObj)[];
@@ -333,18 +385,21 @@ export default function OrderModePanel({
     <>
       {/* Size/Quantity Table */}
       {sizeOptions.length > 0 && (
-        <div className="p-2.5 border-b">
+        <div className="p-3 border-b">
           <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">주문 옵션</h3>
           <div className="overflow-hidden rounded border border-gray-200">
             <table className="w-full text-[11px] border-collapse">
               <thead className="bg-gray-50 text-black">
                 <tr>
                   {sizeOptions.map((size) => (
-                    <th key={size.size_code} className="px-2 py-1 text-center font-medium border border-gray-200">
-                      {size.label}
+                    <th key={size.size_code} className="px-2 py-1.5 text-center font-medium border border-gray-200">
+                      <div>{size.label}</div>
+                      {size.size_code && size.size_code !== size.label && (
+                        <div className="text-[9px] font-normal text-gray-400 font-mono">{size.size_code}</div>
+                      )}
                     </th>
                   ))}
-                  <th className="px-2 py-1 text-center font-medium border border-gray-200 bg-gray-100">합계</th>
+                  <th className="px-2 py-1.5 text-center font-medium border border-gray-200 bg-gray-100">합계</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 text-black">
@@ -352,12 +407,12 @@ export default function OrderModePanel({
                   {sizeOptions.map((size) => {
                     const quantity = sizeQuantities.get(size.size_code);
                     return (
-                      <td key={size.size_code} className="px-2 py-1 text-center border border-gray-200">
-                        {quantity && quantity > 0 ? quantity : '-'}
+                      <td key={size.size_code} className="px-2 py-1.5 text-center border border-gray-200">
+                        {quantity && quantity > 0 ? <span className="font-semibold">{quantity}</span> : '-'}
                       </td>
                     );
                   })}
-                  <td className="px-2 py-1 text-center border border-gray-200 bg-gray-100 font-semibold">
+                  <td className="px-2 py-1.5 text-center border border-gray-200 bg-gray-100 font-bold">
                     {Array.from(sizeQuantities.values()).reduce((sum, qty) => sum + qty, 0) || '-'}
                   </td>
                 </tr>
@@ -367,56 +422,56 @@ export default function OrderModePanel({
         </div>
       )}
 
-      {/* Product Info */}
-      <div className="p-2.5 border-b">
+      {/* Product Info + Color */}
+      <div className="p-3 border-b">
         <div className="flex items-center gap-1.5 mb-2">
           <Package className="w-3.5 h-3.5 text-gray-500" />
-          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">제품정보</h3>
+          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">제품 정보</h3>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-start gap-1.5">
-            <span className="text-[11px] text-gray-400 shrink-0">제품명:</span>
+            <span className="text-[11px] text-gray-400 shrink-0 w-12">제품명</span>
             <span className="text-[11px] font-medium text-gray-800">{product.title}</span>
           </div>
           {product.product_code && (
             <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0">코드:</span>
+              <span className="text-[11px] text-gray-400 shrink-0 w-12">코드</span>
               <span className="text-[11px] font-medium text-gray-800 font-mono">{product.product_code}</span>
             </div>
           )}
           {product.manufacturers?.name && (
             <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0">제조사:</span>
+              <span className="text-[11px] text-gray-400 shrink-0 w-12">제조사</span>
               <span className="text-[11px] font-medium text-gray-800">{product.manufacturers.name}</span>
             </div>
           )}
+          {/* Color inline */}
+          {mockupColorInfo.length > 0 && mockupColorInfo.map((color, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-12 mt-0.5">원감</span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-6 h-6 rounded-full border border-gray-300 shrink-0"
+                  style={{ backgroundColor: color.hex }}
+                />
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-medium text-gray-800">{color.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    {color.colorCode && (
+                      <span className="text-[10px] font-medium text-gray-500 font-mono">{color.colorCode}</span>
+                    )}
+                    <span className="text-[10px] text-gray-400 font-mono">{color.hex}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Design Color */}
-      {mockupColorInfo.length > 0 && (
-        <div className="p-2.5 border-b">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Palette className="w-3.5 h-3.5 text-gray-500" />
-            <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">디자인 색상</h3>
-          </div>
-          <div className="space-y-1.5">
-            {mockupColorInfo.map((color, i) => (
-              <div key={i} className="flex items-center gap-2 p-1.5 border border-gray-200 rounded">
-                <div className="w-6 h-6 rounded border border-gray-300 shrink-0" style={{ backgroundColor: color.hex }} />
-                <div>
-                  <p className="text-[11px] font-medium text-gray-800">{color.name}</p>
-                  {color.colorCode && <p className="text-[10px] text-gray-400 font-mono">{color.colorCode}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Design Specifications */}
-      <div className="p-2.5 border-b">
-        <div className="flex items-center gap-1.5 mb-2">
+      <div className="p-3 border-b">
+        <div className="flex items-center gap-1.5 mb-2.5">
           <Ruler className="w-3.5 h-3.5 text-gray-500" />
           <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">디자인 사양</h3>
         </div>
@@ -427,58 +482,83 @@ export default function OrderModePanel({
               if (sideObjects.length === 0) return null;
               return (
                 <div key={side.id}>
-                  <div className="text-[10px] font-bold text-gray-600 mb-1.5">[{side.name}]</div>
-                  <div className="space-y-1.5">
-                    {sideObjects.map((dim, index) => (
-                      <div key={index} className="p-2 border border-gray-200 rounded bg-gray-50/50">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-semibold text-gray-800">
-                            {dim.text || dim.objectType}
-                          </span>
-                          <button
-                            onClick={() => void handleDownloadObjectAsset(dim, objectDimensions.indexOf(dim))}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          >
-                            <Download className="w-2.5 h-2.5" />
-                          </button>
-                        </div>
-                        <div className="space-y-1 text-[10px]">
-                          <div className="flex gap-1">
-                            <span className="text-gray-400 shrink-0">방식:</span>
-                            <span className={`font-medium px-1 py-0 rounded ${getPrintMethodColor(dim.printMethod)}`}>
-                              {getPrintMethodName(dim.printMethod)}
-                            </span>
-                          </div>
-                          <div className="flex gap-1">
-                            <span className="text-gray-400 shrink-0">크기:</span>
-                            <span className="text-gray-700">
-                              {dim.widthMm >= dim.heightMm
-                                ? `가로기준 ${(dim.widthMm / 10).toFixed(1)}cm`
-                                : `세로기준 ${(dim.heightMm / 10).toFixed(1)}cm`}
-                            </span>
-                          </div>
-                          {dim.colors && dim.colors.length > 0 && (
-                            <div className="flex gap-1 items-center">
-                              <span className="text-gray-400 shrink-0">색상:</span>
-                              <div className="flex flex-wrap gap-1">
-                                {dim.colors.map((c) => (
-                                  <span key={c} className="inline-flex items-center gap-0.5">
-                                    <span className="w-2.5 h-2.5 rounded border border-gray-300" style={{ backgroundColor: c }} />
-                                    <span className="font-mono text-gray-500">{c}</span>
-                                  </span>
-                                ))}
+                  <div className="text-[11px] font-bold text-gray-700 mb-2 pb-1 border-b border-gray-100">[{side.name}]</div>
+                  <div className="space-y-2">
+                    {sideObjects.map((dim, index) => {
+                      const preview = dim.objectId ? objectPreviews[dim.objectId] : undefined;
+                      return (
+                        <div key={index} className="flex gap-2.5 p-2 border border-gray-200 rounded-lg bg-gray-50/50">
+                          {/* Preview thumbnail */}
+                          <div className="w-20 h-20 bg-white border border-gray-200 rounded flex items-center justify-center shrink-0 overflow-hidden">
+                            {preview ? (
+                              <img
+                                src={preview}
+                                alt={dim.text || dim.objectType}
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            ) : (
+                              <div className="text-gray-300">
+                                {isTextObjectType((dim.rawType || '').toLowerCase()) ? (
+                                  <Type className="w-6 h-6" />
+                                ) : (
+                                  <ImageIcon className="w-6 h-6" />
+                                )}
                               </div>
+                            )}
+                          </div>
+
+                          {/* Object details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-gray-800 leading-tight">
+                                {dim.text || dim.objectType}
+                              </span>
+                              <button
+                                onClick={() => void handleDownloadObjectAsset(dim, objectDimensions.indexOf(dim))}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors shrink-0 ml-1"
+                              >
+                                <Download className="w-2.5 h-2.5" />
+                              </button>
                             </div>
-                          )}
-                          {dim.fontFamily && (
-                            <div className="flex gap-1">
-                              <span className="text-gray-400 shrink-0">폰트:</span>
-                              <span className="text-gray-700">{dim.fontFamily}</span>
+                            <div className="space-y-0.5 text-[10px]">
+                              <div className="flex gap-1">
+                                <span className="text-gray-400 shrink-0 w-7">방식</span>
+                                <span className={`font-medium px-1 rounded ${getPrintMethodColor(dim.printMethod)}`}>
+                                  {getPrintMethodName(dim.printMethod)}
+                                </span>
+                              </div>
+                              <div className="flex gap-1">
+                                <span className="text-gray-400 shrink-0 w-7">크기</span>
+                                <span className="text-gray-700">
+                                  {dim.widthMm >= dim.heightMm
+                                    ? `가로기준 ${(dim.widthMm / 10).toFixed(1)}cm`
+                                    : `세로기준 ${(dim.heightMm / 10).toFixed(1)}cm`}
+                                </span>
+                              </div>
+                              {dim.colors && dim.colors.length > 0 && (
+                                <div className="flex gap-1 items-center">
+                                  <span className="text-gray-400 shrink-0 w-7">색상</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {dim.colors.map((c) => (
+                                      <span key={c} className="inline-flex items-center gap-0.5">
+                                        <span className="w-2.5 h-2.5 rounded-sm border border-gray-300" style={{ backgroundColor: c }} />
+                                        <span className="font-mono text-gray-500">{c}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {dim.fontFamily && (
+                                <div className="flex gap-1">
+                                  <span className="text-gray-400 shrink-0 w-7">폰트</span>
+                                  <span className="text-gray-700 truncate">{dim.fontFamily}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -491,7 +571,7 @@ export default function OrderModePanel({
 
       {/* Custom Fonts */}
       {customFonts.length > 0 && (
-        <div className="p-2.5 border-b">
+        <div className="p-3 border-b">
           <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">커스텀 폰트</h3>
           <div className="space-y-1">
             {customFonts.map((font, i) => (
