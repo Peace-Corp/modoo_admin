@@ -63,14 +63,6 @@ export default function OrderModePanel({
     return coerceTextSvgObjectUrlsBySide(textSvgExports.__objects);
   }, [textSvgExports]);
 
-  const sideNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    product?.configuration?.forEach((side) => {
-      map.set(side.id, side.name);
-    });
-    return map;
-  }, [product]);
-
   const getAppliedProductColorHex = useCallback(() => {
     const canvasStates = Object.values(orderItem.canvas_state || {});
     for (const canvasStateRaw of canvasStates) {
@@ -422,67 +414,75 @@ export default function OrderModePanel({
         </div>
       )}
 
-      {/* Object Dimensions */}
+      {/* Design Specifications */}
       <div className="p-2.5 border-b">
         <div className="flex items-center gap-1.5 mb-2">
           <Ruler className="w-3.5 h-3.5 text-gray-500" />
-          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">객체 정보</h3>
+          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">디자인 사양</h3>
         </div>
         {objectDimensions.length > 0 ? (
-          <div className="space-y-1.5">
-            {objectDimensions.map((dim, index) => (
-              <div key={index} className="p-2 border border-gray-200 rounded bg-gray-50/50">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-medium text-gray-800">
-                    {dim.objectType}
-                    {dim.sideId && (
-                      <span className="ml-1.5 text-[10px] font-normal text-gray-400">
-                        {sideNameById.get(dim.sideId) || dim.sideId}
-                      </span>
-                    )}
-                  </span>
-                  <button
-                    onClick={() => void handleDownloadObjectAsset(dim, index)}
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                  >
-                    <Download className="w-2.5 h-2.5" />
-                    다운로드
-                  </button>
-                </div>
-                {dim.text && <p className="text-[10px] text-gray-500 mb-0.5 italic">&quot;{dim.text}&quot;</p>}
-                {dim.fontFamily && (
-                  <div className="text-[10px] text-gray-500 mb-0.5">
-                    <span className="text-gray-400">폰트:</span>
-                    <span className="ml-1 font-medium text-gray-700">{dim.fontFamily}</span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
-                  <div>
-                    <span className="text-gray-400">W:</span>
-                    <span className="ml-0.5 font-medium text-gray-700">{dim.widthMm.toFixed(1)}mm</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">H:</span>
-                    <span className="ml-0.5 font-medium text-gray-700">{dim.heightMm.toFixed(1)}mm</span>
-                  </div>
-                </div>
-                <div className="mt-1">
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getPrintMethodColor(dim.printMethod)}`}>
-                    {getPrintMethodName(dim.printMethod)}
-                  </span>
-                </div>
-                {dim.rawType !== 'image' && dim.colors && dim.colors.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {dim.colors.map((c) => (
-                      <div key={c} className="flex items-center gap-0.5 text-[10px]">
-                        <span className="w-2.5 h-2.5 rounded border border-gray-300" style={{ backgroundColor: c }} />
-                        <span className="font-mono text-gray-500">{c}</span>
+          <div className="space-y-3">
+            {(product.configuration || []).map((side) => {
+              const sideObjects = objectDimensions.filter((d) => d.sideId === side.id);
+              if (sideObjects.length === 0) return null;
+              return (
+                <div key={side.id}>
+                  <div className="text-[10px] font-bold text-gray-600 mb-1.5">[{side.name}]</div>
+                  <div className="space-y-1.5">
+                    {sideObjects.map((dim, index) => (
+                      <div key={index} className="p-2 border border-gray-200 rounded bg-gray-50/50">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-semibold text-gray-800">
+                            {dim.text || dim.objectType}
+                          </span>
+                          <button
+                            onClick={() => void handleDownloadObjectAsset(dim, objectDimensions.indexOf(dim))}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          >
+                            <Download className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                        <div className="space-y-1 text-[10px]">
+                          <div className="flex gap-1">
+                            <span className="text-gray-400 shrink-0">방식:</span>
+                            <span className={`font-medium px-1 py-0 rounded ${getPrintMethodColor(dim.printMethod)}`}>
+                              {getPrintMethodName(dim.printMethod)}
+                            </span>
+                          </div>
+                          <div className="flex gap-1">
+                            <span className="text-gray-400 shrink-0">크기:</span>
+                            <span className="text-gray-700">
+                              {dim.widthMm >= dim.heightMm
+                                ? `가로기준 ${(dim.widthMm / 10).toFixed(1)}cm`
+                                : `세로기준 ${(dim.heightMm / 10).toFixed(1)}cm`}
+                            </span>
+                          </div>
+                          {dim.colors && dim.colors.length > 0 && (
+                            <div className="flex gap-1 items-center">
+                              <span className="text-gray-400 shrink-0">색상:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {dim.colors.map((c) => (
+                                  <span key={c} className="inline-flex items-center gap-0.5">
+                                    <span className="w-2.5 h-2.5 rounded border border-gray-300" style={{ backgroundColor: c }} />
+                                    <span className="font-mono text-gray-500">{c}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {dim.fontFamily && (
+                            <div className="flex gap-1">
+                              <span className="text-gray-400 shrink-0">폰트:</span>
+                              <span className="text-gray-700">{dim.fontFamily}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-[11px] text-gray-400">객체 정보가 없습니다.</p>

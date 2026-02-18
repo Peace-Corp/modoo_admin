@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as fabric from 'fabric';
 import { useCanvasStore } from '@/store/useCanvasStore';
@@ -15,6 +15,7 @@ import EditorRightPanel from './EditorRightPanel';
 import Toolbar from '@/components/canvas/Toolbar';
 import DesignModePanel from './panels/DesignModePanel';
 import OrderModePanel from './panels/OrderModePanel';
+import OrderEditPanel from './panels/OrderEditPanel';
 import TemplateModePanel from './panels/TemplateModePanel';
 import {
   coerceImageUrlsBySide,
@@ -76,6 +77,9 @@ export default function UnifiedEditor({
 
   // Canvas states for rendering (may come from order or template)
   const [canvasStates, setCanvasStates] = useState<Record<string, CanvasState | string | null>>({});
+
+  // Snapshot for reverting on edit cancel (order mode)
+  const editSnapshotRef = useRef<Record<string, object>>({});
 
   // Sync editing state with canvas store
   useEffect(() => {
@@ -142,6 +146,7 @@ export default function UnifiedEditor({
 
     if (result.success) {
       if (mode === 'order') {
+        editSnapshotRef.current = {};
         setIsEditing(false);
       } else if (mode === 'design') {
         // Navigate back after design save, appending designId
@@ -157,11 +162,33 @@ export default function UnifiedEditor({
     }
   }, [executeSave, mode, router, returnUrl, editorData]);
 
-  // Handle edit toggle (order mode)
+  // Handle edit toggle (order mode) — snapshot on enter, restore on cancel
   const handleToggleEdit = useCallback(() => {
-    setIsEditing((prev) => !prev);
+    if (!isEditing) {
+      // Entering edit mode — snapshot all canvases
+      const snapshot: Record<string, object> = {};
+      Object.entries(canvasMap).forEach(([sideId, canvas]) => {
+        snapshot[sideId] = canvas.toJSON();
+      });
+      editSnapshotRef.current = snapshot;
+      setIsEditing(true);
+    } else {
+      // Cancelling edit mode — restore from snapshot
+      Object.entries(editSnapshotRef.current).forEach(([sideId, json]) => {
+        const canvas = canvasMap[sideId];
+        if (canvas) {
+          canvas.discardActiveObject();
+          canvas.loadFromJSON(json).then(() => {
+            canvas.requestRenderAll();
+          });
+        }
+      });
+      editSnapshotRef.current = {};
+      setSelectedTextObject(null);
+      setIsEditing(false);
+    }
     setSaveError(null);
-  }, []);
+  }, [isEditing, canvasMap]);
 
   // Handle selected object change
   const handleSelectedObjectChange = useCallback((obj: fabric.FabricObject | null) => {
@@ -422,10 +449,20 @@ export default function UnifiedEditor({
               )}
 
               {mode === 'order' && editorData.orderItem && (
-                <OrderModePanel
-                  product={product}
-                  orderItem={editorData.orderItem}
-                />
+                isEditing ? (
+                  <OrderEditPanel
+                    product={product}
+                    productColors={editorData.productColors}
+                    selectedTextObject={selectedTextObject}
+                    onSave={handleSave}
+                    isSaving={isSaving}
+                  />
+                ) : (
+                  <OrderModePanel
+                    product={product}
+                    orderItem={editorData.orderItem}
+                  />
+                )
               )}
 
               {mode === 'template' && (
