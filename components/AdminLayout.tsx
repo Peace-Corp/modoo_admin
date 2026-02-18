@@ -33,7 +33,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
   const isPublicRoute = pathname?.startsWith('/shared/') ?? false;
+  const isEditorRoute = pathname?.startsWith('/editor') ?? false;
   const skipAuth = isLoginRoute || isPublicRoute;
+  const skipLayout = skipAuth || isEditorRoute;
 
   const { authStatus, user, logout } = useAdminAuth({ skip: skipAuth });
 
@@ -57,6 +59,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </div>
     );
+  }
+
+  // Full-screen layout for editor (auth checked, no sidebar)
+  if (isEditorRoute) {
+    return <>{children}</>;
   }
 
   const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;

@@ -1,25 +1,32 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Package, Search, X } from 'lucide-react';
 import { Product } from '@/types/types';
-import AdminDesignEditor from '@/components/cobuy/AdminDesignEditor';
 import OrderDetailsForm from './OrderDetailsForm';
 
-type Step = 'product-select' | 'design' | 'details' | 'success';
+type Step = 'product-select' | 'details' | 'success';
 
 interface AdminOrderCreatorProps {
   onClose: () => void;
   onSuccess?: (orderId: string) => void;
+  /** When resuming from editor, pass the product ID to auto-load */
+  initialProductId?: string;
+  /** When resuming from editor, pass the saved design ID to skip to details */
+  initialDesignId?: string;
 }
 
-export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCreatorProps) {
-  const [currentStep, setCurrentStep] = useState<Step>('product-select');
+export default function AdminOrderCreator({ onClose, onSuccess, initialProductId, initialDesignId }: AdminOrderCreatorProps) {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState<Step>(
+    initialProductId && initialDesignId ? 'details' : 'product-select'
+  );
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [savedDesignId, setSavedDesignId] = useState<string | null>(null);
+  const [savedDesignId, setSavedDesignId] = useState<string | null>(initialDesignId ?? null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
   // Fetch products on mount
@@ -29,7 +36,14 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
         const response = await fetch('/api/admin/products');
         if (!response.ok) throw new Error('Failed to fetch products');
         const data = await response.json();
-        setProducts(data.data || []);
+        const fetched: Product[] = data.data || [];
+        setProducts(fetched);
+
+        // When resuming from editor, find the product from the fetched list
+        if (initialProductId && initialDesignId) {
+          const product = fetched.find((p) => p.id === initialProductId);
+          if (product) setSelectedProduct(product);
+        }
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -37,7 +51,7 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
       }
     };
     fetchProducts();
-  }, []);
+  }, [initialProductId, initialDesignId]);
 
   const filteredProducts = products.filter(product =>
     product.is_active && (
@@ -47,13 +61,9 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
   );
 
   const handleProductSelect = (product: Product) => {
-    setSelectedProduct(product);
-    setCurrentStep('design');
-  };
-
-  const handleDesignSaved = (designId: string) => {
-    setSavedDesignId(designId);
-    setCurrentStep('details');
+    // Navigate to the unified editor for design creation
+    const returnUrl = encodeURIComponent(`/orders?resumeProductId=${product.id}`);
+    router.push(`/editor/${product.id}?mode=design&returnUrl=${returnUrl}`);
   };
 
   const handleOrderCreated = (orderId: string) => {
@@ -63,11 +73,10 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
   };
 
   const handleBack = () => {
-    if (currentStep === 'design') {
+    if (currentStep === 'details') {
+      // Go back to product select (design is done externally)
       setCurrentStep('product-select');
       setSelectedProduct(null);
-    } else if (currentStep === 'details') {
-      setCurrentStep('design');
       setSavedDesignId(null);
     }
   };
@@ -83,7 +92,7 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
       {/* Header */}
       <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
-          {currentStep !== 'product-select' && currentStep !== 'success' && (
+          {currentStep === 'details' && (
             <button
               onClick={handleBack}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
@@ -95,7 +104,6 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
             <h2 className="text-xl font-bold">주문 생성하기</h2>
             <p className="text-sm text-gray-500">
               {currentStep === 'product-select' && '제품을 선택하세요'}
-              {currentStep === 'design' && '디자인을 만드세요'}
               {currentStep === 'details' && '주문 정보를 입력하세요'}
               {currentStep === 'success' && '주문이 생성되었습니다'}
             </p>
@@ -114,10 +122,13 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
         <div className="px-6 py-3 bg-gray-50 border-b">
           <div className="flex items-center gap-4 max-w-2xl mx-auto">
             {(['product-select', 'design', 'details'] as const).map((step, index) => {
-              const stepIndex = ['product-select', 'design', 'details'].indexOf(step);
-              const currentIndex = ['product-select', 'design', 'details'].indexOf(currentStep);
+              const stepOrder = ['product-select', 'design', 'details'];
+              const stepIndex = stepOrder.indexOf(step);
+              // Map current step to index (details maps to index 2, product-select to 0)
+              const currentIndex = currentStep === 'details' ? 2 : 0;
               const isCompleted = currentIndex > stepIndex;
-              const isCurrent = currentStep === step;
+              const isCurrent = (step === 'product-select' && currentStep === 'product-select')
+                || (step === 'details' && currentStep === 'details');
 
               return (
                 <div key={step} className="flex items-center flex-1">
@@ -205,14 +216,7 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
           </div>
         )}
 
-        {/* Step 2: Design Editor */}
-        {currentStep === 'design' && selectedProduct && (
-          <AdminDesignEditor
-            product={selectedProduct}
-            onDesignSaved={handleDesignSaved}
-            onBack={handleBack}
-          />
-        )}
+        {/* Step 2 (Design) is handled by the unified editor route */}
 
         {/* Step 3: Order Details Form */}
         {currentStep === 'details' && selectedProduct && savedDesignId && (
@@ -222,6 +226,13 @@ export default function AdminOrderCreator({ onClose, onSuccess }: AdminOrderCrea
             onSubmit={handleOrderCreated}
             onBack={handleBack}
           />
+        )}
+
+        {/* Loading state when resuming from editor */}
+        {currentStep === 'details' && !selectedProduct && (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         )}
 
         {/* Step 4: Success */}

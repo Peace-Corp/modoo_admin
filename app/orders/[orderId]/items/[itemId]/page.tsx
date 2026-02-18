@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { OrderItem } from '@/types/types';
 import { useAuthStore } from '@/store/useAuthStore';
-import OrderItemCanvas from '@/components/OrderItemCanvas';
 
 export default function OrderItemPage() {
   const params = useParams();
@@ -14,13 +13,12 @@ export default function OrderItemPage() {
   const orderId = params.orderId as string;
   const itemId = params.itemId as string;
 
-  const [orderItem, setOrderItem] = useState<OrderItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const initialFetchDone = useRef(false);
 
-  const fetchOrderItem = useCallback(async () => {
+  const fetchAndRedirect = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -39,24 +37,23 @@ export default function OrderItemPage() {
         throw new Error('Order item not found.');
       }
 
-      setOrderItem(foundItem);
+      // Redirect to unified editor
+      const returnUrl = encodeURIComponent(`/orders/${orderId}`);
+      router.replace(
+        `/editor/${foundItem.product_id}?mode=order&orderId=${orderId}&orderItemId=${itemId}&returnUrl=${returnUrl}`
+      );
     } catch (err) {
       console.error('Error fetching order item:', err);
       setError(err instanceof Error ? err.message : 'Failed to load order item.');
-    } finally {
       setLoading(false);
     }
-  }, [orderId, itemId]);
+  }, [orderId, itemId, router]);
 
   useEffect(() => {
     if (!user || initialFetchDone.current) return;
     initialFetchDone.current = true;
-    fetchOrderItem();
-  }, [user, fetchOrderItem]);
-
-  const handleBack = useCallback(() => {
-    router.push(`/orders/${orderId}`);
-  }, [router, orderId]);
+    fetchAndRedirect();
+  }, [user, fetchAndRedirect]);
 
   if (loading) {
     return (
@@ -66,12 +63,12 @@ export default function OrderItemPage() {
     );
   }
 
-  if (error || !orderItem) {
+  if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500 mb-4">{error || 'Order item not found.'}</p>
+        <p className="text-red-500 mb-4">{error}</p>
         <button
-          onClick={handleBack}
+          onClick={() => router.push(`/orders/${orderId}`)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
         >
           Back to Order
@@ -80,5 +77,5 @@ export default function OrderItemPage() {
     );
   }
 
-  return <OrderItemCanvas orderItem={orderItem} onBack={handleBack} />;
+  return null;
 }

@@ -1,25 +1,32 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Package, Search, Share2, X, Users } from 'lucide-react';
-import { Product, CoBuyCustomField, CoBuyPricingTier, CoBuyDeliverySettings, CoBuySession } from '@/types/types';
-import AdminDesignEditor from './AdminDesignEditor';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, CheckCircle2, Package, Search, Share2, X } from 'lucide-react';
+import { Product, CoBuySession } from '@/types/types';
 import AdminCoBuyForm from './AdminCoBuyForm';
 
-type Step = 'product-select' | 'design' | 'form' | 'success';
+type Step = 'product-select' | 'form' | 'success';
 
 interface AdminCoBuyCreatorProps {
   onClose: () => void;
   onSuccess?: (session: CoBuySession) => void;
+  /** When resuming from editor, pass the product ID to auto-load */
+  initialProductId?: string;
+  /** When resuming from editor, pass the saved design ID to skip to form */
+  initialDesignId?: string;
 }
 
-export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCreatorProps) {
-  const [currentStep, setCurrentStep] = useState<Step>('product-select');
+export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId, initialDesignId }: AdminCoBuyCreatorProps) {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState<Step>(
+    initialProductId && initialDesignId ? 'form' : 'product-select'
+  );
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [savedDesignId, setSavedDesignId] = useState<string | null>(null);
+  const [savedDesignId, setSavedDesignId] = useState<string | null>(initialDesignId ?? null);
   const [createdSession, setCreatedSession] = useState<CoBuySession | null>(null);
 
   // Fetch products on mount
@@ -29,7 +36,14 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
         const response = await fetch('/api/admin/products');
         if (!response.ok) throw new Error('Failed to fetch products');
         const data = await response.json();
-        setProducts(data.data || []);
+        const fetched: Product[] = data.data || [];
+        setProducts(fetched);
+
+        // When resuming from editor, find the product from the fetched list
+        if (initialProductId && initialDesignId) {
+          const product = fetched.find((p) => p.id === initialProductId);
+          if (product) setSelectedProduct(product);
+        }
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -37,7 +51,7 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
       }
     };
     fetchProducts();
-  }, []);
+  }, [initialProductId, initialDesignId]);
 
   const filteredProducts = products.filter(product =>
     product.is_active && (
@@ -47,13 +61,9 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
   );
 
   const handleProductSelect = (product: Product) => {
-    setSelectedProduct(product);
-    setCurrentStep('design');
-  };
-
-  const handleDesignSaved = (designId: string) => {
-    setSavedDesignId(designId);
-    setCurrentStep('form');
+    // Navigate to the unified editor for design creation
+    const returnUrl = encodeURIComponent(`/cobuy?resumeProductId=${product.id}`);
+    router.push(`/editor/${product.id}?mode=design&returnUrl=${returnUrl}`);
   };
 
   const handleCoBuyCreated = (session: CoBuySession) => {
@@ -77,11 +87,10 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
   };
 
   const handleBack = () => {
-    if (currentStep === 'design') {
+    if (currentStep === 'form') {
+      // Go back to product select (design is done externally)
       setCurrentStep('product-select');
       setSelectedProduct(null);
-    } else if (currentStep === 'form') {
-      setCurrentStep('design');
       setSavedDesignId(null);
     }
   };
@@ -91,7 +100,7 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
       {/* Header */}
       <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
-          {currentStep !== 'product-select' && currentStep !== 'success' && (
+          {currentStep === 'form' && (
             <button
               onClick={handleBack}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
@@ -103,7 +112,6 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
             <h2 className="text-xl font-bold">공동구매 생성하기</h2>
             <p className="text-sm text-gray-500">
               {currentStep === 'product-select' && '제품을 선택하세요'}
-              {currentStep === 'design' && '디자인을 만드세요'}
               {currentStep === 'form' && '공동구매 정보를 입력하세요'}
               {currentStep === 'success' && '공동구매가 생성되었습니다'}
             </p>
@@ -121,27 +129,37 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
       {currentStep !== 'success' && (
         <div className="px-6 py-3 bg-gray-50 border-b">
           <div className="flex items-center gap-4 max-w-2xl mx-auto">
-            {(['product-select', 'design', 'form'] as const).map((step, index) => (
-              <div key={step} className="flex items-center flex-1">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                  currentStep === step
-                    ? 'bg-blue-600 text-white'
-                    : ['design', 'form'].indexOf(currentStep) > ['product-select', 'design', 'form'].indexOf(step)
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 text-gray-500'
-                }`}>
-                  {index + 1}
+            {(['product-select', 'design', 'form'] as const).map((step, index) => {
+              const stepOrder = ['product-select', 'design', 'form'];
+              const stepIndex = stepOrder.indexOf(step);
+              // Map current step to index (form maps to index 2, product-select to 0)
+              const currentIndex = currentStep === 'form' ? 2 : 0;
+              const isCompleted = currentIndex > stepIndex;
+              const isCurrent = (step === 'product-select' && currentStep === 'product-select')
+                || (step === 'form' && currentStep === 'form');
+
+              return (
+                <div key={step} className="flex items-center flex-1">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                    isCurrent
+                      ? 'bg-blue-600 text-white'
+                      : isCompleted
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <span className={`ml-2 text-sm ${isCurrent ? 'font-medium text-gray-900' : 'text-gray-500'}`}>
+                    {step === 'product-select' && '제품 선택'}
+                    {step === 'design' && '디자인'}
+                    {step === 'form' && '정보 입력'}
+                  </span>
+                  {index < 2 && (
+                    <div className="flex-1 h-0.5 bg-gray-200 mx-4" />
+                  )}
                 </div>
-                <span className={`ml-2 text-sm ${currentStep === step ? 'font-medium text-gray-900' : 'text-gray-500'}`}>
-                  {step === 'product-select' && '제품 선택'}
-                  {step === 'design' && '디자인'}
-                  {step === 'form' && '정보 입력'}
-                </span>
-                {index < 2 && (
-                  <div className="flex-1 h-0.5 bg-gray-200 mx-4" />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -206,14 +224,7 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
           </div>
         )}
 
-        {/* Step 2: Design Editor */}
-        {currentStep === 'design' && selectedProduct && (
-          <AdminDesignEditor
-            product={selectedProduct}
-            onDesignSaved={handleDesignSaved}
-            onBack={handleBack}
-          />
-        )}
+        {/* Step 2 (Design) is handled by the unified editor route */}
 
         {/* Step 3: CoBuy Form */}
         {currentStep === 'form' && selectedProduct && savedDesignId && (
@@ -223,6 +234,13 @@ export default function AdminCoBuyCreator({ onClose, onSuccess }: AdminCoBuyCrea
             onSuccess={handleCoBuyCreated}
             onBack={handleBack}
           />
+        )}
+
+        {/* Loading state when resuming from editor */}
+        {currentStep === 'form' && !selectedProduct && (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         )}
 
         {/* Step 4: Success */}

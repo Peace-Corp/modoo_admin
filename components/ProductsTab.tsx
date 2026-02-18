@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Product } from '@/types/types';
 import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
-import EditTemplateTab from './EditTemplateTab';
 import { getCategoryName } from '@/lib/categories';
 
-type EditorMode = 'print-area' | 'full-edit' | 'template-edit' | null;
+type EditorMode = 'print-area' | 'full-edit' | null;
 
 export default function ProductsTab() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -141,15 +142,7 @@ export default function ProductsTab() {
     );
   }
 
-  // Show Template Editor
-  if (editorMode === 'template-edit' && selectedProduct) {
-    return (
-      <EditTemplateTab
-        product={selectedProduct}
-        onClose={handleCancel}
-      />
-    );
-  }
+  // Template editing is now handled by the unified editor route
 
 
   return (
@@ -266,8 +259,7 @@ export default function ProductsTab() {
                       </button>
                       <button
                         onClick={() => {
-                          setSelectedProduct(product);
-                          setEditorMode('template-edit');
+                          router.push(`/editor/${product.id}?mode=template`);
                         }}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
                       >

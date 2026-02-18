@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Plus, RefreshCw } from 'lucide-react';
 import { CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
@@ -79,6 +80,13 @@ const renderFieldResponses = (responses?: Record<string, unknown> | null) => {
 };
 
 export default function CoBuyTab() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Detect return from editor: /cobuy?resumeProductId=xxx&designId=yyy
+  const resumeProductId = searchParams.get('resumeProductId');
+  const resumeDesignId = searchParams.get('designId');
+
   const [sessions, setSessions] = useState<CoBuySession[]>([]);
   const [participants, setParticipants] = useState<CoBuyParticipant[]>([]);
   const [selectedSession, setSelectedSession] = useState<CoBuySession | null>(null);
@@ -89,7 +97,7 @@ export default function CoBuyTab() {
   const [actionLoading, setActionLoading] = useState<'status' | 'bulk' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [showCreator, setShowCreator] = useState(false);
+  const [showCreator, setShowCreator] = useState(!!resumeProductId && !!resumeDesignId);
 
   useEffect(() => {
     fetchSessions();
@@ -499,15 +507,25 @@ export default function CoBuyTab() {
     setSessions((prev) => [session, ...prev]);
   };
 
+  const handleCloseCreator = () => {
+    setShowCreator(false);
+    // Clear resume params from URL if present
+    if (resumeProductId || resumeDesignId) {
+      router.replace('/cobuy');
+    }
+  };
+
   // Show the creator modal
   if (showCreator) {
     return (
       <AdminCoBuyCreator
-        onClose={() => setShowCreator(false)}
+        onClose={handleCloseCreator}
         onSuccess={(session) => {
           handleCoBuyCreated(session);
-          setShowCreator(false);
+          handleCloseCreator();
         }}
+        initialProductId={resumeProductId ?? undefined}
+        initialDesignId={resumeDesignId ?? undefined}
       />
     );
   }

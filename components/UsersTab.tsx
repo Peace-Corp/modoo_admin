@@ -316,16 +316,16 @@ export default function UsersTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">사용자 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {users.length}명의 사용자</p>
+          <h2 className="text-base font-semibold text-gray-900">사용자 관리</h2>
+          <p className="text-xs text-gray-500 mt-1">총 {users.length}명의 사용자</p>
         </div>
         {currentUser?.role === 'admin' && selectedUserIds.size > 0 && (
           <button
             onClick={() => openCouponModal(Array.from(selectedUserIds))}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            <Ticket className="w-4 h-4" />
-            쿠폰 발급하기 ({selectedUserIds.size}명)
+            <Ticket className="w-3.5 h-3.5" />
+            <span className="text-xs">쿠폰 발급하기 ({selectedUserIds.size}명)</span>
           </button>
         )}
       </div>
@@ -333,16 +333,16 @@ export default function UsersTab() {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-red-800">{error}</p>
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <p className="text-xs text-red-800">{error}</p>
         </div>
       )}
 
       {/* Success Message */}
       {successMessage && (
         <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center gap-3">
-          <Ticket className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <p className="text-green-800">{successMessage}</p>
+          <Ticket className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <p className="text-xs text-green-800">{successMessage}</p>
         </div>
       )}
 
@@ -355,7 +355,7 @@ export default function UsersTab() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="이메일, 이름, 전화번호로 검색..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         {currentUser?.role === 'admin' && (
@@ -369,7 +369,7 @@ export default function UsersTab() {
               <button
                 key={filter.value}
                 onClick={() => setFilterRole(filter.value)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   filterRole === filter.value
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -444,18 +444,18 @@ export default function UsersTab() {
                   )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-gray-400" />
-                      <div className="text-sm font-mono text-gray-600">{user.id.slice(0, 8)}...</div>
+                      <UserIcon className="w-3.5 h-3.5 text-gray-400" />
+                      <div className="text-xs font-mono text-gray-600">{user.id.slice(0, 8)}...</div>
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                    <div className="text-xs font-medium text-gray-900">{user.email}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.name || '-'}</div>
+                    <div className="text-xs text-gray-900">{user.name || '-'}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-xs text-gray-900">
                       {user.phone_number || '-'}
                     </div>
                   </td>
@@ -496,14 +496,14 @@ export default function UsersTab() {
                         )}
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">
+                      <span className="text-xs text-gray-500">
                         {getFactoryName(user.manufacturer_id)}
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-900">
-                      <Calendar className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-1 text-xs text-gray-900">
+                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
                       {formatDate(user.created_at)}
                     </div>
                   </td>
@@ -549,9 +549,9 @@ export default function UsersTab() {
 
         {users.length === 0 && (
           <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">사용자가 없습니다</h3>
-            <p className="text-gray-500">등록된 사용자가 없습니다.</p>
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">사용자가 없습니다</h3>
+            <p className="text-xs text-gray-500">등록된 사용자가 없습니다.</p>
           </div>
         )}
       </div>
@@ -562,8 +562,8 @@ export default function UsersTab() {
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b">
               <div>
-                <h3 className="text-lg font-semibold">쿠폰 발급</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <h3 className="text-sm font-semibold">쿠폰 발급</h3>
+                <p className="text-xs text-gray-500 mt-1">
                   {couponTargetUserIds.length}명의 사용자에게 쿠폰을 발급합니다.
                 </p>
               </div>
@@ -582,8 +582,8 @@ export default function UsersTab() {
                 </div>
               ) : activeCoupons.length === 0 ? (
                 <div className="text-center py-8">
-                  <Ticket className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">발급 가능한 활성 쿠폰이 없습니다.</p>
+                  <Ticket className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <p className="text-xs text-gray-500">발급 가능한 활성 쿠폰이 없습니다.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -606,7 +606,7 @@ export default function UsersTab() {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-gray-900">
+                          <span className="font-mono text-xs font-medium text-gray-900">
                             {coupon.code}
                           </span>
                           <span className="text-xs text-blue-600 font-medium">
@@ -616,7 +616,7 @@ export default function UsersTab() {
                           </span>
                         </div>
                         {coupon.display_name && (
-                          <p className="text-sm text-gray-500 truncate">{coupon.display_name}</p>
+                          <p className="text-xs text-gray-500 truncate">{coupon.display_name}</p>
                         )}
                         {coupon.max_uses && (
                           <p className="text-xs text-gray-400">
@@ -633,14 +633,14 @@ export default function UsersTab() {
             <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
               <button
                 onClick={() => setShowCouponModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                className="px-3 py-1.5 text-xs text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleIssueCoupon}
                 disabled={!selectedCouponId || issuingCoupon}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 {issuingCoupon ? '발급 중...' : '발급하기'}
               </button>

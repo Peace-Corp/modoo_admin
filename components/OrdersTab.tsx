@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Factory, Order } from '@/types/types';
 import { Package, Calendar, Clock, Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -14,13 +14,19 @@ type OrderWithItemCount = Order & {
 
 export default function OrdersTab() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
+
+  // Detect return from editor: /orders?resumeProductId=xxx&designId=yyy
+  const resumeProductId = searchParams.get('resumeProductId');
+  const resumeDesignId = searchParams.get('designId');
+
   const [orders, setOrders] = useState<OrderWithItemCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [factories, setFactories] = useState<Factory[]>([]);
-  const [showOrderCreator, setShowOrderCreator] = useState(false);
+  const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   // Track if initial data has been fetched to avoid duplicate fetches
@@ -486,11 +492,21 @@ export default function OrdersTab() {
       {/* Order Creator Modal */}
       {showOrderCreator && (
         <AdminOrderCreator
-          onClose={() => setShowOrderCreator(false)}
+          onClose={() => {
+            setShowOrderCreator(false);
+            if (resumeProductId || resumeDesignId) {
+              router.replace('/orders');
+            }
+          }}
           onSuccess={() => {
             setShowOrderCreator(false);
+            if (resumeProductId || resumeDesignId) {
+              router.replace('/orders');
+            }
             fetchOrders(filterStatus);
           }}
+          initialProductId={resumeProductId ?? undefined}
+          initialDesignId={resumeDesignId ?? undefined}
         />
       )}
     </div>
