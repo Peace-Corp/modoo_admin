@@ -62,6 +62,7 @@ export default function TemplateModePanel({
             selectedObject={selectedTextObject as fabric.IText}
             onClose={() => {}}
             variant="desktop"
+            compact
           />
         </div>
       )}

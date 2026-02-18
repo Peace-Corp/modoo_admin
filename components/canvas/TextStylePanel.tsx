@@ -35,10 +35,12 @@ interface TextStylePanelProps {
   selectedObject: fabric.IText | fabric.Text;
   onClose?: () => void;
   variant?: 'mobile' | 'desktop';
+  compact?: boolean;
 }
 
-const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose, variant = 'mobile' }) => {
+const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose, variant = 'mobile', compact = false }) => {
   const isDesktop = variant === 'desktop';
+  const labelCls = compact ? 'text-[11px] font-medium text-gray-700' : 'text-sm font-medium text-gray-700';
   const [activeTab, setActiveTab] = useState<'font' | 'colors' | 'spacing' | 'warp'>('font');
   const [fontFamily, setFontFamily] = useState<string>('Arial');
   const [fontSize, setFontSize] = useState<number>(30);
@@ -467,7 +469,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
         : "border-t rounded-t-2xl bg-white border-gray-200 shadow-2xl h-[34vh] flex flex-col px-4"
       }>
         {/* Header with Tabs */}
-        <div className={`shrink-0 ${isDesktop ? 'border-b border-gray-200 p-3' : 'sticky top-0 border-b border-gray-100'}`}>
+        <div className={`shrink-0 ${isDesktop ? `border-b border-gray-200 ${compact ? 'p-2' : 'p-3'}` : 'sticky top-0 border-b border-gray-100'}`}>
           {/* Mobile drag handle */}
           {!isDesktop && (
             <div className='py-3 w-10 mx-auto'>
@@ -478,7 +480,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
           {/* Desktop header */}
           {isDesktop && (
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-800">텍스트 스타일</h3>
+              <h3 className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-gray-800`}>텍스트 스타일</h3>
               <button
                 onClick={handleOpenTextEdit}
                 className="p-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center"
@@ -493,7 +495,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
           <div className={`flex ${isDesktop ? 'gap-1' : ''}`}>
             <button
               onClick={() => setActiveTab('font')}
-              className={`flex-1 py-2 px-4 text-sm font-medium ${
+              className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-4 text-sm'} font-medium ${
                 activeTab === 'font'
                   ? 'bg-black text-white rounded-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -503,7 +505,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             </button>
             <button
               onClick={() => setActiveTab('colors')}
-              className={`flex-1 py-2 px-4 text-sm font-medium ${
+              className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-4 text-sm'} font-medium ${
                 activeTab === 'colors'
                   ? 'bg-black text-white rounded-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -513,7 +515,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             </button>
             <button
               onClick={() => setActiveTab('spacing')}
-              className={`flex-1 py-2 px-4 text-sm font-medium ${
+              className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-4 text-sm'} font-medium ${
                 activeTab === 'spacing'
                   ? 'bg-black text-white rounded-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -523,7 +525,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             </button>
             <button
               onClick={() => setActiveTab('warp')}
-              className={`flex-1 py-2 px-4 text-sm font-medium ${
+              className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-4 text-sm'} font-medium ${
                 activeTab === 'warp'
                   ? 'bg-black text-white rounded-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -545,13 +547,13 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
         </div>
 
         {/* Scrollable Content */}
-        <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${isDesktop ? 'max-h-100' : ''}`}>
+        <div className={`flex-1 overflow-y-auto ${compact ? 'p-2.5 space-y-2.5' : 'p-4 space-y-4'} ${isDesktop ? 'max-h-100' : ''}`}>
           {/* Font Tab */}
           {activeTab === 'font' && (
             <>
               {/* Font Family */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <Type className="size-4" />
                   글꼴
                 </label>
@@ -561,7 +563,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                     aria-haspopup="listbox"
                     aria-expanded={isFontDropdownOpen}
                     onClick={() => setIsFontDropdownOpen((prev) => !prev)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent flex items-center justify-between gap-2"
+                    className={`w-full ${compact ? 'p-1.5 text-[11px]' : 'p-2'} border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent flex items-center justify-between gap-2`}
                   >
                     <span className="truncate" style={{ fontFamily }}>
                       {fontFamily}
@@ -677,7 +679,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
 
               {/* Font Size */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <CaseSensitive className="size-4" />
                   크기: {fontSize}px
                 </label>
@@ -693,94 +695,94 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
 
               {/* Text Alignment */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">정렬</label>
+                <label className={labelCls}>정렬</label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleTextAlignChange('left')}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       textAlign === 'left'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <AlignLeft className="size-5 mx-auto" />
+                    <AlignLeft className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={() => handleTextAlignChange('center')}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       textAlign === 'center'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <AlignCenter className="size-5 mx-auto" />
+                    <AlignCenter className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={() => handleTextAlignChange('right')}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       textAlign === 'right'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <AlignRight className="size-5 mx-auto" />
+                    <AlignRight className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={() => handleTextAlignChange('justify')}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       textAlign === 'justify'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <AlignJustify className="size-5 mx-auto" />
+                    <AlignJustify className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                 </div>
               </div>
 
               {/* Text Decorations */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">텍스트 스타일</label>
+                <label className={labelCls}>텍스트 스타일</label>
                 <div className="flex gap-2">
                   <button
                     onClick={toggleBold}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       fontWeight === 'bold'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <Bold className="size-5 mx-auto" />
+                    <Bold className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={toggleItalic}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       fontStyle === 'italic'
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <Italic className="size-5 mx-auto" />
+                    <Italic className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={toggleUnderline}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       underline
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <Underline className="size-5 mx-auto" />
+                    <Underline className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                   <button
                     onClick={toggleLinethrough}
-                    className={`flex-1 p-2 rounded-lg border transition ${
+                    className={`flex-1 ${compact ? 'p-1' : 'p-2'} rounded-lg border transition ${
                       linethrough
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                     }`}
                   >
-                    <Strikethrough className="size-5 mx-auto" />
+                    <Strikethrough className={`${compact ? 'size-3.5' : 'size-5'} mx-auto`} />
                   </button>
                 </div>
               </div>
@@ -792,7 +794,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             <>
               {/* Fill Color */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <Palette className="size-4" />
                   글자 색상
                 </label>
@@ -801,20 +803,20 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                     type="color"
                     value={fillColor}
                     onChange={(e) => handleFillColorChange(e.target.value)}
-                    className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                    className={`${compact ? 'w-8 h-7' : 'w-12 h-10'} rounded border border-gray-300 cursor-pointer`}
                   />
                   <input
                     type="text"
                     value={fillColor}
                     onChange={(e) => handleFillColorChange(e.target.value)}
-                    className="flex-1 p-2 border border-gray-300 rounded-lg"
+                    className={`flex-1 ${compact ? 'p-1.5 text-[11px]' : 'p-2'} border border-gray-300 rounded-lg`}
                   />
                 </div>
               </div>
 
               {/* Stroke Color */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <CircleDot className="size-4" />
                   테두리 색상
                 </label>
@@ -823,20 +825,20 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                     type="color"
                     value={strokeColor}
                     onChange={(e) => handleStrokeColorChange(e.target.value)}
-                    className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                    className={`${compact ? 'w-8 h-7' : 'w-12 h-10'} rounded border border-gray-300 cursor-pointer`}
                   />
                   <input
                     type="text"
                     value={strokeColor}
                     onChange={(e) => handleStrokeColorChange(e.target.value)}
-                    className="flex-1 p-2 border border-gray-300 rounded-lg"
+                    className={`flex-1 ${compact ? 'p-1.5 text-[11px]' : 'p-2'} border border-gray-300 rounded-lg`}
                   />
                 </div>
               </div>
 
               {/* Stroke Width */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className={labelCls}>
                   테두리 두께: {strokeWidth}px
                 </label>
                 <input
@@ -851,7 +853,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
 
               {/* Text Background Color */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   배경 색상
                 </label>
                 <div className="flex gap-2 items-center">
@@ -859,18 +861,18 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                     type="color"
                     value={textBackgroundColor || '#ffffff'}
                     onChange={(e) => handleTextBackgroundColorChange(e.target.value)}
-                    className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                    className={`${compact ? 'w-8 h-7' : 'w-12 h-10'} rounded border border-gray-300 cursor-pointer`}
                   />
                   <input
                     type="text"
                     value={textBackgroundColor}
                     onChange={(e) => handleTextBackgroundColorChange(e.target.value)}
                     placeholder="투명"
-                    className="flex-1 p-2 border border-gray-300 rounded-lg"
+                    className={`flex-1 ${compact ? 'p-1.5 text-[11px]' : 'p-2'} border border-gray-300 rounded-lg`}
                   />
                   <button
                     onClick={() => handleTextBackgroundColorChange('')}
-                    className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg transition"
+                    className={`${compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-sm'} bg-gray-200 hover:bg-gray-300 rounded-lg transition`}
                   >
                     제거
                   </button>
@@ -879,7 +881,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
 
               {/* Opacity */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
+                <label className={labelCls}>
                   투명도: {Math.round(opacity * 100)}%
                 </label>
                 <input
@@ -900,7 +902,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             <>
               {/* Line Height */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <Baseline className="size-4" />
                   줄 간격: {lineHeight.toFixed(2)}
                 </label>
@@ -917,7 +919,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
 
               {/* Character Spacing */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <LetterText className="size-4" />
                   자간: {charSpacing}
                 </label>
@@ -939,7 +941,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
             <>
               {/* Curve Intensity Slider */}
               <div className="space-y-4">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`${labelCls} flex items-center gap-2`}>
                   <Waves className="size-4" />
                   곡선 변형
                 </label>
@@ -948,7 +950,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleCurveIntensityChange(0)}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition ${
+                    className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-3 text-sm'} rounded-lg border font-medium transition ${
                       curveIntensity === 0
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
@@ -958,7 +960,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                   </button>
                   <button
                     onClick={() => handleCurveIntensityChange(30)}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition ${
+                    className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-3 text-sm'} rounded-lg border font-medium transition ${
                       curveIntensity === 30
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
@@ -968,7 +970,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                   </button>
                   <button
                     onClick={() => handleCurveIntensityChange(100)}
-                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition ${
+                    className={`flex-1 ${compact ? 'py-1 px-2 text-[11px]' : 'py-2 px-3 text-sm'} rounded-lg border font-medium transition ${
                       curveIntensity === 100
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
@@ -989,7 +991,7 @@ const TextStylePanel: React.FC<TextStylePanelProps> = ({ selectedObject, onClose
                     className="w-full"
                   />
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">강도: {curveIntensity}%</span>
+                    <span className={`${compact ? 'text-[11px]' : 'text-sm'} text-gray-600`}>강도: {curveIntensity}%</span>
                     <button
                       onClick={() => handleCurveIntensityChange(0)}
                       className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"

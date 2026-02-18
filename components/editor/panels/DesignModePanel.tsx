@@ -64,6 +64,7 @@ export default function DesignModePanel({
             selectedObject={selectedTextObject as fabric.IText}
             onClose={() => {}}
             variant="desktop"
+            compact
           />
         </div>
       )}
@@ -72,7 +73,7 @@ export default function DesignModePanel({
       <div className="p-2.5 border-b">
         <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">제품 색상</h3>
         {hasLayers && currentSide?.layers ? (
-          <LayerColorSelector sideId={activeSideId || ''} layers={currentSide.layers} />
+          <LayerColorSelector sideId={activeSideId || ''} layers={currentSide.layers} compact />
         ) : (
           <div className="relative">
             <button
@@ -128,8 +129,8 @@ export default function DesignModePanel({
 
       {/* Print Options & Pricing */}
       <div className="p-2.5 border-b">
-        <ObjectPreviewPanel sides={sides} />
-        <PricingInfo basePrice={product.base_price} sides={sides} />
+        <ObjectPreviewPanel sides={sides} compact />
+        <PricingInfo basePrice={product.base_price} sides={sides} compact />
       </div>
 
       {/* Save button */}

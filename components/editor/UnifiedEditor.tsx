@@ -10,7 +10,9 @@ import { useEditorData } from './hooks/useEditorData';
 import { useEditorSave } from './hooks/useEditorSave';
 import EditorHeader from './EditorHeader';
 import EditorCanvas from './EditorCanvas';
+
 import EditorRightPanel from './EditorRightPanel';
+import Toolbar from '@/components/canvas/Toolbar';
 import DesignModePanel from './panels/DesignModePanel';
 import OrderModePanel from './panels/OrderModePanel';
 import TemplateModePanel from './panels/TemplateModePanel';
@@ -165,6 +167,14 @@ export default function UnifiedEditor({
   const handleSelectedObjectChange = useCallback((obj: fabric.FabricObject | null) => {
     setSelectedTextObject(obj);
   }, []);
+
+  // Exit edit mode (deselect all objects)
+  const handleExitEditMode = useCallback(() => {
+    Object.values(canvasMap).forEach((canvas) => {
+      canvas.discardActiveObject();
+      canvas.requestRenderAll();
+    });
+  }, [canvasMap]);
 
   // Handle download all (order mode)
   const handleDownloadAll = useCallback(async () => {
@@ -348,78 +358,100 @@ export default function UnifiedEditor({
     : modeConfig.showToolbar;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <EditorHeader
-        modeConfig={modeConfig}
+    <div className="h-screen relative overflow-hidden bg-neutral-700">
+      {/* Full-screen canvas workspace */}
+      <EditorCanvas
+        sides={sides}
         isEditing={isEditing}
-        isSaving={isSaving}
-        onToggleEdit={mode === 'order' ? handleToggleEdit : undefined}
-        onSave={handleSave}
-        onDownload={mode === 'order' ? handleDownloadAll : undefined}
-        isDownloading={isDownloading}
-        saveError={saveError}
+        canvasStates={mode !== 'design' ? canvasStates : undefined}
+        productColor={mode === 'order' ? editorData.productColor : undefined}
+        customFonts={editorData.customFonts.length > 0 ? editorData.customFonts : undefined}
       />
 
-      {/* Edit mode banner for order */}
-      {mode === 'order' && isEditing && (
-        <div className="text-[11px] text-amber-700 bg-amber-50 border-b border-amber-200 px-3 py-1 shrink-0">
-          편집 모드 — 객체 이동/크기 조절, 스크롤 확대/축소, Space+드래그 이동
+      {/* Floating UI overlay */}
+      <div className="relative z-10 h-full flex flex-col pointer-events-none">
+        {/* Header */}
+        <div className="pointer-events-auto shrink-0">
+          <EditorHeader
+            modeConfig={modeConfig}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            onToggleEdit={mode === 'order' ? handleToggleEdit : undefined}
+            onSave={handleSave}
+            onDownload={mode === 'order' ? handleDownloadAll : undefined}
+            isDownloading={isDownloading}
+            saveError={saveError}
+          />
+          {mode === 'order' && isEditing && (
+            <div className="text-[11px] text-amber-700 bg-amber-50/90 backdrop-blur-sm border-b border-amber-200 px-3 py-1">
+              편집 모드 — 객체 이동/크기 조절, 스크롤 확대/축소, Space+드래그 이동
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="flex-1 flex overflow-hidden">
-        <EditorCanvas
-          sides={sides}
-          isEditing={isEditing}
-          showToolbar={showToolbar}
-          canvasStates={mode !== 'design' ? canvasStates : undefined}
-          productColor={mode === 'order' ? editorData.productColor : undefined}
-          customFonts={editorData.customFonts.length > 0 ? editorData.customFonts : undefined}
-          onSelectedObjectChange={handleSelectedObjectChange}
-        />
-
-        <EditorRightPanel>
-          {mode === 'design' && (
-            <DesignModePanel
-              product={product}
-              productColors={editorData.productColors}
-              designTitle={designTitle}
-              onDesignTitleChange={setDesignTitle}
-              selectedTextObject={selectedTextObject}
-              onSave={handleSave}
-              isSaving={isSaving}
-            />
+        {/* Workspace area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left toolbar */}
+          {showToolbar && isEditing && (
+            <div className="pointer-events-auto flex">
+              <Toolbar
+                sides={sides}
+                handleExitEditMode={handleExitEditMode}
+                variant="editor"
+                onSelectedObjectChange={handleSelectedObjectChange}
+              />
+            </div>
           )}
 
-          {mode === 'order' && editorData.orderItem && (
-            <OrderModePanel
-              product={product}
-              orderItem={editorData.orderItem}
-            />
-          )}
+          {/* Spacer */}
+          <div className="flex-1" />
 
-          {mode === 'template' && (
-            <TemplateModePanel
-              templates={editorData.templates}
-              selectedTemplate={editorData.selectedTemplate}
-              onSelectTemplate={handleSelectTemplate}
-              onCreateNew={handleCreateNewTemplate}
-              selectedTextObject={selectedTextObject}
-              templateTitle={templateTitle}
-              onTemplateTitleChange={setTemplateTitle}
-              templateDescription={templateDescription}
-              onTemplateDescriptionChange={setTemplateDescription}
-              templateSortOrder={templateSortOrder}
-              onTemplateSortOrderChange={setTemplateSortOrder}
-              templateIsActive={templateIsActive}
-              onTemplateIsActiveChange={setTemplateIsActive}
-              onSave={handleSave}
-              onDelete={handleDeleteTemplate}
-              isSaving={isSaving}
-              isCreating={isCreatingTemplate}
-            />
-          )}
-        </EditorRightPanel>
+          {/* Right panel */}
+          <div className="pointer-events-auto flex">
+            <EditorRightPanel>
+              {mode === 'design' && (
+                <DesignModePanel
+                  product={product}
+                  productColors={editorData.productColors}
+                  designTitle={designTitle}
+                  onDesignTitleChange={setDesignTitle}
+                  selectedTextObject={selectedTextObject}
+                  onSave={handleSave}
+                  isSaving={isSaving}
+                />
+              )}
+
+              {mode === 'order' && editorData.orderItem && (
+                <OrderModePanel
+                  product={product}
+                  orderItem={editorData.orderItem}
+                />
+              )}
+
+              {mode === 'template' && (
+                <TemplateModePanel
+                  templates={editorData.templates}
+                  selectedTemplate={editorData.selectedTemplate}
+                  onSelectTemplate={handleSelectTemplate}
+                  onCreateNew={handleCreateNewTemplate}
+                  selectedTextObject={selectedTextObject}
+                  templateTitle={templateTitle}
+                  onTemplateTitleChange={setTemplateTitle}
+                  templateDescription={templateDescription}
+                  onTemplateDescriptionChange={setTemplateDescription}
+                  templateSortOrder={templateSortOrder}
+                  onTemplateSortOrderChange={setTemplateSortOrder}
+                  templateIsActive={templateIsActive}
+                  onTemplateIsActiveChange={setTemplateIsActive}
+                  onSave={handleSave}
+                  onDelete={handleDeleteTemplate}
+                  isSaving={isSaving}
+                  isCreating={isCreatingTemplate}
+                />
+              )}
+            </EditorRightPanel>
+          </div>
+        </div>
       </div>
     </div>
   );

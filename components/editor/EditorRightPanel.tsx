@@ -6,7 +6,7 @@ interface EditorRightPanelProps {
 
 export default function EditorRightPanel({ children }: EditorRightPanelProps) {
   return (
-    <aside className="w-72 bg-white border-l border-gray-200 flex flex-col overflow-y-auto shrink-0 text-xs">
+    <aside className="w-72 h-full bg-white/95 backdrop-blur-sm border-l border-gray-200 flex flex-col overflow-y-auto shrink-0 text-xs">
       {children}
     </aside>
   );

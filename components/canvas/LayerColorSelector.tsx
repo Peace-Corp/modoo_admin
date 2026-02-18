@@ -6,9 +6,10 @@ import { useCanvasStore } from '@/store/useCanvasStore';
 interface LayerColorSelectorProps {
   sideId: string;
   layers: ProductLayer[];
+  compact?: boolean;
 }
 
-const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers }) => {
+const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers, compact = false }) => {
   const { layerColors, setLayerColor } = useCanvasStore();
 
   // Sort layers by zIndex for consistent display
@@ -19,9 +20,9 @@ const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers 
   };
 
   return (
-    <div className="w-full bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Product Colors</h3>
-      <div className="space-y-3">
+    <div className={`w-full bg-white rounded-lg shadow-sm border border-gray-200 ${compact ? 'p-2.5' : 'p-4'}`}>
+      <h3 className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-gray-700 ${compact ? 'mb-2' : 'mb-3'}`}>Product Colors</h3>
+      <div className={compact ? 'space-y-2' : 'space-y-3'}>
         {sortedLayers.map((layer) => {
           const currentColor = layerColors[sideId]?.[layer.id] || layer.colorOptions[0]?.hex || '#FFFFFF';
 
@@ -36,7 +37,7 @@ const LayerColorSelector: React.FC<LayerColorSelectorProps> = ({ sideId, layers 
                     key={`${layer.id}-${color.hex}`}
                     onClick={() => handleColorChange(layer.id, color.hex)}
                     className={`
-                      w-10 h-10 rounded-full border-2 transition-all duration-200
+                      ${compact ? 'w-7 h-7' : 'w-10 h-10'} rounded-full border-2 transition-all duration-200
                       ${currentColor === color.hex
                         ? 'border-blue-500 scale-110 shadow-md'
                         : 'border-gray-300 hover:border-gray-400 hover:scale-105'
