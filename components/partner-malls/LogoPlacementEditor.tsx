@@ -99,6 +99,7 @@ export default function LogoPlacementEditor({
   const saveCurrentState = useCallback(() => {
     if (!canvasRef.current || !logoRef.current || !currentSide) return;
 
+    const canvas = canvasRef.current;
     const logo = logoRef.current;
 
     const logoLeft = logo.left || 0;
@@ -113,14 +114,27 @@ export default function LogoPlacementEditor({
       height: Math.round(logoHeight),
     };
 
-    // Get canvas state (only logo)
-    const logoObject = logo.toObject();
-    // @ts-expect-error - Include custom data property
-    logoObject.data = logo.data;
-    const canvasState = {
-      objects: [logoObject],
+    // Serialize canvas state in editor-compatible format
+    const userObjects = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - Checking custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+
+    const canvasData = {
+      version: canvas.toJSON().version,
+      objects: userObjects.map(obj => {
+        const json = obj.toObject(['data']);
+        if (obj.type === 'image') {
+          const imgObj = obj as fabric.FabricImage;
+          json.src = imgObj.getSrc();
+        }
+        return json;
+      }),
     };
 
+    const canvasState = JSON.stringify(canvasData);
     updatePlacement(currentSide.id, placement, canvasState);
   }, [currentSide, updatePlacement]);
 

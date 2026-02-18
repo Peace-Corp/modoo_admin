@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent } from 'react';
+import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
@@ -14,38 +15,14 @@ import {
 } from './utils';
 
 export default function AnnouncementsSection() {
-  const [announcements, setAnnouncements] = useState<AnnouncementRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawAnnouncements, error: swrError, isLoading: loading, mutate } = useSWR<AnnouncementRecord[]>('/api/admin/announcements');
+  const announcements = rawAnnouncements ? sortAnnouncements(rawAnnouncements) : [];
   const [error, setError] = useState<string | null>(null);
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementFormState>(emptyAnnouncementForm);
   const [announcementFormOpen, setAnnouncementFormOpen] = useState(false);
   const [announcementFormError, setAnnouncementFormError] = useState<string | null>(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
   const [uploadingAnnouncementImages, setUploadingAnnouncementImages] = useState(0);
-
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
-  const fetchAnnouncements = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/announcements');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공지 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setAnnouncements(sortAnnouncements(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching announcements:', err);
-      setAnnouncements([]);
-      setError(err instanceof Error ? err.message : '공지 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAnnouncementFormToggle = () => {
     setAnnouncementFormOpen((prev) => !prev);
@@ -161,12 +138,10 @@ export default function AnnouncementsSection() {
       const responsePayload = await response.json();
       const savedAnnouncement = responsePayload?.data as AnnouncementRecord;
 
-      setAnnouncements((prev) => {
-        const updated = announcementForm.id
-          ? prev.map((item) => (item.id === savedAnnouncement.id ? savedAnnouncement : item))
-          : [savedAnnouncement, ...prev];
-        return sortAnnouncements(updated);
-      });
+      const updated = announcementForm.id
+        ? (rawAnnouncements || []).map((item) => (item.id === savedAnnouncement.id ? savedAnnouncement : item))
+        : [savedAnnouncement, ...(rawAnnouncements || [])];
+      mutate(updated, { revalidate: false });
 
       setAnnouncementForm(emptyAnnouncementForm);
       setAnnouncementFormOpen(false);
@@ -193,7 +168,7 @@ export default function AnnouncementsSection() {
         throw new Error(payload?.error || '공지 삭제에 실패했습니다.');
       }
 
-      setAnnouncements((prev) => prev.filter((item) => item.id !== announcementId));
+      mutate((rawAnnouncements || []).filter((item) => item.id !== announcementId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting announcement:', err);
       setError(err instanceof Error ? err.message : '공지 삭제에 실패했습니다.');
@@ -221,8 +196,9 @@ export default function AnnouncementsSection() {
 
       const payload = await response.json();
       const updatedAnnouncement = payload?.data as AnnouncementRecord;
-      setAnnouncements((prev) =>
-        sortAnnouncements(prev.map((item) => (item.id === updatedAnnouncement.id ? updatedAnnouncement : item)))
+      mutate(
+        (rawAnnouncements || []).map((item) => (item.id === updatedAnnouncement.id ? updatedAnnouncement : item)),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error toggling announcement:', err);
@@ -232,9 +208,9 @@ export default function AnnouncementsSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

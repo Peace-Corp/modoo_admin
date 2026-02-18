@@ -1,22 +1,19 @@
 'use client';
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { Factory, Profile, Coupon } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search } from 'lucide-react';
 
 export default function UsersTab() {
   const { user: currentUser } = useAuthStore();
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [updatingFactoryId, setUpdatingFactoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [loadingFactories, setLoadingFactories] = useState(false);
 
   // Coupon issuance states
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -33,51 +30,25 @@ export default function UsersTab() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchUsers();
+  // Build users SWR key
+  const usersKey = useMemo(() => {
+    if (!currentUser) return null;
+    let url = `/api/admin/users?role=${filterRole}`;
+    if (debouncedSearch) {
+      url += `&search=${encodeURIComponent(debouncedSearch)}`;
     }
-  }, [filterRole, debouncedSearch, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.role === 'admin') {
-      fetchFactories();
-    } else {
-      setFactories([]);
+    if (currentUser.role === 'factory' && currentUser.manufacturer_id) {
+      url += `&factoryId=${currentUser.manufacturer_id}`;
     }
-  }, [currentUser?.role]);
+    return url;
+  }, [currentUser, filterRole, debouncedSearch]);
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let url = `/api/admin/users?role=${filterRole}`;
-      if (debouncedSearch) {
-        url += `&search=${encodeURIComponent(debouncedSearch)}`;
-      }
-      if (currentUser?.role === 'factory' && currentUser.manufacturer_id) {
-        url += `&factoryId=${currentUser.manufacturer_id}`;
-      }
-      const response = await fetch(url, {
-        method: 'GET',
-      });
+  const { data: users = [], isLoading: loading, mutate: mutateUsers } = useSWR<Profile[]>(usersKey);
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || '사용자 목록을 불러오는데 실패했습니다.');
-      }
-
-      const payload = await response.json();
-      setUsers(payload?.data || []);
-      setSelectedUserIds(new Set());
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setUsers([]);
-      setError(error instanceof Error ? error.message : '사용자 목록을 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Factories: only fetch for admin
+  const { data: factories = [], isLoading: loadingFactories } = useSWR<Factory[]>(
+    currentUser?.role === 'admin' ? '/api/admin/factories' : null
+  );
 
   const updateUserRole = async (userId: string, newRole: 'customer' | 'admin' | 'factory') => {
     setUpdatingUserId(userId);
@@ -101,16 +72,15 @@ export default function UsersTab() {
       const updatedRole = updatedUser?.role ?? newRole;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? null;
 
-      setUsers((prev) => {
-        if (filterRole !== 'all' && updatedRole !== filterRole) {
-          return prev.filter((user) => user.id !== userId);
-        }
-        return prev.map((user) =>
+      if (filterRole !== 'all' && updatedRole !== filterRole) {
+        mutateUsers(users.filter((user) => user.id !== userId), { revalidate: false });
+      } else {
+        mutateUsers(users.map((user) =>
           user.id === userId
             ? { ...user, role: updatedRole, manufacturer_id: updatedManufacturerId }
             : user
-        );
-      });
+        ), { revalidate: false });
+      }
     } catch (error) {
       console.error('Error updating user role:', error);
       setError(error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.');
@@ -140,34 +110,17 @@ export default function UsersTab() {
       const updatedUser = payload?.data as Profile | undefined;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
-      setUsers((prev) =>
-        prev.map((user) =>
+      mutateUsers(
+        users.map((user) =>
           user.id === userId ? { ...user, manufacturer_id: updatedManufacturerId } : user
-        )
+        ),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error updating factory assignment:', error);
       setError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
     } finally {
       setUpdatingFactoryId(null);
-    }
-  };
-
-  const fetchFactories = async () => {
-    setLoadingFactories(true);
-    try {
-      const response = await fetch('/api/admin/factories', { method: 'GET' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching factories:', error);
-      setFactories([]);
-    } finally {
-      setLoadingFactories(false);
     }
   };
 

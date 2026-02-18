@@ -1,42 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import type { FaqRecord, FaqFormState } from './types';
 import { emptyFaqForm, sortFaqs, formatDate, parseFaqTags } from './utils';
 
 export default function FaqsSection() {
-  const [faqs, setFaqs] = useState<FaqRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawFaqs, error: swrError, isLoading: loading, mutate } = useSWR<FaqRecord[]>('/api/admin/faqs');
+  const faqs = rawFaqs ? sortFaqs(rawFaqs) : [];
   const [error, setError] = useState<string | null>(null);
   const [faqForm, setFaqForm] = useState<FaqFormState>(emptyFaqForm);
   const [faqFormOpen, setFaqFormOpen] = useState(false);
   const [faqFormError, setFaqFormError] = useState<string | null>(null);
   const [savingFaq, setSavingFaq] = useState(false);
-
-  useEffect(() => {
-    fetchFaqs();
-  }, []);
-
-  const fetchFaqs = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/faqs');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || 'FAQ 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFaqs(sortFaqs(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching faqs:', err);
-      setFaqs([]);
-      setError(err instanceof Error ? err.message : 'FAQ 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleFaqFormToggle = () => {
     setFaqFormOpen((prev) => !prev);
@@ -103,12 +80,10 @@ export default function FaqsSection() {
       const responsePayload = await response.json();
       const savedFaq = responsePayload?.data as FaqRecord;
 
-      setFaqs((prev) => {
-        const updated = faqForm.id
-          ? prev.map((item) => (item.id === savedFaq.id ? savedFaq : item))
-          : [savedFaq, ...prev];
-        return sortFaqs(updated);
-      });
+      const updated = faqForm.id
+        ? (rawFaqs || []).map((item) => (item.id === savedFaq.id ? savedFaq : item))
+        : [savedFaq, ...(rawFaqs || [])];
+      mutate(updated, { revalidate: false });
 
       setFaqForm(emptyFaqForm);
       setFaqFormOpen(false);
@@ -135,7 +110,7 @@ export default function FaqsSection() {
         throw new Error(payload?.error || 'FAQ 삭제에 실패했습니다.');
       }
 
-      setFaqs((prev) => prev.filter((item) => item.id !== faqId));
+      mutate((rawFaqs || []).filter((item) => item.id !== faqId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting faq:', err);
       setError(err instanceof Error ? err.message : 'FAQ 삭제에 실패했습니다.');
@@ -163,7 +138,10 @@ export default function FaqsSection() {
 
       const payload = await response.json();
       const updatedFaq = payload?.data as FaqRecord;
-      setFaqs((prev) => sortFaqs(prev.map((item) => (item.id === updatedFaq.id ? updatedFaq : item))));
+      mutate(
+        (rawFaqs || []).map((item) => (item.id === updatedFaq.id ? updatedFaq : item)),
+        { revalidate: false }
+      );
     } catch (err) {
       console.error('Error toggling faq:', err);
       setError(err instanceof Error ? err.message : '공개 상태 변경에 실패했습니다.');
@@ -172,9 +150,9 @@ export default function FaqsSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

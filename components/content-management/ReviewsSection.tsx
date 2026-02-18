@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ChangeEvent } from 'react';
+import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Edit2, Plus, Star, Trash2, X, Award } from 'lucide-react';
@@ -14,9 +15,9 @@ import {
 } from './utils';
 
 export default function ReviewsSection() {
-  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const { data: rawReviews, error: swrError, isLoading: loading, mutate } = useSWR<ReviewRecord[]>('/api/admin/reviews');
+  const reviews = rawReviews ? sortReviews(rawReviews) : [];
   const [products, setProducts] = useState<ProductSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewForm, setReviewForm] = useState<ReviewFormState>(emptyReviewForm);
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
@@ -25,29 +26,8 @@ export default function ReviewsSection() {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
-    fetchReviews();
     fetchProducts();
   }, []);
-
-  const fetchReviews = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/reviews');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '리뷰 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setReviews(sortReviews(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching reviews:', err);
-      setReviews([]);
-      setError(err instanceof Error ? err.message : '리뷰 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -200,12 +180,10 @@ export default function ReviewsSection() {
       const responsePayload = await response.json();
       const savedReview = responsePayload?.data as ReviewRecord;
 
-      setReviews((prev) => {
-        const updated = reviewForm.id
-          ? prev.map((review) => (review.id === savedReview.id ? savedReview : review))
-          : [savedReview, ...prev];
-        return sortReviews(updated);
-      });
+      const updated = reviewForm.id
+        ? (rawReviews || []).map((review) => (review.id === savedReview.id ? savedReview : review))
+        : [savedReview, ...(rawReviews || [])];
+      mutate(updated, { revalidate: false });
 
       setReviewForm(emptyReviewForm);
       setReviewFormOpen(false);
@@ -232,7 +210,7 @@ export default function ReviewsSection() {
         throw new Error(payload?.error || '리뷰 삭제에 실패했습니다.');
       }
 
-      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
+      mutate((rawReviews || []).filter((review) => review.id !== reviewId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting review:', err);
       setError(err instanceof Error ? err.message : '리뷰 삭제에 실패했습니다.');
@@ -260,8 +238,9 @@ export default function ReviewsSection() {
 
       const payload = await response.json();
       const updatedReview = payload?.data as ReviewRecord;
-      setReviews((prev) =>
-        sortReviews(prev.map((item) => (item.id === updatedReview.id ? updatedReview : item)))
+      mutate(
+        (rawReviews || []).map((item) => (item.id === updatedReview.id ? updatedReview : item)),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error toggling best review:', err);
@@ -293,9 +272,9 @@ export default function ReviewsSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

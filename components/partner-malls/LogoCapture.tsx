@@ -210,7 +210,6 @@ export default function LogoCapture({ onLogoReady, onCancel }: LogoCaptureProps)
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={handleFileUpload}
         className="hidden"
       />

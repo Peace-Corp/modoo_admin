@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Plus, RefreshCw } from 'lucide-react';
 import { CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
@@ -87,70 +88,26 @@ export default function CoBuyTab() {
   const resumeProductId = searchParams.get('resumeProductId');
   const resumeDesignId = searchParams.get('designId');
 
-  const [sessions, setSessions] = useState<CoBuySession[]>([]);
-  const [participants, setParticipants] = useState<CoBuyParticipant[]>([]);
-  const [selectedSession, setSelectedSession] = useState<CoBuySession | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | CoBuyStatus>('all');
+  const [selectedSession, setSelectedSession] = useState<CoBuySession | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<CoBuyStatus>('open');
-  const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<'status' | 'bulk' | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(!!resumeProductId && !!resumeDesignId);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [filterStatus]);
+  const { data: sessions = [], isLoading: loading, error: sessionsError, mutate: mutateSessions } = useSWR<CoBuySession[]>(
+    `/api/admin/cobuy/sessions?status=${filterStatus}`
+  );
+  const errorMessage = sessionsError?.message || null;
 
-  const fetchSessions = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const response = await fetch(`/api/admin/cobuy/sessions?status=${filterStatus}`);
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공동구매 세션을 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      setSessions(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching CoBuy sessions:', error);
-      setSessions([]);
-      setErrorMessage(error instanceof Error ? error.message : '공동구매 세션을 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchParticipants = async (sessionId: string) => {
-    setDetailLoading(true);
-    setDetailError(null);
-
-    try {
-      const response = await fetch(`/api/admin/cobuy/participants?sessionId=${sessionId}`);
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '참여자 정보를 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      setParticipants(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching CoBuy participants:', error);
-      setParticipants([]);
-      setDetailError(error instanceof Error ? error.message : '참여자 정보를 불러오지 못했습니다.');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
+  // Participants: fetch when a session is selected
+  const { data: participants = [], isLoading: detailLoading, mutate: mutateParticipants } = useSWR<CoBuyParticipant[]>(
+    selectedSession ? `/api/admin/cobuy/participants?sessionId=${selectedSession.id}` : null
+  );
 
   const handleSelectSession = (session: CoBuySession) => {
     setSelectedSession(session);
     setStatusUpdate(session.status);
-    fetchParticipants(session.id);
   };
 
   const handleUpdateStatus = async () => {
@@ -175,8 +132,9 @@ export default function CoBuyTab() {
       const updatedSession = payload?.data as CoBuySession;
 
       setSelectedSession(updatedSession);
-      setSessions((prev) =>
-        prev.map((session) => (session.id === updatedSession.id ? updatedSession : session))
+      mutateSessions(
+        sessions.map((session) => (session.id === updatedSession.id ? updatedSession : session)),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error updating session status:', error);
@@ -217,8 +175,9 @@ export default function CoBuyTab() {
       };
 
       setSelectedSession(updatedSession);
-      setSessions((prev) =>
-        prev.map((session) => (session.id === updatedSession.id ? updatedSession : session))
+      mutateSessions(
+        sessions.map((session) => (session.id === updatedSession.id ? updatedSession : session)),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error creating bulk order:', error);
@@ -333,7 +292,7 @@ export default function CoBuyTab() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-gray-900">참여자 목록</h3>
                 <button
-                  onClick={() => fetchParticipants(selectedSession.id)}
+                  onClick={() => mutateParticipants()}
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                   disabled={detailLoading}
                 >
@@ -504,7 +463,7 @@ export default function CoBuyTab() {
   }
 
   const handleCoBuyCreated = (session: CoBuySession) => {
-    setSessions((prev) => [session, ...prev]);
+    mutateSessions([session, ...sessions], { revalidate: false });
   };
 
   const handleCloseCreator = () => {
@@ -546,7 +505,7 @@ export default function CoBuyTab() {
             공동구매 생성하기
           </button>
           <button
-            onClick={fetchSessions}
+            onClick={() => mutateSessions()}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />

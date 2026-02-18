@@ -30,8 +30,8 @@ export default function ContentManagementTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">콘텐츠 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-base font-semibold text-gray-900">콘텐츠 관리</h2>
+          <p className="text-xs text-gray-500 mt-1">
             리뷰, 제작 사례, 배너, 공지, FAQ, 문의, 챗봇 문의를 한 곳에서 관리합니다.
           </p>
         </div>
@@ -43,7 +43,7 @@ export default function ContentManagementTab() {
             <button
               key={tab.key}
               onClick={() => setActiveSection(tab.key)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 activeSection === tab.key
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { BarChart3, Factory, MessageSquare, Package, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -59,40 +60,8 @@ const formatDateTime = (value: string) =>
 
 export default function Dashboard() {
   const { user } = useAuthStore();
-  const [payload, setPayload] = useState<DashboardPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchDashboard = async () => {
-      setIsLoading(true);
-      setErrorMessage(null);
-      try {
-        const response = await fetch('/api/admin/dashboard');
-        if (!response.ok) {
-          const errorPayload = await response.json().catch(() => ({}));
-          throw new Error(errorPayload?.error || '대시보드 데이터를 불러오지 못했습니다.');
-        }
-        const json = await response.json();
-        if (!isActive) return;
-        setPayload(json?.data ?? null);
-      } catch (error) {
-        if (!isActive) return;
-        setPayload(null);
-        setErrorMessage(error instanceof Error ? error.message : '대시보드 데이터를 불러오지 못했습니다.');
-      } finally {
-        if (isActive) setIsLoading(false);
-      }
-    };
-
-    fetchDashboard();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
+  const { data: payload = null, isLoading, error: swrError } = useSWR<DashboardPayload>('/api/admin/dashboard');
+  const errorMessage = swrError?.message || null;
 
   const cards = useMemo(() => {
     if (!payload) return [];

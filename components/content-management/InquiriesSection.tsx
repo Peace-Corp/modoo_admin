@@ -1,42 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import type { InquiryRecord, InquiryStatus, InquiryReplyRecord } from './types';
 import { formatDate, getStatusStyle, getStatusLabel } from './utils';
 
 export default function InquiriesSection() {
-  const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: inquiries = [], error: swrError, isLoading: loading, mutate } = useSWR<InquiryRecord[]>('/api/admin/inquiries');
   const [error, setError] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchInquiries();
-  }, []);
-
-  const fetchInquiries = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/inquiries');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '문의 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setInquiries(payload?.data || []);
-    } catch (err) {
-      console.error('Error fetching inquiries:', err);
-      setInquiries([]);
-      setError(err instanceof Error ? err.message : '문의 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDeleteInquiry = async (inquiryId: string) => {
     const confirmed = window.confirm('이 문의를 삭제할까요? 관련된 답변도 함께 삭제됩니다.');
@@ -53,7 +29,7 @@ export default function InquiriesSection() {
         throw new Error(payload?.error || '문의 삭제에 실패했습니다.');
       }
 
-      setInquiries((prev) => prev.filter((inquiry) => inquiry.id !== inquiryId));
+      mutate(inquiries.filter((inquiry) => inquiry.id !== inquiryId), { revalidate: false });
       if (expandedInquiryId === inquiryId) {
         setExpandedInquiryId(null);
       }
@@ -87,12 +63,13 @@ export default function InquiriesSection() {
       const payload = await response.json();
       const reply = payload?.data as InquiryReplyRecord;
 
-      setInquiries((prev) =>
-        prev.map((inquiry) => {
+      mutate(
+        inquiries.map((inquiry) => {
           if (inquiry.id !== inquiryId) return inquiry;
           const replies = inquiry.inquiry_replies ? [...inquiry.inquiry_replies, reply] : [reply];
           return { ...inquiry, inquiry_replies: replies };
-        })
+        }),
+        { revalidate: false }
       );
 
       setReplyDrafts((prev) => ({ ...prev, [inquiryId]: '' }));
@@ -125,10 +102,11 @@ export default function InquiriesSection() {
       const payload = await response.json();
       const updated = payload?.data as { id: string; status: InquiryStatus };
 
-      setInquiries((prev) =>
-        prev.map((inquiry) =>
+      mutate(
+        inquiries.map((inquiry) =>
           inquiry.id === updated.id ? { ...inquiry, status: updated.status } : inquiry
-        )
+        ),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error updating inquiry status:', err);
@@ -140,9 +118,9 @@ export default function InquiriesSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
       {loading ? (

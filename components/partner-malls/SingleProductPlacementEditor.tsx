@@ -225,6 +225,33 @@ export default function SingleProductPlacementEditor({
     });
   }, []);
 
+  // Serialize canvas state (user objects only, matching editor format)
+  const serializeCanvasState = useCallback((): Record<string, string> => {
+    const canvas = canvasRef.current;
+    if (!canvas || !currentSide) return {};
+
+    const userObjects = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - Checking custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+
+    const canvasData = {
+      version: canvas.toJSON().version,
+      objects: userObjects.map(obj => {
+        const json = obj.toObject(['data']);
+        if (obj.type === 'image') {
+          const imgObj = obj as fabric.FabricImage;
+          json.src = imgObj.getSrc();
+        }
+        return json;
+      }),
+    };
+
+    return { [currentSide.id]: JSON.stringify(canvasData) };
+  }, [currentSide]);
+
   // Handle save
   const handleSave = async () => {
     if (!currentSide) return;
@@ -242,6 +269,9 @@ export default function SingleProductPlacementEditor({
       // Generate preview image
       const previewUrl = generatePreviewImage();
 
+      // Serialize the full canvas state including the logo object
+      const canvasState = serializeCanvasState();
+
       const response = await fetch('/api/admin/partner-malls/products', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -251,6 +281,7 @@ export default function SingleProductPlacementEditor({
             ...mallProduct.logo_placements,
             [currentSide.id]: placement,
           },
+          canvas_state: canvasState,
           preview_url: previewUrl,
           display_name: displayName || null,
           manufacturer_color_id: selectedColor?.id ?? null,

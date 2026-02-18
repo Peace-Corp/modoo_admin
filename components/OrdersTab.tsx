@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
 import { Package, Calendar, Clock, Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -21,102 +22,48 @@ export default function OrdersTab() {
   const resumeProductId = searchParams.get('resumeProductId');
   const resumeDesignId = searchParams.get('designId');
 
-  const [orders, setOrders] = useState<OrderWithItemCount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [factories, setFactories] = useState<Factory[]>([]);
   const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
-
-  // Track if initial data has been fetched to avoid duplicate fetches
-  const initialFetchDone = useRef(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isFactoryUser = user?.role === 'factory';
 
-  const fetchOrders = useCallback(async (status: string = 'all') => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const params = new URLSearchParams();
-      if (user?.role === 'factory' && user.manufacturer_id) {
-        params.set('factoryId', user.manufacturer_id);
-      }
-      if (status !== 'all') {
-        params.set('status', status);
-      }
-      const url = `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || '주문 데이터를 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      setOrders(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      setOrders([]);
-      setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
+  // Build orders SWR key based on user role and filter
+  const ordersKey = useMemo(() => {
+    if (!user) return null;
+    const params = new URLSearchParams();
+    if (user.role === 'factory' && user.manufacturer_id) {
+      params.set('factoryId', user.manufacturer_id);
     }
-  }, [user?.role, user?.manufacturer_id]);
-
-  const fetchFactories = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/factories');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching factories:', error);
-      setFactories([]);
+    if (filterStatus !== 'all') {
+      params.set('status', filterStatus);
     }
-  }, []);
+    return `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
+  }, [user, filterStatus]);
 
-  // Initial data fetch - parallel loading of orders and factories
-  useEffect(() => {
-    if (!user || initialFetchDone.current) return;
-    initialFetchDone.current = true;
+  const { data: orders = [], isLoading: loading, mutate: mutateOrders } = useSWR<OrderWithItemCount[]>(ordersKey);
 
-    const loadData = async () => {
-      if (user.role === 'admin') {
-        // Admin: fetch orders and factories in parallel
-        await Promise.all([fetchOrders(filterStatus), fetchFactories()]);
-      } else if (user.role === 'factory') {
-        // Factory user: fetch orders and set factory info from user profile
-        await fetchOrders(filterStatus);
-        if (user.manufacturer_id) {
-          setFactories([
-            {
-              id: user.manufacturer_id,
-              name: user.manufacturer_name || user.email || '공장',
-              email: user.email || null,
-              phone_number: user.phone || null,
-              is_active: true,
-              created_at: user.created_at || new Date().toISOString(),
-              updated_at: user.created_at || new Date().toISOString(),
-            },
-          ]);
-        }
-      } else {
-        await fetchOrders(filterStatus);
-      }
-    };
+  // Factories: fetch for admin, compute from profile for factory user
+  const { data: fetchedFactories = [] } = useSWR<Factory[]>(
+    user?.role === 'admin' ? '/api/admin/factories' : null
+  );
 
-    loadData();
-  }, [user, fetchOrders, fetchFactories, filterStatus]);
-
-  // Re-fetch orders when filter changes (server-side filtering)
-  useEffect(() => {
-    if (!user || !initialFetchDone.current) return;
-    fetchOrders(filterStatus);
-  }, [filterStatus, user, fetchOrders]);
+  const factories = useMemo(() => {
+    if (user?.role === 'admin') return fetchedFactories;
+    if (user?.role === 'factory' && user.manufacturer_id) {
+      return [{
+        id: user.manufacturer_id,
+        name: user.manufacturer_name || user.email || '공장',
+        email: user.email || null,
+        phone_number: user.phone || null,
+        is_active: true,
+        created_at: user.created_at || new Date().toISOString(),
+        updated_at: user.created_at || new Date().toISOString(),
+      }];
+    }
+    return [];
+  }, [user, fetchedFactories]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -215,8 +162,9 @@ export default function OrdersTab() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '주문 상태 변경에 실패했습니다.');
       }
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, order_status: newStatus } : o))
+      mutateOrders(
+        orders.map((o) => (o.id === orderId ? { ...o, order_status: newStatus } : o)),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -224,7 +172,7 @@ export default function OrdersTab() {
     } finally {
       setUpdatingStatusId(null);
     }
-  }, []);
+  }, [orders, mutateOrders]);
 
   if (loading) {
     return (
@@ -503,7 +451,7 @@ export default function OrdersTab() {
             if (resumeProductId || resumeDesignId) {
               router.replace('/orders');
             }
-            fetchOrders(filterStatus);
+            mutateOrders();
           }}
           initialProductId={resumeProductId ?? undefined}
           initialDesignId={resumeDesignId ?? undefined}

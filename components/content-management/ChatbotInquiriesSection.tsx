@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import type { ChatbotInquiryRecord, ChatbotInquiryStatus } from './types';
 import {
@@ -11,45 +12,27 @@ import {
 } from './utils';
 
 export default function ChatbotInquiriesSection() {
-  const [inquiries, setInquiries] = useState<ChatbotInquiryRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawInquiries, error: swrError, isLoading: loading, mutate } = useSWR<ChatbotInquiryRecord[]>('/api/admin/chatbot-inquiries');
+  const inquiries = rawInquiries ? sortChatbotInquiries(rawInquiries) : [];
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
   const [savingNotesId, setSavingNotesId] = useState<string | null>(null);
 
+  // Initialize notes drafts when data first loads
   useEffect(() => {
-    fetchInquiries();
-  }, []);
-
-  const fetchInquiries = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/chatbot-inquiries');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '챗봇 문의 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      const sorted = sortChatbotInquiries(payload?.data || []);
-      setInquiries(sorted);
-
-      // Initialize notes drafts
-      const drafts: Record<string, string> = {};
-      sorted.forEach((inq) => {
-        drafts[inq.id] = inq.admin_notes || '';
+    if (!rawInquiries) return;
+    setNotesDrafts((prev) => {
+      const drafts: Record<string, string> = { ...prev };
+      rawInquiries.forEach((inq) => {
+        if (!(inq.id in drafts)) {
+          drafts[inq.id] = inq.admin_notes || '';
+        }
       });
-      setNotesDrafts(drafts);
-    } catch (err) {
-      console.error('Error fetching chatbot inquiries:', err);
-      setInquiries([]);
-      setError(err instanceof Error ? err.message : '챗봇 문의 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      return drafts;
+    });
+  }, [rawInquiries]);
 
   const handleStatusChange = async (inquiryId: string, status: ChatbotInquiryStatus) => {
     setUpdatingStatusId(inquiryId);
@@ -67,12 +50,13 @@ export default function ChatbotInquiriesSection() {
       }
 
       const payload = await response.json();
-      setInquiries((prev) =>
-        prev.map((inq) =>
+      mutate(
+        (rawInquiries || []).map((inq) =>
           inq.id === inquiryId
             ? { ...inq, status: payload.data.status, updated_at: payload.data.updated_at }
             : inq
-        )
+        ),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error updating status:', err);
@@ -100,12 +84,13 @@ export default function ChatbotInquiriesSection() {
       }
 
       const payload = await response.json();
-      setInquiries((prev) =>
-        prev.map((inq) =>
+      mutate(
+        (rawInquiries || []).map((inq) =>
           inq.id === inquiryId
             ? { ...inq, admin_notes: payload.data.admin_notes, updated_at: payload.data.updated_at }
             : inq
-        )
+        ),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error saving notes:', err);
@@ -129,7 +114,7 @@ export default function ChatbotInquiriesSection() {
         throw new Error(payload?.error || '삭제에 실패했습니다.');
       }
 
-      setInquiries((prev) => prev.filter((inq) => inq.id !== inquiryId));
+      mutate((rawInquiries || []).filter((inq) => inq.id !== inquiryId), { revalidate: false });
       if (expandedId === inquiryId) setExpandedId(null);
     } catch (err) {
       console.error('Error deleting inquiry:', err);
@@ -156,9 +141,9 @@ export default function ChatbotInquiriesSection() {
         <span className="text-sm text-gray-500">{inquiries.length}건</span>
       </div>
 
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800 text-sm">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

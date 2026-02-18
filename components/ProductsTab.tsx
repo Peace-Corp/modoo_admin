@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { Product } from '@/types/types';
 import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
@@ -12,34 +13,11 @@ type EditorMode = 'print-area' | 'full-edit' | null;
 
 export default function ProductsTab() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/admin/products');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '제품 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setProducts(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
@@ -59,9 +37,9 @@ export default function ProductsTab() {
       const payload = await response.json();
       const updatedProduct = payload?.data as Product;
 
-      setProducts(products.map(p =>
+      mutate(products.map(p =>
         p.id === updatedProduct.id ? updatedProduct : p
-      ));
+      ), { revalidate: false });
     } catch (error) {
       console.error('Error toggling product status:', error);
     }
@@ -69,13 +47,11 @@ export default function ProductsTab() {
 
   const handleProductSave = (savedProduct: Product) => {
     if (isCreatingNew) {
-      // Add new product to list
-      setProducts([savedProduct, ...products]);
+      mutate([savedProduct, ...products], { revalidate: false });
     } else {
-      // Update existing product
-      setProducts(products.map(p =>
+      mutate(products.map(p =>
         p.id === savedProduct.id ? savedProduct : p
-      ));
+      ), { revalidate: false });
     }
     setSelectedProduct(null);
     setEditorMode(null);
@@ -97,7 +73,7 @@ export default function ProductsTab() {
         throw new Error(payload?.error || '제품 삭제에 실패했습니다.');
       }
 
-      setProducts((prev) => prev.filter((product) => product.id !== productId));
+      mutate(products.filter((product) => product.id !== productId), { revalidate: false });
     } catch (error) {
       console.error('Error deleting product:', error);
       alert(error instanceof Error ? error.message : '제품 삭제에 실패했습니다.');
@@ -150,15 +126,15 @@ export default function ProductsTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">제품 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {products.length}개의 제품</p>
+          <h2 className="text-base font-semibold text-gray-900">제품 관리</h2>
+          <p className="text-xs text-gray-500 mt-1">총 {products.length}개의 제품</p>
         </div>
         <button
           onClick={() => {
             setIsCreatingNew(true);
             setSelectedProduct(null);
           }}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium"
         >
           <Plus className="w-5 h-5" />
           새 제품 추가
@@ -198,20 +174,20 @@ export default function ProductsTab() {
               {products.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{product.title}</div>
+                    <div className="text-xs font-medium text-gray-900">{product.title}</div>
                     <div className="text-xs text-gray-500">ID: {product.id.slice(0, 8)}...</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{product.category ? getCategoryName(product.category) : '-'}</span>
+                    <span className="text-xs text-gray-900">{product.category ? getCategoryName(product.category) : '-'}</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{product.manufacturers?.name || '-'}</span>
+                    <span className="text-xs text-gray-900">{product.manufacturers?.name || '-'}</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{product.base_price.toLocaleString()}원</span>
+                    <span className="text-xs text-gray-900">{product.base_price.toLocaleString()}원</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{product.configuration?.length || 0}개</span>
+                    <span className="text-xs text-gray-900">{product.configuration?.length || 0}개</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <button
@@ -235,7 +211,7 @@ export default function ProductsTab() {
                       )}
                     </button>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => {
@@ -285,8 +261,8 @@ export default function ProductsTab() {
         {products.length === 0 && (
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">제품이 없습니다</h3>
-            <p className="text-gray-500">새 제품을 추가해보세요.</p>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">제품이 없습니다</h3>
+            <p className="text-xs text-gray-500">새 제품을 추가해보세요.</p>
           </div>
         )}
       </div>

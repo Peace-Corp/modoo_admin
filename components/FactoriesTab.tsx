@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import type { Factory, ManufacturerColor, Profile } from '@/types/types';
 import {
   AlertCircle,
@@ -12,6 +13,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react';
 
@@ -47,8 +49,10 @@ interface ManufacturerColorsEditorProps {
 }
 
 function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorProps) {
-  const [colors, setColors] = useState<ManufacturerColor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawColors = [], isLoading: loading, mutate: mutateColors } = useSWR<ManufacturerColor[]>(
+    `/api/admin/manufacturer-colors?manufacturerId=${factory.id}&includeInactive=true`
+  );
+  const colors = useMemo(() => sortColors(rawColors), [rawColors]);
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState(emptyColorForm);
@@ -58,32 +62,6 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
   const [editDraft, setEditDraft] = useState<typeof emptyColorForm | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchColors();
-  }, [factory.id]);
-
-  const fetchColors = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/admin/manufacturer-colors?manufacturerId=${factory.id}&includeInactive=true`
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '색상 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setColors(sortColors(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching colors:', err);
-      setColors([]);
-      setError(err instanceof Error ? err.message : '색상 목록을 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const createColor = async () => {
     if (!form.name.trim()) {
@@ -123,7 +101,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 
       const payload = await response.json();
       const created = payload?.data as ManufacturerColor;
-      setColors((prev) => sortColors([created, ...prev]));
+      mutateColors(sortColors([created, ...rawColors]), { revalidate: false });
       setForm(emptyColorForm);
     } catch (err) {
       console.error('Error creating color:', err);
@@ -150,7 +128,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 
       const payload = await response.json();
       const updated = payload?.data as ManufacturerColor;
-      setColors((prev) => sortColors(prev.map((c) => (c.id === updated.id ? updated : c))));
+      mutateColors(sortColors(rawColors.map((c) => (c.id === updated.id ? updated : c))), { revalidate: false });
       return updated;
     } catch (err) {
       console.error('Error updating color:', err);
@@ -178,7 +156,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
         throw new Error(payload?.error || '색상 삭제에 실패했습니다.');
       }
 
-      setColors((prev) => prev.filter((c) => c.id !== colorId));
+      mutateColors(rawColors.filter((c) => c.id !== colorId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting color:', err);
       setError(err instanceof Error ? err.message : '색상 삭제에 실패했습니다.');
@@ -566,10 +544,9 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 }
 
 export default function FactoriesTab() {
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [factoryUsers, setFactoryUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const { data: rawFactories = [], isLoading: loading, mutate: mutateFactories } = useSWR<Factory[]>('/api/admin/factories');
+  const factories = useMemo(() => sortFactories(rawFactories), [rawFactories]);
+  const { data: factoryUsers = [], isLoading: loadingUsers, mutate: mutateFactoryUsers } = useSWR<Profile[]>('/api/admin/users?role=factory');
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState(emptyForm);
@@ -585,53 +562,15 @@ export default function FactoriesTab() {
   // Color management view state
   const [selectedFactoryForColors, setSelectedFactoryForColors] = useState<Factory | null>(null);
 
-  useEffect(() => {
-    fetchFactories();
-    fetchFactoryUsers();
-  }, []);
+  // Account creation state
+  const [creatingAccountForId, setCreatingAccountForId] = useState<string | null>(null);
+  const [accountForm, setAccountForm] = useState({ email: '', password: '' });
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const unassignedFactoryUsers = useMemo(
     () => factoryUsers.filter((user) => !user.manufacturer_id),
     [factoryUsers]
   );
-
-  const fetchFactories = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/factories');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(sortFactories(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching factories:', err);
-      setFactories([]);
-      setError(err instanceof Error ? err.message : '공장 목록을 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFactoryUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const response = await fetch('/api/admin/users?role=factory');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 사용자 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactoryUsers(payload?.data || []);
-    } catch (err) {
-      console.error('Error fetching factory users:', err);
-      setFactoryUsers([]);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
 
   const createFactory = async () => {
     if (!form.name.trim()) {
@@ -660,7 +599,7 @@ export default function FactoriesTab() {
 
       const payload = await response.json();
       const created = payload?.data as Factory;
-      setFactories((prev) => sortFactories([created, ...prev]));
+      mutateFactories(sortFactories([created, ...rawFactories]), { revalidate: false });
       setForm(emptyForm);
     } catch (err) {
       console.error('Error creating factory:', err);
@@ -687,8 +626,9 @@ export default function FactoriesTab() {
 
       const payload = await response.json();
       const updated = payload?.data as Factory;
-      setFactories((prev) =>
-        sortFactories(prev.map((factory) => (factory.id === updated.id ? updated : factory)))
+      mutateFactories(
+        sortFactories(rawFactories.map((factory) => (factory.id === updated.id ? updated : factory))),
+        { revalidate: false }
       );
       return updated;
     } catch (err) {
@@ -761,10 +701,11 @@ export default function FactoriesTab() {
       const updatedUser = payload?.data as Profile | undefined;
       const nextManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
-      setFactoryUsers((prev) =>
-        prev.map((user) =>
+      mutateFactoryUsers(
+        factoryUsers.map((user) =>
           user.id === userId ? { ...user, manufacturer_id: nextManufacturerId } : user
-        )
+        ),
+        { revalidate: false }
       );
       return updatedUser ?? null;
     } catch (err) {
@@ -783,6 +724,47 @@ export default function FactoriesTab() {
     const updated = await updateUserFactory(selectedUserId, factoryId);
     if (updated) {
       setSelectedUserByFactory((prev) => ({ ...prev, [factoryId]: '' }));
+    }
+  };
+
+  const createFactoryAccount = async (factoryId: string) => {
+    if (!accountForm.email.trim()) {
+      setError('이메일을 입력해주세요.');
+      return;
+    }
+    if (!accountForm.password || accountForm.password.length < 6) {
+      setError('비밀번호는 6자 이상이어야 합니다.');
+      return;
+    }
+
+    setCreatingAccount(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/admin/factory-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manufacturer_id: factoryId,
+          email: accountForm.email.trim(),
+          password: accountForm.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '계정 생성에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const created = payload?.data as Profile;
+      mutateFactoryUsers([created, ...factoryUsers], { revalidate: false });
+      setAccountForm({ email: '', password: '' });
+      setCreatingAccountForId(null);
+    } catch (err) {
+      console.error('Error creating factory account:', err);
+      setError(err instanceof Error ? err.message : '계정 생성에 실패했습니다.');
+    } finally {
+      setCreatingAccount(false);
     }
   };
 
@@ -1032,6 +1014,18 @@ export default function FactoriesTab() {
                                 색상 관리
                               </button>
                               <button
+                                onClick={() => {
+                                  setCreatingAccountForId((prev) =>
+                                    prev === factory.id ? null : factory.id
+                                  );
+                                  setAccountForm({ email: '', password: '' });
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                              >
+                                <UserPlus className="w-4 h-4" />
+                                계정 생성
+                              </button>
+                              <button
                                 onClick={() =>
                                   setExpandedFactoryId((prev) =>
                                     prev === factory.id ? null : factory.id
@@ -1046,6 +1040,70 @@ export default function FactoriesTab() {
                         </div>
                       </td>
                     </tr>
+                    {creatingAccountForId === factory.id && (
+                      <tr className="bg-green-50">
+                        <td colSpan={6} className="px-4 py-3">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <UserPlus className="w-4 h-4 text-green-700" />
+                              <span className="text-sm font-medium text-gray-700">
+                                공장 계정 생성
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-end gap-3">
+                              <label className="space-y-1 text-sm text-gray-700">
+                                이메일 *
+                                <input
+                                  type="email"
+                                  value={accountForm.email}
+                                  onChange={(e) =>
+                                    setAccountForm((prev) => ({
+                                      ...prev,
+                                      email: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="factory@example.com"
+                                  className="w-60 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </label>
+                              <label className="space-y-1 text-sm text-gray-700">
+                                비밀번호 *
+                                <input
+                                  type="text"
+                                  value={accountForm.password}
+                                  onChange={(e) =>
+                                    setAccountForm((prev) => ({
+                                      ...prev,
+                                      password: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="6자 이상"
+                                  className="w-48 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </label>
+                              <button
+                                onClick={() => createFactoryAccount(factory.id)}
+                                disabled={creatingAccount}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                              >
+                                <Plus className="w-4 h-4" />
+                                {creatingAccount ? '생성 중...' : '생성'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCreatingAccountForId(null);
+                                  setAccountForm({ email: '', password: '' });
+                                }}
+                                disabled={creatingAccount}
+                                className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {isExpanded && (
                       <tr className="bg-gray-50">
                         <td colSpan={6} className="px-4 py-3">
