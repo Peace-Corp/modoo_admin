@@ -78,6 +78,16 @@ export const formatDate = (dateString: string) => {
   });
 };
 
+export const isToday = (dateString: string) => {
+  const date = new Date(dateString);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+};
+
 export const sortExamples = (examples: ProductionExampleRecord[]) => {
   return [...examples].sort((a, b) => {
     const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);

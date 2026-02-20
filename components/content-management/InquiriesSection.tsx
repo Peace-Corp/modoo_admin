@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import type { InquiryRecord, InquiryStatus, InquiryReplyRecord } from './types';
-import { formatDate, getStatusStyle, getStatusLabel } from './utils';
+import { formatDate, getStatusStyle, getStatusLabel, isToday } from './utils';
 
 export default function InquiriesSection() {
   const { data: inquiries = [], error: swrError, isLoading: loading, mutate } = useSWR<InquiryRecord[]>('/api/admin/inquiries');
@@ -156,10 +156,18 @@ export default function InquiriesSection() {
                   className="w-full px-4 py-3 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
                 >
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
+                      {isToday(inquiry.created_at) && (
+                        <span className="text-xs text-red-500 font-bold">NEW</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">{formatDate(inquiry.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-3">
+                    {isToday(inquiry.created_at) && (
+                      <span className="text-xs text-red-500 font-bold">NEW</span>
+                    )}
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
                         inquiry.status

@@ -31,7 +31,11 @@ export async function GET(
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('saved_designs')
-      .select('id, price_per_item')
+      .select(`
+        *,
+        user:profiles!saved_designs_user_id_fkey(id, email, name),
+        product:products!saved_designs_product_id_fkey(id, title, thumbnail_image_link)
+      `)
       .eq('id', id)
       .single();
 

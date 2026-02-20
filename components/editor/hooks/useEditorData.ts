@@ -8,6 +8,7 @@ import {
   ProductSide,
   OrderItem,
   DesignTemplate,
+  SavedDesign,
   CanvasState,
   CustomFont,
 } from '@/types/types';
@@ -20,12 +21,14 @@ interface UseEditorDataParams {
   orderId?: string;
   orderItemId?: string;
   templateId?: string;
+  designId?: string;
 }
 
 interface EditorData {
   product: Product | null;
   productColors: ProductColor[];
   orderItem: OrderItem | null;
+  savedDesign: SavedDesign | null;
   templates: DesignTemplate[];
   selectedTemplate: DesignTemplate | null;
   canvasStates: Record<string, CanvasState | string | null>;
@@ -43,10 +46,12 @@ export function useEditorData({
   orderId,
   orderItemId,
   templateId,
+  designId,
 }: UseEditorDataParams): EditorData {
   const [product, setProduct] = useState<Product | null>(null);
   const [productColors, setProductColors] = useState<ProductColor[]>([]);
   const [orderItem, setOrderItem] = useState<OrderItem | null>(null);
+  const [savedDesign, setSavedDesign] = useState<SavedDesign | null>(null);
   const [templates, setTemplates] = useState<DesignTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<DesignTemplate | null>(null);
   const [canvasStates, setCanvasStates] = useState<Record<string, CanvasState | string | null>>({});
@@ -119,6 +124,17 @@ export function useEditorData({
     return (data || []) as DesignTemplate[];
   }, []);
 
+  // Fetch saved design
+  const fetchSavedDesign = useCallback(async (id: string) => {
+    const response = await fetch(`/api/admin/designs/${id}`);
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => ({}));
+      throw new Error(errorPayload?.error || '디자인을 불러올 수 없습니다.');
+    }
+    const payload = await response.json();
+    return payload?.data as SavedDesign;
+  }, []);
+
   const refetchTemplates = useCallback(async () => {
     const t = await fetchTemplates(productId);
     setTemplates(t);
@@ -180,8 +196,30 @@ export function useEditorData({
               setCanvasStates(selected.canvas_state as Record<string, CanvasState | string | null>);
             }
           }
+        } else if (mode === 'design' && designId) {
+          // Load saved design for viewing/editing
+          const design = await fetchSavedDesign(designId);
+          if (cancelled) return;
+          setSavedDesign(design);
+          setCanvasStates(design.canvas_state || {});
+          setCustomFonts(coerceCustomFonts(design.custom_fonts));
+
+          // Extract product color from canvas state or color_selections
+          const colorSelections = design.color_selections as { productColor?: string } | undefined;
+          if (typeof colorSelections?.productColor === 'string' && colorSelections.productColor.startsWith('#')) {
+            setProductColor(colorSelections.productColor);
+          } else {
+            const states = Object.values(design.canvas_state || {});
+            for (const stateRaw of states) {
+              const state = parseCanvasState(stateRaw);
+              if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
+                setProductColor(state.productColor);
+                break;
+              }
+            }
+          }
         }
-        // design mode: no canvas state to load (fresh canvas)
+        // design mode without designId: no canvas state to load (fresh canvas)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : '데이터를 불러오는 중 오류가 발생했습니다.');
@@ -198,12 +236,13 @@ export function useEditorData({
     return () => {
       cancelled = true;
     };
-  }, [productId, mode, orderItemId, templateId, fetchProduct, fetchProductColors, fetchOrderItem, fetchTemplates]);
+  }, [productId, mode, orderItemId, templateId, designId, fetchProduct, fetchProductColors, fetchOrderItem, fetchTemplates, fetchSavedDesign]);
 
   return {
     product,
     productColors,
     orderItem,
+    savedDesign,
     templates,
     selectedTemplate,
     canvasStates,

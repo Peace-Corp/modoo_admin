@@ -40,6 +40,7 @@ interface UnifiedEditorProps {
   orderId?: string;
   orderItemId?: string;
   templateId?: string;
+  designId?: string;
   returnUrl?: string;
 }
 
@@ -49,11 +50,12 @@ export default function UnifiedEditor({
   orderId,
   orderItemId,
   templateId,
+  designId,
   returnUrl,
 }: UnifiedEditorProps) {
   const router = useRouter();
   const modeConfig = useEditorMode({ mode, returnUrl });
-  const editorData = useEditorData({ productId, mode, orderId, orderItemId, templateId });
+  const editorData = useEditorData({ productId, mode, orderId, orderItemId, templateId, designId });
   const { setEditMode, setActiveSide, canvasMap } = useCanvasStore();
 
   // Editing state
@@ -102,6 +104,14 @@ export default function UnifiedEditor({
     }
   }, [editorData.canvasStates]);
 
+  // Update design form when savedDesign changes
+  useEffect(() => {
+    const saved = editorData.savedDesign;
+    if (saved && mode === 'design') {
+      setDesignTitle(saved.title || '');
+    }
+  }, [editorData.savedDesign, mode]);
+
   // Update template form when selectedTemplate changes
   useEffect(() => {
     const tmpl = editorData.selectedTemplate;
@@ -127,6 +137,7 @@ export default function UnifiedEditor({
     mode,
     product: editorData.product,
     orderItem: editorData.orderItem,
+    savedDesign: editorData.savedDesign,
     selectedTemplate: editorData.selectedTemplate,
     designTitle,
     templateTitle,

@@ -13,6 +13,7 @@ function EditorPage() {
   const orderId = searchParams.get('orderId') || undefined;
   const orderItemId = searchParams.get('orderItemId') || undefined;
   const templateId = searchParams.get('templateId') || undefined;
+  const designId = searchParams.get('designId') || undefined;
   const returnUrl = searchParams.get('returnUrl') || undefined;
 
   return (
@@ -22,6 +23,7 @@ function EditorPage() {
       orderId={orderId}
       orderItemId={orderItemId}
       templateId={templateId}
+      designId={designId}
       returnUrl={returnUrl}
     />
   );

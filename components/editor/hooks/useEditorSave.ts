@@ -2,9 +2,9 @@
 
 import { useCallback } from 'react';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { Product, OrderItem, DesignTemplate, CanvasState } from '@/types/types';
+import { Product, OrderItem, DesignTemplate, SavedDesign, CanvasState } from '@/types/types';
 import { serializeCanvasState } from '@/lib/canvasUtils';
-import { saveDesign, SaveDesignData } from '@/lib/designService';
+import { saveDesign, updateDesign, SaveDesignData } from '@/lib/designService';
 import { parseCanvasState } from '@/lib/downloadUtils';
 import { EditorMode } from './useEditorMode';
 
@@ -12,6 +12,7 @@ interface UseEditorSaveParams {
   mode: EditorMode;
   product: Product | null;
   orderItem?: OrderItem | null;
+  savedDesign?: SavedDesign | null;
   selectedTemplate?: DesignTemplate | null;
   designTitle?: string;
   templateTitle?: string;
@@ -28,6 +29,7 @@ export function useEditorSave({
   mode,
   product,
   orderItem,
+  savedDesign,
   selectedTemplate,
   designTitle,
   templateTitle,
@@ -56,7 +58,7 @@ export function useEditorSave({
       console.error('Save error:', err);
       return { success: false, error: message };
     }
-  }, [mode, product, canvasMap, productColor, layerColors, orderItem, selectedTemplate, designTitle, templateTitle, templateDescription, templateSortOrder, templateIsActive]);
+  }, [mode, product, canvasMap, productColor, layerColors, orderItem, savedDesign, selectedTemplate, designTitle, templateTitle, templateDescription, templateSortOrder, templateIsActive]);
 
   async function saveDesignMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {
     // Serialize canvas state from all sides
@@ -83,18 +85,32 @@ export function useEditorSave({
       }
     }
 
-    const designData: SaveDesignData = {
-      productId: product!.id,
-      title: designTitle || `디자인 ${new Date().toLocaleString('ko-KR')}`,
-      productColor,
-      canvasState,
-      previewImage,
-      pricePerItem: product!.base_price,
-    };
+    // Update existing design or create new one
+    if (savedDesign?.id) {
+      const updateData: Partial<SaveDesignData> = {
+        title: designTitle || savedDesign.title || `디자인 ${new Date().toLocaleString('ko-KR')}`,
+        productColor,
+        canvasState,
+        previewImage,
+      };
 
-    const savedDesign = await saveDesign(designData);
-    if (!savedDesign) return { success: false, error: '디자인 저장에 실패했습니다.' };
-    return { success: true, id: savedDesign.id };
+      const updated = await updateDesign(savedDesign.id, updateData);
+      if (!updated) return { success: false, error: '디자인 업데이트에 실패했습니다.' };
+      return { success: true, id: updated.id };
+    } else {
+      const designData: SaveDesignData = {
+        productId: product!.id,
+        title: designTitle || `디자인 ${new Date().toLocaleString('ko-KR')}`,
+        productColor,
+        canvasState,
+        previewImage,
+        pricePerItem: product!.base_price,
+      };
+
+      const newDesign = await saveDesign(designData);
+      if (!newDesign) return { success: false, error: '디자인 저장에 실패했습니다.' };
+      return { success: true, id: newDesign.id };
+    }
   }
 
   async function saveOrderMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {

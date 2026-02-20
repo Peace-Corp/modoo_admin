@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { SavedDesign } from '@/types/types';
-import { Palette, Calendar, User, Package } from 'lucide-react';
-import DesignDetail from './DesignDetail';
+import { Palette, Calendar, User, Package, ChevronRight } from 'lucide-react';
 
 export default function DesignsTab() {
   const [mounted, setMounted] = useState(false);
   const [designs, setDesigns] = useState<SavedDesign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDesign, setSelectedDesign] = useState<SavedDesign | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -83,15 +82,6 @@ export default function DesignsTab() {
     );
   }
 
-  if (selectedDesign) {
-    return (
-      <DesignDetail
-        design={selectedDesign}
-        onBack={() => setSelectedDesign(null)}
-      />
-    );
-  }
-
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -113,7 +103,7 @@ export default function DesignsTab() {
         />
       </div>
 
-      {/* Designs Grid */}
+      {/* Designs List */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         {errorMessage && (
           <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">
@@ -122,60 +112,65 @@ export default function DesignsTab() {
         )}
 
         {filteredDesigns.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+          <div className="divide-y divide-gray-200">
             {filteredDesigns.map((design) => (
-              <div
+              <Link
                 key={design.id}
-                onClick={() => setSelectedDesign(design)}
-                className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-blue-300 cursor-pointer transition-all"
+                href={`/editor/${design.product_id}?mode=design&designId=${design.id}`}
+                className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group"
               >
                 {/* Preview Image */}
-                <div className="aspect-square bg-gray-100 flex items-center justify-center">
+                <div className="w-20 h-20 bg-gray-100 rounded flex items-center justify-center shrink-0">
                   {design.preview_url ? (
                     <img
                       src={design.preview_url}
                       alt={design.title || '디자인 미리보기'}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain rounded"
                     />
                   ) : design.product?.thumbnail_image_link ? (
                     <img
                       src={design.product.thumbnail_image_link}
                       alt={design.product.title}
-                      className="w-full h-full object-contain opacity-50"
+                      className="w-full h-full object-contain opacity-50 rounded"
                     />
                   ) : (
-                    <Palette className="w-12 h-12 text-gray-300" />
+                    <Palette className="w-8 h-8 text-gray-300" />
                   )}
                 </div>
 
                 {/* Design Info */}
-                <div className="p-3 space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-900 truncate">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 truncate mb-1">
                     {design.title || '제목 없음'}
                   </h3>
 
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <Package className="w-3.5 h-3.5" />
-                    <span className="truncate">{design.product?.title || '제품 정보 없음'}</span>
+                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-1">
+                    <div className="flex items-center gap-1">
+                      <Package className="w-3 h-3" />
+                      <span className="truncate">{design.product?.title || '제품 정보 없음'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <User className="w-3 h-3" />
+                      <span className="truncate">{design.user?.email || design.user?.name || '사용자 정보 없음'}</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <User className="w-3.5 h-3.5" />
-                    <span className="truncate">{design.user?.email || design.user?.name || '사용자 정보 없음'}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                    <Calendar className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1 text-xs text-gray-400">
+                    <Calendar className="w-3 h-3" />
                     <span>{formatDate(design.created_at)}</span>
                   </div>
+                </div>
 
+                {/* Price and Arrow */}
+                <div className="flex items-center gap-4 shrink-0">
                   {design.price_per_item > 0 && (
                     <div className="text-sm font-semibold text-blue-600">
                       {design.price_per_item.toLocaleString()}원
                     </div>
                   )}
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         ) : (
