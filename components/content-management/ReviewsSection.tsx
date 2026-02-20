@@ -33,10 +33,23 @@ const paginatedFetcher = async (url: string): Promise<PaginatedResponse> => {
 
 export default function ReviewsSection() {
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const limit = 10;
 
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const searchParams = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
   const { data: response, error: swrError, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
-    `/api/admin/reviews?page=${currentPage}&limit=${limit}`,
+    `/api/admin/reviews?page=${currentPage}&limit=${limit}${searchParams}`,
     paginatedFetcher
   );
 
@@ -317,6 +330,22 @@ export default function ReviewsSection() {
             <Plus className="w-4 h-4" />
             {reviewFormOpen ? '입력 닫기' : '새 리뷰 추가'}
           </button>
+        </div>
+
+        {/* Search Input */}
+        <div>
+          <input
+            type="text"
+            placeholder="리뷰 제목 또는 작성자로 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <p className="text-xs text-gray-500 mt-1">
+              총 {total}개의 검색 결과
+            </p>
+          )}
         </div>
 
         {reviewFormOpen && (
