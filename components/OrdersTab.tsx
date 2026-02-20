@@ -4,9 +4,10 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock, Plus } from 'lucide-react';
+import { Package, Calendar, Clock, Plus, Factory as FactoryIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
+import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 
 // Extended order type with item count from API
 type OrderWithItemCount = Order & {
@@ -26,6 +27,7 @@ export default function OrdersTab() {
   const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [allocationOrder, setAllocationOrder] = useState<OrderWithItemCount | null>(null);
 
   const isFactoryUser = user?.role === 'factory';
 
@@ -296,6 +298,9 @@ export default function OrdersTab() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     배송 방법
                   </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    작업
+                  </th>
                 </tr>
               )}
             </thead>
@@ -420,6 +425,15 @@ export default function OrdersTab() {
                             : '픽업'}
                         </span>
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => setAllocationOrder(order)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                        >
+                          <FactoryIcon className="w-3 h-3" />
+                          공장배정
+                        </button>
+                      </td>
                     </>
                   )}
                 </tr>
@@ -455,6 +469,19 @@ export default function OrdersTab() {
           }}
           initialProductId={resumeProductId ?? undefined}
           initialDesignId={resumeDesignId ?? undefined}
+        />
+      )}
+
+      {/* Factory Allocation Modal */}
+      {allocationOrder && (
+        <FactoryAllocationModal
+          order={allocationOrder}
+          factories={factories}
+          onClose={() => setAllocationOrder(null)}
+          onSuccess={() => {
+            setAllocationOrder(null);
+            mutateOrders();
+          }}
         />
       )}
     </div>
