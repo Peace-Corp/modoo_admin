@@ -50,6 +50,10 @@ export default function EditorCanvas({
   const [spaceHeld, setSpaceHeld] = useState(false);
   const lastPointer = useRef({ x: 0, y: 0 });
 
+  // Touch gesture state
+  const touchesRef = useRef<{ id: number; x: number; y: number }[]>([]);
+  const lastPinchDist = useRef<number>(0);
+
   // Grid dimensions
   const cols = sides.length > 1 ? 2 : 1;
   const rows = Math.ceil(sides.length / cols);
@@ -176,6 +180,104 @@ export default function EditorCanvas({
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Touch gesture handlers (pinch zoom & two-finger pan)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        touchesRef.current = Array.from(e.touches).map(t => ({
+          id: t.identifier,
+          x: t.clientX,
+          y: t.clientY,
+        }));
+
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          lastPinchDist.current = Math.sqrt(dx * dx + dy * dy);
+        }
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2 && touchesRef.current.length >= 2) {
+        e.preventDefault();
+
+        const rect = el.getBoundingClientRect();
+
+        // Two-finger pinch zoom
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const newDist = Math.sqrt(dx * dx + dy * dy);
+
+          if (lastPinchDist.current > 0) {
+            const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+            const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+            const scaleFactor = newDist / lastPinchDist.current;
+
+            setView((prev) => {
+              const ns = Math.max(0.1, Math.min(5, prev.scale * scaleFactor));
+              return {
+                x: centerX - (centerX - prev.x) * (ns / prev.scale),
+                y: centerY - (centerY - prev.y) * (ns / prev.scale),
+                scale: ns,
+              };
+            });
+          }
+
+          lastPinchDist.current = newDist;
+        }
+
+        // Two-finger pan
+        const currentTouches = Array.from(e.touches).slice(0, 2).map(t => ({
+          id: t.identifier,
+          x: t.clientX,
+          y: t.clientY,
+        }));
+
+        const prevCenterX = (touchesRef.current[0].x + touchesRef.current[1].x) / 2;
+        const prevCenterY = (touchesRef.current[0].y + touchesRef.current[1].y) / 2;
+        const currCenterX = (currentTouches[0].x + currentTouches[1].x) / 2;
+        const currCenterY = (currentTouches[0].y + currentTouches[1].y) / 2;
+
+        const dx = currCenterX - prevCenterX;
+        const dy = currCenterY - prevCenterY;
+
+        setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+
+        touchesRef.current = currentTouches;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchesRef.current = [];
+        lastPinchDist.current = 0;
+      } else {
+        touchesRef.current = Array.from(e.touches).map(t => ({
+          id: t.identifier,
+          x: t.clientX,
+          y: t.clientY,
+        }));
+      }
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
   }, []);
 
   return (

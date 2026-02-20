@@ -64,6 +64,9 @@ export default function UnifiedEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+
   // Selected text object for text style panel
   const [selectedTextObject, setSelectedTextObject] = useState<fabric.FabricObject | null>(null);
 
@@ -88,6 +91,17 @@ export default function UnifiedEditor({
     setEditMode(isEditing);
     return () => setEditMode(false);
   }, [isEditing, setEditMode]);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Set initial active side when product loads
   useEffect(() => {
@@ -395,12 +409,15 @@ export default function UnifiedEditor({
     ? isEditing
     : modeConfig.showToolbar;
 
-  // Overlay widths for canvas centering
+  // Overlay widths for canvas centering (desktop only, 0 on mobile)
   const TOOLBAR_W = 36; // w-9
   const PANEL_W_NARROW = 288; // w-72
   const PANEL_W_WIDE = 480; // w-120
-  const rightPanelWidth = mode === 'order' && !isEditing ? PANEL_W_WIDE : PANEL_W_NARROW;
-  const leftToolbarWidth = showToolbar && isEditing ? TOOLBAR_W : 0;
+
+  // On mobile (< md breakpoint ~768px), panels are overlays so width = 0
+  // On desktop, use actual panel widths
+  const rightPanelWidth = isMobile ? 0 : (mode === 'order' && !isEditing ? PANEL_W_WIDE : PANEL_W_NARROW);
+  const leftToolbarWidth = isMobile ? 0 : (showToolbar && isEditing ? TOOLBAR_W : 0);
 
   return (
     <div className="h-screen relative overflow-hidden bg-neutral-700">
@@ -408,8 +425,8 @@ export default function UnifiedEditor({
       <EditorCanvas
         sides={sides}
         isEditing={isEditing}
-        canvasStates={mode !== 'design' ? canvasStates : undefined}
-        productColor={mode === 'order' ? editorData.productColor : undefined}
+        canvasStates={mode === 'design' && !designId ? undefined : canvasStates}
+        productColor={mode === 'order' || mode === 'design' ? editorData.productColor : undefined}
         customFonts={editorData.customFonts.length > 0 ? editorData.customFonts : undefined}
         rightPanelWidth={rightPanelWidth}
         leftToolbarWidth={leftToolbarWidth}
@@ -438,8 +455,8 @@ export default function UnifiedEditor({
 
         {/* Workspace area */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left toolbar */}
-          {showToolbar && isEditing && (
+          {/* Left toolbar (hidden on mobile) */}
+          {showToolbar && isEditing && !isMobile && (
             <div className="pointer-events-auto flex">
               <Toolbar
                 sides={sides}
