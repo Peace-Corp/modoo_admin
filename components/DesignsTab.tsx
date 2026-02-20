@@ -1,9 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { SavedDesign } from '@/types/types';
-import { Palette, Calendar, User, Package, ChevronRight } from 'lucide-react';
+import { Palette, Calendar, User, Package, ChevronRight, ChevronLeft } from 'lucide-react';
+
+interface PaginatedResponse {
+  data: SavedDesign[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 export default function DesignsTab() {
   const [mounted, setMounted] = useState(false);
@@ -11,6 +19,10 @@ export default function DesignsTab() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const limit = 10;
 
   // Set mounted on client to prevent hydration issues
   useEffect(() => {
@@ -21,7 +33,16 @@ export default function DesignsTab() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const response = await fetch('/api/admin/designs', {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: limit.toString(),
+      });
+
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
+
+      const response = await fetch(`/api/admin/designs?${params}`, {
         method: 'GET',
       });
 
@@ -30,16 +51,20 @@ export default function DesignsTab() {
         throw new Error(errorPayload?.error || '디자인 데이터를 불러오지 못했습니다.');
       }
 
-      const payload = await response.json();
+      const payload: PaginatedResponse = await response.json();
       setDesigns(payload?.data || []);
+      setTotal(payload?.total || 0);
+      setTotalPages(payload?.totalPages || 0);
     } catch (error) {
       console.error('Error fetching designs:', error);
       setDesigns([]);
+      setTotal(0);
+      setTotalPages(0);
       setErrorMessage(error instanceof Error ? error.message : '디자인 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, searchQuery]);
 
   useEffect(() => {
     fetchDesigns();
@@ -55,24 +80,10 @@ export default function DesignsTab() {
     });
   };
 
-  const filteredDesigns = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return designs;
-    }
-    const query = searchQuery.toLowerCase();
-    return designs.filter((design) => {
-      const title = design.title?.toLowerCase() || '';
-      const userEmail = design.user?.email?.toLowerCase() || '';
-      const userName = design.user?.name?.toLowerCase() || '';
-      const productTitle = design.product?.title?.toLowerCase() || '';
-      return (
-        title.includes(query) ||
-        userEmail.includes(query) ||
-        userName.includes(query) ||
-        productTitle.includes(query)
-      );
-    });
-  }, [designs, searchQuery]);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1); // Reset to first page when searching
+  };
 
   if (!mounted || loading) {
     return (
@@ -88,7 +99,7 @@ export default function DesignsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">디자인 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {filteredDesigns.length}개의 디자인</p>
+          <p className="text-sm text-gray-500 mt-1">총 {total}개의 디자인</p>
         </div>
       </div>
 
@@ -98,7 +109,7 @@ export default function DesignsTab() {
           type="text"
           placeholder="디자인 제목, 사용자, 제품명으로 검색..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleSearchChange}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
@@ -111,9 +122,9 @@ export default function DesignsTab() {
           </div>
         )}
 
-        {filteredDesigns.length > 0 ? (
+        {designs.length > 0 ? (
           <div className="divide-y divide-gray-200">
-            {filteredDesigns.map((design) => (
+            {designs.map((design) => (
               <Link
                 key={design.id}
                 href={`/editor/${design.product_id}?mode=design&designId=${design.id}`}
@@ -178,6 +189,36 @@ export default function DesignsTab() {
             <Palette className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">디자인이 없습니다</h3>
             <p className="text-gray-500">사용자가 디자인을 저장하면 여기에 표시됩니다.</p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {total}개 중 {(currentPage - 1) * limit + 1}-{Math.min(currentPage * limit, total)}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                이전
+              </button>
+              <span className="text-sm text-gray-700">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                다음
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>

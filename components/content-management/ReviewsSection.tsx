@@ -4,19 +4,45 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Plus, Star, Trash2, X, Award } from 'lucide-react';
+import { Edit2, Plus, Star, Trash2, X, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReviewRecord, ProductSummary, ReviewFormState } from './types';
 import {
   REVIEW_IMAGE_BUCKET,
   REVIEW_IMAGE_FOLDER,
   emptyReviewForm,
-  sortReviews,
   formatDate,
 } from './utils';
 
+interface PaginatedResponse {
+  data: ReviewRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Custom fetcher that returns full paginated response
+const paginatedFetcher = async (url: string): Promise<PaginatedResponse> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload?.error || 'Failed to fetch');
+  }
+  return res.json();
+};
+
 export default function ReviewsSection() {
-  const { data: rawReviews, error: swrError, isLoading: loading, mutate } = useSWR<ReviewRecord[]>('/api/admin/reviews');
-  const reviews = rawReviews ? sortReviews(rawReviews) : [];
+  const [currentPage, setCurrentPage] = useState(1);
+  const limit = 10;
+
+  const { data: response, error: swrError, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
+    `/api/admin/reviews?page=${currentPage}&limit=${limit}`,
+    paginatedFetcher
+  );
+
+  const reviews = response?.data || [];
+  const totalPages = response?.totalPages || 0;
+  const total = response?.total || 0;
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reviewForm, setReviewForm] = useState<ReviewFormState>(emptyReviewForm);
@@ -164,7 +190,7 @@ export default function ReviewsSection() {
     };
 
     try {
-      const response = await fetch('/api/admin/reviews', {
+      const res = await fetch('/api/admin/reviews', {
         method: reviewForm.id ? 'PATCH' : 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -172,18 +198,13 @@ export default function ReviewsSection() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => ({}));
         throw new Error(errorPayload?.error || '리뷰 저장에 실패했습니다.');
       }
 
-      const responsePayload = await response.json();
-      const savedReview = responsePayload?.data as ReviewRecord;
-
-      const updated = reviewForm.id
-        ? (rawReviews || []).map((review) => (review.id === savedReview.id ? savedReview : review))
-        : [savedReview, ...(rawReviews || [])];
-      mutate(updated, { revalidate: false });
+      // Revalidate to refresh the current page
+      mutate();
 
       setReviewForm(emptyReviewForm);
       setReviewFormOpen(false);
@@ -210,7 +231,8 @@ export default function ReviewsSection() {
         throw new Error(payload?.error || '리뷰 삭제에 실패했습니다.');
       }
 
-      mutate((rawReviews || []).filter((review) => review.id !== reviewId), { revalidate: false });
+      // Revalidate to refresh the current page
+      mutate();
     } catch (err) {
       console.error('Error deleting review:', err);
       setError(err instanceof Error ? err.message : '리뷰 삭제에 실패했습니다.');
@@ -220,7 +242,7 @@ export default function ReviewsSection() {
   const handleToggleBest = async (review: ReviewRecord) => {
     setError(null);
     try {
-      const response = await fetch('/api/admin/reviews', {
+      const res = await fetch('/api/admin/reviews', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -231,17 +253,21 @@ export default function ReviewsSection() {
         }),
       });
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.error || 'BEST 상태 변경에 실패했습니다.');
       }
 
-      const payload = await response.json();
+      const payload = await res.json();
       const updatedReview = payload?.data as ReviewRecord;
-      mutate(
-        (rawReviews || []).map((item) => (item.id === updatedReview.id ? updatedReview : item)),
-        { revalidate: false }
-      );
+
+      // Update the current page data
+      if (response?.data) {
+        const updatedData = response.data.map((item) =>
+          item.id === updatedReview.id ? updatedReview : item
+        );
+        mutate({ ...response, data: updatedData }, { revalidate: false });
+      }
     } catch (err) {
       console.error('Error toggling best review:', err);
       setError(err instanceof Error ? err.message : 'BEST 상태 변경에 실패했습니다.');
@@ -579,6 +605,36 @@ export default function ReviewsSection() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                {total}개 중 {(currentPage - 1) * limit + 1}-{Math.min(currentPage * limit, total)}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  이전
+                </button>
+                <span className="text-sm text-gray-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  다음
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
