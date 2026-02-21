@@ -15,10 +15,11 @@ interface ToolbarProps {
   sides?: ProductSide[];
   handleExitEditMode?: () => void;
   variant?: 'mobile' | 'desktop' | 'editor';
+  horizontal?: boolean;
   onSelectedObjectChange?: (obj: fabric.FabricObject | null) => void;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', onSelectedObjectChange }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', horizontal = false, onSelectedObjectChange }) => {
   const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -482,7 +483,10 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
     return (
       <>
-        <div className="w-9 bg-neutral-800 flex flex-col items-center pt-2 pb-1 gap-0.5 shrink-0 border-r border-neutral-700">
+        <div className={horizontal
+          ? "h-9 bg-neutral-800 flex flex-row items-center px-2 gap-0.5 shrink-0 border-b border-neutral-700"
+          : "w-9 bg-neutral-800 flex flex-col items-center pt-2 pb-1 gap-0.5 shrink-0 border-r border-neutral-700"
+        }>
           {/* Add tools */}
           <button onClick={addText} className={`${editorBtnBase} ${editorBtnIdle}`} title="텍스트 추가">
             <TextCursor className="w-3.5 h-3.5" />
@@ -491,7 +495,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             <FileImage className="w-3.5 h-3.5" />
           </button>
 
-          <div className="w-5 border-t border-neutral-600 my-1" />
+          <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
 
           {/* Layer controls */}
           <button onClick={bringToFront} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="맨 앞으로">
@@ -507,7 +511,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             <ChevronsDown className="w-3.5 h-3.5" />
           </button>
 
-          <div className="w-5 border-t border-neutral-600 my-1" />
+          <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
 
           {/* Destructive */}
           <button onClick={handleDeleteObject} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? 'text-red-400 hover:text-red-300 hover:bg-neutral-700' : editorBtnDisabled}`} title="삭제">

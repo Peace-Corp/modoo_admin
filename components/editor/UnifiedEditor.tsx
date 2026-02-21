@@ -451,6 +451,16 @@ export default function UnifiedEditor({
               편집 모드 — 객체 이동/크기 조절, 스크롤 확대/축소, Space+드래그 이동
             </div>
           )}
+          {/* Mobile horizontal toolbar */}
+          {showToolbar && isEditing && isMobile && (
+            <Toolbar
+              sides={sides}
+              handleExitEditMode={handleExitEditMode}
+              variant="editor"
+              horizontal
+              onSelectedObjectChange={handleSelectedObjectChange}
+            />
+          )}
         </div>
 
         {/* Workspace area */}
