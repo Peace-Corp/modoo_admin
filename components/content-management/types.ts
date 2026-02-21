@@ -101,6 +101,7 @@ export type InquiryRecord = {
   title: string;
   content: string;
   status: InquiryStatus;
+  is_admin: boolean | null;
   created_at: string;
   updated_at: string;
   inquiry_products?: InquiryProductRecord[] | null;
