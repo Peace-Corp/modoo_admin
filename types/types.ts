@@ -577,6 +577,7 @@ export interface PartnerMallProduct {
   logo_placements: Record<string, LogoPlacement>;  // keyed by side_id
   canvas_state: Record<string, unknown>;
   preview_url: string | null;
+  price: number | null;
   created_at: string;
   updated_at: string;
   // Joined relations

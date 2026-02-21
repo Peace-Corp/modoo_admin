@@ -315,6 +315,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 }}
                 onConfirm={() => setEditingProductIndex(null)}
                 onBack={() => setEditingProductIndex(null)}
+                productColor={productColorsMap[products[editingProductIndex].id]}
               />
             ) : (
               <div>

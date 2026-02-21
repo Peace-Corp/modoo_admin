@@ -34,9 +34,6 @@ interface PreviewItem {
   sideIndex: number;
 }
 
-// Editor canvas width (coordinates are stored at this scale)
-const EDITOR_WIDTH = 400;
-
 // Individual preview card component that captures canvas as a static image
 function PreviewCard({
   item,
@@ -67,14 +64,13 @@ function PreviewCard({
   // Preview canvas dimensions (scaled down from editor)
   const previewWidth = 160;
   const previewHeight = 200;
-  const scaleRatio = previewWidth / EDITOR_WIDTH;
 
   // Handle canvas ready - add logo and capture as static image
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
     const captureCanvas = () => {
       requestAnimationFrame(() => {
         try {
-          const dataUrl = canvas.toDataURL({ format: 'png', multiplier: 1 });
+          const dataUrl = canvas.toDataURL({ format: 'png', quality: 0.9, multiplier: 2 });
           setPreviewImage(dataUrl);
           onPreviewCaptured?.(item.productId, dataUrl);
         } catch (err) {
@@ -89,22 +85,31 @@ function PreviewCard({
       return;
     }
 
-    // Load and add logo using direct coordinates scaled to preview size
+    // Get print area offset from canvas (set by SingleSideCanvas)
+    // @ts-expect-error - Custom property
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property
+    const printAreaTop = canvas.printAreaTop || 0;
+
+    // Load and add logo using print-area-relative coordinates
     fabric.FabricImage.fromURL(logoUrl, { crossOrigin: 'anonymous' })
       .then((logoImg) => {
         const placement = item.placement!;
 
-        // Calculate logo scale at editor size, then apply preview scale ratio
+        // Placement coordinates are now in print-area-relative space (unscaled)
+        // Convert to preview canvas coordinates
         const logoScale = Math.min(
           placement.width / (logoImg.width || 100),
           placement.height / (logoImg.height || 100)
         );
 
         logoImg.set({
-          left: placement.x * scaleRatio,
-          top: placement.y * scaleRatio,
-          scaleX: logoScale * scaleRatio,
-          scaleY: logoScale * scaleRatio,
+          left: printAreaLeft + placement.x * canvasScale,
+          top: printAreaTop + placement.y * canvasScale,
+          scaleX: logoScale * canvasScale,
+          scaleY: logoScale * canvasScale,
+          originX: 'left',
+          originY: 'top',
           selectable: false,
           evented: false,
           data: { id: 'partner-mall-logo' },
@@ -118,7 +123,7 @@ function PreviewCard({
         console.error('Error loading logo for preview:', err);
         captureCanvas();
       });
-  }, [item.placement, item.productId, logoUrl, scaleRatio, onPreviewCaptured]);
+  }, [item.placement, item.productId, logoUrl, onPreviewCaptured]);
 
   return (
     <div className="relative group">
@@ -271,7 +276,7 @@ export default function ProductPreviewGrid({
           onClick={onBack}
           className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
         >
-          배치 수정
+          이전
         </button>
         <button
           onClick={onConfirm}

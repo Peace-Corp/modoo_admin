@@ -19,6 +19,7 @@ interface LogoPlacementEditorProps {
   onPlacementsChange: (placements: ProductPlacement[]) => void;
   onConfirm: () => void;
   onBack: () => void;
+  productColor?: string;
 }
 
 // Get only the first side of a product (front side)
@@ -34,6 +35,7 @@ export default function LogoPlacementEditor({
   onPlacementsChange,
   onConfirm,
   onBack,
+  productColor,
 }: LogoPlacementEditorProps) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const logoRef = useRef<fabric.FabricImage | null>(null);
@@ -95,23 +97,35 @@ export default function LogoPlacementEditor({
     [currentProduct, placements, onPlacementsChange]
   );
 
-  // Save current canvas state using direct canvas coordinates
+  // Save current canvas state using print-area-relative coordinates
   const saveCurrentState = useCallback(() => {
     if (!canvasRef.current || !logoRef.current || !currentSide) return;
 
     const canvas = canvasRef.current;
     const logo = logoRef.current;
 
+    // Get print area position and canvas scale
+    // @ts-expect-error - Custom property
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property
+    const printAreaTop = canvas.printAreaTop || 0;
+    // @ts-expect-error - Custom property
+    const scaledImageWidth = canvas.scaledImageWidth || canvasWidth;
+    // @ts-expect-error - Custom property
+    const originalImageWidth = canvas.originalImageWidth || canvasWidth;
+    const canvasScale = originalImageWidth > 0 ? scaledImageWidth / originalImageWidth : 1;
+
     const logoLeft = logo.left || 0;
     const logoTop = logo.top || 0;
     const logoWidth = (logo.width || 100) * (logo.scaleX || 1);
     const logoHeight = (logo.height || 100) * (logo.scaleY || 1);
 
+    // Convert from canvas coordinates to print-area-relative coordinates (unscaled)
     const placement: LogoPlacement = {
-      x: Math.round(logoLeft),
-      y: Math.round(logoTop),
-      width: Math.round(logoWidth),
-      height: Math.round(logoHeight),
+      x: Math.round((logoLeft - printAreaLeft) / canvasScale),
+      y: Math.round((logoTop - printAreaTop) / canvasScale),
+      width: Math.round(logoWidth / canvasScale),
+      height: Math.round(logoHeight / canvasScale),
     };
 
     // Serialize canvas state in editor-compatible format
@@ -138,39 +152,59 @@ export default function LogoPlacementEditor({
     updatePlacement(currentSide.id, placement, canvasState);
   }, [currentSide, updatePlacement]);
 
-  // Reset logo to center of canvas
+  // Reset logo to center of print area
   const resetToCenter = useCallback(() => {
-    if (!canvasRef.current || !logoRef.current) return;
+    if (!canvasRef.current || !logoRef.current || !currentSide) return;
 
     const canvas = canvasRef.current;
     const logo = logoRef.current;
 
-    const defaultSize = 80;
+    // Get print area position and canvas scale
+    // @ts-expect-error - Custom property
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property
+    const printAreaTop = canvas.printAreaTop || 0;
+    // @ts-expect-error - Custom property
+    const scaledImageWidth = canvas.scaledImageWidth || canvasWidth;
+    // @ts-expect-error - Custom property
+    const originalImageWidth = canvas.originalImageWidth || canvasWidth;
+    const canvasScale = originalImageWidth > 0 ? scaledImageWidth / originalImageWidth : 1;
+
+    const centerX = currentSide.printArea.width / 2;
+    const centerY = currentSide.printArea.height / 2;
+
+    const maxLogoWidth = currentSide.printArea.width * 0.2;
+    const maxLogoHeight = currentSide.printArea.height * 0.2;
     const logoScale = Math.min(
-      defaultSize / (logo.width || 100),
-      defaultSize / (logo.height || 100)
+      maxLogoWidth / (logo.width || 100),
+      maxLogoHeight / (logo.height || 100)
     );
 
-    const scaledW = (logo.width || 100) * logoScale;
-    const scaledH = (logo.height || 100) * logoScale;
-
     logo.set({
-      left: (canvasWidth - scaledW) / 2,
-      top: (canvasHeight - scaledH) / 2,
-      scaleX: logoScale,
-      scaleY: logoScale,
+      left: printAreaLeft + centerX * canvasScale,
+      top: printAreaTop + centerY * canvasScale,
+      scaleX: logoScale * canvasScale,
+      scaleY: logoScale * canvasScale,
       angle: 0,
+      originX: 'center',
+      originY: 'center',
     });
 
     canvas.renderAll();
     saveCurrentState();
-  }, [saveCurrentState]);
+  }, [currentSide, saveCurrentState]);
 
   // Handle canvas ready callback from SingleSideCanvas
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, sideId: string, _canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, sideId: string, canvasScale: number) => {
     canvasRef.current = canvas;
 
     if (!currentSide) return;
+
+    // Get print area position from canvas
+    // @ts-expect-error - Custom property
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property
+    const printAreaTop = canvas.printAreaTop || 0;
 
     // Load logo image
     fabric.FabricImage.fromURL(logoUrl, { crossOrigin: 'anonymous' })
@@ -179,35 +213,40 @@ export default function LogoPlacementEditor({
         const existingPlacement = productPlacement.placements[sideId];
 
         if (existingPlacement) {
-          // Place logo at exact stored coordinates
+          // Convert from print-area-relative coordinates to canvas coordinates
           const logoScale = Math.min(
             existingPlacement.width / (logoImg.width || 100),
             existingPlacement.height / (logoImg.height || 100)
           );
 
           logoImg.set({
-            left: existingPlacement.x,
-            top: existingPlacement.y,
-            scaleX: logoScale,
-            scaleY: logoScale,
+            left: printAreaLeft + existingPlacement.x * canvasScale,
+            top: printAreaTop + existingPlacement.y * canvasScale,
+            scaleX: logoScale * canvasScale,
+            scaleY: logoScale * canvasScale,
+            originX: 'left',
+            originY: 'top',
             data: { id: 'partner-mall-logo' },
           });
         } else {
-          // Default to center of canvas
-          const defaultSize = 80;
+          // Default to center of print area
+          const centerX = currentSide.printArea.width / 2;
+          const centerY = currentSide.printArea.height / 2;
+
+          const maxLogoWidth = currentSide.printArea.width * 0.2;
+          const maxLogoHeight = currentSide.printArea.height * 0.2;
           const logoScale = Math.min(
-            defaultSize / (logoImg.width || 100),
-            defaultSize / (logoImg.height || 100)
+            maxLogoWidth / (logoImg.width || 100),
+            maxLogoHeight / (logoImg.height || 100)
           );
 
-          const scaledW = (logoImg.width || 100) * logoScale;
-          const scaledH = (logoImg.height || 100) * logoScale;
-
           logoImg.set({
-            left: (canvasWidth - scaledW) / 2,
-            top: (canvasHeight - scaledH) / 2,
-            scaleX: logoScale,
-            scaleY: logoScale,
+            left: printAreaLeft + centerX * canvasScale,
+            top: printAreaTop + centerY * canvasScale,
+            scaleX: logoScale * canvasScale,
+            scaleY: logoScale * canvasScale,
+            originX: 'center',
+            originY: 'center',
             data: { id: 'partner-mall-logo' },
           });
         }
@@ -315,6 +354,7 @@ export default function LogoPlacementEditor({
             canvasState={{ objects: [] }}
             onCanvasReady={handleCanvasReady}
             showScaleBox={false}
+            productColor={productColor}
           />
         </div>
       </div>
@@ -349,22 +389,14 @@ export default function LogoPlacementEditor({
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-3 sm:gap-4">
-        <button
-          onClick={onBack}
-          className="flex-1 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
-        >
-          이전
-        </button>
-        <button
-          onClick={handleConfirm}
-          className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-        >
-          <Check className="w-4 h-4 sm:w-5 sm:h-5" />
-          미리보기
-        </button>
-      </div>
+      {/* Action button */}
+      <button
+        onClick={handleConfirm}
+        className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+      >
+        <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+        완료
+      </button>
     </div>
   );
 }

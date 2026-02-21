@@ -95,6 +95,11 @@ function ProductPreviewCard({
             {mallProduct.color_name || product?.product_code || ''}
           </p>
         </div>
+        {mallProduct.price !== null && mallProduct.price !== undefined && (
+          <p className="text-xs sm:text-sm font-semibold text-blue-600 mt-1">
+            {mallProduct.price.toLocaleString()}원
+          </p>
+        )}
         {/* Mobile action buttons */}
         <div className="flex items-center gap-2 mt-2 sm:hidden">
           <button

@@ -55,6 +55,11 @@ export default function SingleProductPlacementEditor({
     mallProduct.display_name || ''
   );
 
+  // Price state
+  const [price, setPrice] = useState<number | null>(
+    mallProduct.price ?? null
+  );
+
   // Canvas key to force re-render when color changes
   const [canvasKey, setCanvasKey] = useState(0);
 
@@ -217,11 +222,11 @@ export default function SingleProductPlacementEditor({
     canvas.discardActiveObject();
     canvas.renderAll();
 
-    // Generate preview as data URL
+    // Generate preview as data URL with higher resolution
     return canvas.toDataURL({
       format: 'png',
-      quality: 0.8,
-      multiplier: 1,
+      quality: 0.9,
+      multiplier: 2,
     });
   }, []);
 
@@ -288,6 +293,7 @@ export default function SingleProductPlacementEditor({
           color_hex: selectedColor?.hex ?? null,
           color_name: selectedColor?.name ?? null,
           color_code: selectedColor?.color_code ?? null,
+          price: price,
         }),
       });
 
@@ -369,6 +375,23 @@ export default function SingleProductPlacementEditor({
               productId={mallProduct.product_id}
               selectedColorId={selectedColor?.id ?? null}
               onColorSelect={handleColorSelect}
+            />
+          </div>
+
+          {/* Price input */}
+          <div className="mb-3 sm:mb-4">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+              가격 (원)
+            </label>
+            <input
+              type="number"
+              value={price ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPrice(val === '' ? null : parseFloat(val));
+              }}
+              placeholder="가격 입력"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
