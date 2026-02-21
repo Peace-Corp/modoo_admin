@@ -10,6 +10,9 @@ import { formatMm } from '@/lib/canvasUtils';
 import '@/lib/curvedText';
 import { setupCurvedTextEditing, loadCustomFonts, isCurvedText } from '@/lib/curvedText';
 
+// Stable empty array to avoid creating a new reference on every render
+// (prevents unnecessary effect re-fires when no custom fonts are provided)
+const EMPTY_CUSTOM_FONTS: CustomFont[] = [];
 
 interface SingleSideCanvasProps {
   side: ProductSide;
@@ -35,7 +38,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   productColor,
   onCanvasReady,
   renderFromCanvasStateOnly = false,
-  customFonts = [],
+  customFonts = EMPTY_CUSTOM_FONTS,
   showScaleBox = true,
   enableZoomPan = false,
   onZoomChange,
@@ -1156,6 +1159,13 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
     if (!parsedState || !parsedState.objects) return;
 
+    // Set guard refs SYNCHRONOUSLY before starting async work.
+    // This prevents a race condition where re-renders (e.g., from toggling edit mode)
+    // cause this effect to fire again while the async applyObjects is still running,
+    // which would result in objects being added to the canvas twice.
+    lastCanvasStateRef.current = serializedState;
+    lastCanvasSideRef.current = side.id;
+
     const existingObjects = canvas.getObjects().filter((obj) => {
       if (obj.excludeFromExport) return false;
       const objData = obj as { data?: { id?: string } };
@@ -1244,15 +1254,17 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         });
       }
       suppressObjectAddedRef.current = false;
-      lastCanvasStateRef.current = serializedState;
-      lastCanvasSideRef.current = side.id;
 
       if (onCanvasReady) {
         onCanvasReady(canvas, side.id, scaleRef.current);
       }
     };
 
-    applyObjects();
+    applyObjects().catch(() => {
+      // If applyObjects fails, reset the guard refs so a retry can succeed
+      lastCanvasStateRef.current = null;
+      lastCanvasSideRef.current = null;
+    });
   }, [canvasState, customFonts, height, isLoading, layersReady, onCanvasReady, renderFromCanvasStateOnly, side, width]);
 
   // Effect to apply color filter to layers when layerColors change or layers are ready
