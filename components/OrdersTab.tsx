@@ -190,22 +190,23 @@ export default function OrdersTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">주문 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900">주문 관리</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
         </div>
         {!isFactoryUser && (
           <button
             onClick={() => setShowOrderCreator(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-md hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>주문 생성</span>
+            <span className="hidden sm:inline">주문 생성</span>
+            <span className="sm:hidden">생성</span>
           </button>
         )}
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
@@ -218,7 +219,7 @@ export default function OrdersTab() {
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
                 filterStatus === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -233,11 +234,11 @@ export default function OrdersTab() {
       {/* Orders List */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         {errorMessage && (
-          <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">
+          <div className="px-4 py-3 text-xs sm:text-sm text-red-700 bg-red-50 border-b border-red-100">
             {errorMessage}
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               {isFactoryUser ? (
@@ -442,11 +443,89 @@ export default function OrdersTab() {
           </table>
         </div>
 
+        {/* Mobile Card List */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {filteredOrders.map((order) => (
+            <div
+              key={order.id}
+              onClick={() => handleOrderClick(order.id)}
+              className="p-3 space-y-2 cursor-pointer hover:bg-gray-50 transition-colors"
+            >
+              {isFactoryUser ? (
+                /* Factory user mobile card */
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs font-mono text-blue-600 truncate">{order.id}</div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${getStatusColor(order.order_status)}`}>
+                      {order.order_status === 'pending' ? '대기중' : order.order_status === 'processing' ? '처리중' : order.order_status === 'completed' ? '완료' : order.order_status === 'cancelled' ? '취소' : order.order_status === 'refunded' ? '환불' : order.order_status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span>수량: {getOrderItemCount(order)}</span>
+                    <span className="font-medium text-gray-700">{order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />마감: {formatDateShort(order.deadline)}</span>
+                    <span>결제: {formatDateShort(order.factory_payment_date)}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getFactoryPaymentStatusColor(order.factory_payment_status)}`}>
+                      {getFactoryPaymentStatusLabel(order.factory_payment_status)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                /* Admin mobile card */
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-gray-900 truncate">{order.customer_name}</div>
+                      <div className="text-[11px] text-gray-400 truncate">{order.customer_email}</div>
+                    </div>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={order.order_status}
+                        onChange={(e) => handleStatusChange(order.id, e.target.value as any)}
+                        disabled={updatingStatusId === order.id}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getStatusColor(order.order_status)}`}
+                      >
+                        <option value="pending">대기중</option>
+                        <option value="processing">처리중</option>
+                        <option value="completed">완료</option>
+                        <option value="cancelled">취소</option>
+                        <option value="refunded">환불</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span className="font-medium text-gray-700">{order.total_amount.toLocaleString()}원</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{order.payment_status}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-gray-400">
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.created_at)}</span>
+                      <span className={getFactoryLabel(order.assigned_manufacturer_id) === '미배정' ? 'text-red-500' : ''}>{getFactoryLabel(order.assigned_manufacturer_id)}</span>
+                      <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAllocationOrder(order); }}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors shrink-0"
+                    >
+                      <FactoryIcon className="w-3 h-3" />
+                      공장배정
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
         {filteredOrders.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">주문이 없습니다</h3>
-            <p className="text-gray-500">새로운 주문이 들어오면 여기에 표시됩니다.</p>
+          <div className="text-center py-8 sm:py-12">
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2">주문이 없습니다</h3>
+            <p className="text-xs sm:text-sm text-gray-500">새로운 주문이 들어오면 여기에 표시됩니다.</p>
           </div>
         )}
       </div>
