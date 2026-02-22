@@ -9,13 +9,14 @@ import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
 import { getCategoryName } from '@/lib/categories';
 
-type EditorMode = 'print-area' | 'full-edit' | null;
+type EditorMode = 'print-area' | 'full-edit' | 'template' | null;
 
 export default function ProductsTab() {
   const router = useRouter();
   const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>(null);
+  const [activeTab, setActiveTab] = useState<'full-edit' | 'print-area' | 'template'>('full-edit');
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
@@ -86,6 +87,7 @@ export default function ProductsTab() {
     setSelectedProduct(null);
     setEditorMode(null);
     setIsCreatingNew(false);
+    setActiveTab('full-edit');
   };
 
   if (loading) {
@@ -96,19 +98,99 @@ export default function ProductsTab() {
     );
   }
 
-  // Show Print Area Editor
-  if (editorMode === 'print-area' && selectedProduct) {
+  // Show Editor with Tabs (for editing existing product)
+  if (editorMode && selectedProduct && !isCreatingNew) {
     return (
-      <PrintAreaEditor
-        product={selectedProduct}
-        onSave={handleProductSave}
-        onCancel={handleCancel}
-      />
+      <div className="space-y-4">
+        {/* Tab Navigation */}
+        <div className="bg-white border border-gray-200 rounded-md shadow-sm">
+          <div className="flex items-center gap-1 p-1">
+            <button
+              onClick={() => setActiveTab('full-edit')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
+                activeTab === 'full-edit'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Edit2 className="w-4 h-4 inline mr-1.5" />
+              편집
+            </button>
+            <button
+              onClick={() => setActiveTab('print-area')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
+                activeTab === 'print-area'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Edit className="w-4 h-4 inline mr-1.5" />
+              인쇄 영역
+            </button>
+            <button
+              onClick={() => setActiveTab('template')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
+                activeTab === 'template'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Layers className="w-4 h-4 inline mr-1.5" />
+              템플릿
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'full-edit' && (
+          <ProductEditor
+            product={selectedProduct}
+            onSave={handleProductSave}
+            onCancel={handleCancel}
+          />
+        )}
+
+        {activeTab === 'print-area' && (
+          <PrintAreaEditor
+            product={selectedProduct}
+            onSave={handleProductSave}
+            onCancel={handleCancel}
+          />
+        )}
+
+        {activeTab === 'template' && (
+          <div className="bg-white border border-gray-200 rounded-md shadow-sm p-6">
+            <div className="text-center space-y-4">
+              <Layers className="w-16 h-16 text-gray-400 mx-auto" />
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">템플릿 편집기로 이동</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  템플릿 편집은 전용 에디터에서 진행됩니다.
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => router.push(`/editor/${selectedProduct.id}?mode=template`)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm font-medium"
+                  >
+                    템플릿 편집기 열기
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
-  // Show Product Editor (for creating or full editing)
-  if (editorMode === 'full-edit' || isCreatingNew) {
+  // Show Product Editor (for creating new product)
+  if (isCreatingNew) {
     return (
       <ProductEditor
         product={selectedProduct}
@@ -117,8 +199,6 @@ export default function ProductsTab() {
       />
     );
   }
-
-  // Template editing is now handled by the unified editor route
 
 
   return (
@@ -219,30 +299,12 @@ export default function ProductsTab() {
                         onClick={() => {
                           setSelectedProduct(product);
                           setEditorMode('full-edit');
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        편집
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setEditorMode('print-area');
+                          setActiveTab('full-edit');
                         }}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                       >
-                        <Edit className="w-4 h-4" />
-                        인쇄 영역
-                      </button>
-                      <button
-                        onClick={() => {
-                          router.push(`/editor/${product.id}?mode=template`);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-purple-700 hover:bg-purple-50 rounded-md transition-colors"
-                      >
-                        <Layers className="w-4 h-4" />
-                        템플릿
+                        <Edit2 className="w-4 h-4" />
+                        편집
                       </button>
                       <button
                         onClick={() => handleDeleteProduct(product.id, product.title)}
@@ -300,30 +362,12 @@ export default function ProductsTab() {
                   onClick={() => {
                     setSelectedProduct(product);
                     setEditorMode('full-edit');
-                  }}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  편집
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedProduct(product);
-                    setEditorMode('print-area');
+                    setActiveTab('full-edit');
                   }}
                   className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors"
                 >
-                  <Edit className="w-3.5 h-3.5" />
-                  인쇄 영역
-                </button>
-                <button
-                  onClick={() => {
-                    router.push(`/editor/${product.id}?mode=template`);
-                  }}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-purple-700 hover:bg-purple-50 rounded transition-colors"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  템플릿
+                  <Edit2 className="w-3.5 h-3.5" />
+                  편집
                 </button>
                 <button
                   onClick={() => handleDeleteProduct(product.id, product.title)}
