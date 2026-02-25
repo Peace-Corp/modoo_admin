@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers, Star } from 'lucide-react';
+import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers, Star, Search, X } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
-import { getCategoryName } from '@/lib/categories';
+import { getCategoryName, CATEGORIES } from '@/lib/categories';
 
 type EditorMode = 'print-area' | 'full-edit' | 'template' | null;
 
@@ -19,6 +19,17 @@ export default function ProductsTab() {
   const [activeTab, setActiveTab] = useState<'full-edit' | 'print-area' | 'template'>('full-edit');
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = searchQuery === '' ||
+      product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (product.manufacturers?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
@@ -231,7 +242,11 @@ export default function ProductsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">제품 관리</h2>
-          <p className="text-xs text-gray-500 mt-0.5">총 {products.length}개의 제품</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {filteredProducts.length === products.length
+              ? `총 ${products.length}개의 제품`
+              : `${filteredProducts.length} / ${products.length}개의 제품`}
+          </p>
         </div>
         <button
           onClick={() => {
@@ -244,6 +259,37 @@ export default function ProductsTab() {
           <span className="hidden sm:inline">새 제품 추가</span>
           <span className="sm:hidden">추가</span>
         </button>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="제품명, ID, 제조사 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white sm:w-36"
+        >
+          {CATEGORIES.map((cat) => (
+            <option key={cat.key} value={cat.key}>{cat.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Products List */}
@@ -280,7 +326,7 @@ export default function ProductsTab() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-xs font-medium text-gray-900">{product.title}</div>
@@ -364,7 +410,7 @@ export default function ProductsTab() {
 
         {/* Mobile Card List */}
         <div className="md:hidden divide-y divide-gray-200">
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <div key={product.id} className="p-3 space-y-2">
               {/* Top row: title + status */}
               <div className="flex items-start justify-between gap-2">
@@ -435,11 +481,15 @@ export default function ProductsTab() {
           ))}
         </div>
 
-        {products.length === 0 && (
+        {filteredProducts.length === 0 && (
           <div className="text-center py-8 sm:py-12">
             <Package className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 mb-1 sm:mb-2">제품이 없습니다</h3>
-            <p className="text-xs text-gray-500">새 제품을 추가해보세요.</p>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1 sm:mb-2">
+              {products.length === 0 ? '제품이 없습니다' : '검색 결과가 없습니다'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              {products.length === 0 ? '새 제품을 추가해보세요.' : '다른 검색어나 필터를 시도해보세요.'}
+            </p>
           </div>
         )}
       </div>
