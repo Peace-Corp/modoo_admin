@@ -101,7 +101,7 @@ export default function CoBuyRequestsTab() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {(req as any).product?.title} · {(req as any).profiles?.email || (req as any).profiles?.name || 'Unknown'}
+                      {(req as any).product?.title} · {(req as any).guest_name ? `${(req as any).guest_name} (비회원)` : ((req as any).profiles?.email || (req as any).profiles?.name || 'Unknown')}
                     </p>
                     <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(req.created_at)}</p>
                   </div>
@@ -387,7 +387,10 @@ function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () =>
             <div>
               <h3 className="text-lg font-bold text-gray-900">{request.title}</h3>
               <p className="text-xs text-gray-500 mt-0.5">
-                {(request as any).profiles?.email} · {formatDate(request.created_at)}
+                {(request as any).guest_name
+                  ? `${(request as any).guest_name} (비회원)`
+                  : (request as any).profiles?.email
+                } · {formatDate(request.created_at)}
               </p>
             </div>
             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[request.status]}`}>
@@ -431,6 +434,27 @@ function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () =>
               <p className="text-xs font-medium text-gray-500 mb-1">관리자 디자인</p>
               <div className="w-48 h-48 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
                 <img src={request.admin_design_preview_url} alt="Admin design" className="w-full h-full object-contain" />
+              </div>
+            </div>
+          )}
+
+          {/* Guest Contact Info */}
+          {(request as any).guest_name && (
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs font-medium text-amber-800 mb-1.5">비회원 요청자 정보</p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <p className="text-amber-600">이름</p>
+                  <p className="font-medium text-gray-900">{(request as any).guest_name}</p>
+                </div>
+                <div>
+                  <p className="text-amber-600">이메일</p>
+                  <p className="font-medium text-gray-900">{(request as any).guest_email || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-amber-600">전화번호</p>
+                  <p className="font-medium text-gray-900">{(request as any).guest_phone || '-'}</p>
+                </div>
               </div>
             </div>
           )}

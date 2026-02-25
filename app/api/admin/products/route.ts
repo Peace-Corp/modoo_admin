@@ -219,6 +219,13 @@ export async function PATCH(request: Request) {
       updateData.is_active = payload.is_active;
     }
 
+    if (payload?.is_featured !== undefined) {
+      if (typeof payload.is_featured !== 'boolean') {
+        return NextResponse.json({ error: '추천 상태 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.is_featured = payload.is_featured;
+    }
+
     if (payload?.configuration !== undefined) {
       if (!Array.isArray(payload.configuration)) {
         return NextResponse.json({ error: '제품 구성 정보 형식이 올바르지 않습니다.' }, { status: 400 });

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers } from 'lucide-react';
+import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers, Star } from 'lucide-react';
 import PrintAreaEditor from './PrintAreaEditor';
 import ProductEditor from './ProductEditor';
 import { getCategoryName } from '@/lib/categories';
@@ -43,6 +43,30 @@ export default function ProductsTab() {
       ), { revalidate: false });
     } catch (error) {
       console.error('Error toggling product status:', error);
+    }
+  };
+
+  const toggleFeatured = async (productId: string, currentFeatured: boolean) => {
+    try {
+      const response = await fetch('/api/admin/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: productId, is_featured: !currentFeatured }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '추천 상태 변경에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const updatedProduct = payload?.data as Product;
+
+      mutate(products.map(p =>
+        p.id === updatedProduct.id ? updatedProduct : p
+      ), { revalidate: false });
+    } catch (error) {
+      console.error('Error toggling featured status:', error);
     }
   };
 
@@ -247,6 +271,9 @@ export default function ProductsTab() {
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   상태
                 </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  추천
+                </th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
@@ -293,6 +320,19 @@ export default function ProductsTab() {
                       )}
                     </button>
                   </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button
+                      onClick={() => toggleFeatured(product.id, product.is_featured)}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        product.is_featured
+                          ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Star className={`w-3 h-3 ${product.is_featured ? 'fill-yellow-500' : ''}`} />
+                      {product.is_featured ? '추천' : '일반'}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -332,20 +372,33 @@ export default function ProductsTab() {
                   <div className="text-xs font-semibold text-gray-900 truncate">{product.title}</div>
                   <div className="text-[11px] text-gray-400">ID: {product.id.slice(0, 8)}...</div>
                 </div>
-                <button
-                  onClick={() => toggleProductStatus(product.id, product.is_active)}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 transition-colors ${
-                    product.is_active
-                      ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                  }`}
-                >
-                  {product.is_active ? (
-                    <><Eye className="w-3 h-3" /> 활성</>
-                  ) : (
-                    <><EyeOff className="w-3 h-3" /> 비활성</>
-                  )}
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => toggleFeatured(product.id, product.is_featured)}
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                      product.is_featured
+                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Star className={`w-2.5 h-2.5 ${product.is_featured ? 'fill-yellow-500' : ''}`} />
+                    {product.is_featured ? '추천' : '일반'}
+                  </button>
+                  <button
+                    onClick={() => toggleProductStatus(product.id, product.is_active)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                      product.is_active
+                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    {product.is_active ? (
+                      <><Eye className="w-3 h-3" /> 활성</>
+                    ) : (
+                      <><EyeOff className="w-3 h-3" /> 비활성</>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Info row */}
