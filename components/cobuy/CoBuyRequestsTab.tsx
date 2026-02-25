@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Clock, Pencil, Send } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/types';
@@ -25,7 +25,10 @@ const statusColors: Record<CoBuyRequestStatus, string> = {
   rejected: 'bg-red-100 text-red-800',
 };
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+const fetcher = (url: string) => fetch(url).then(r => {
+  if (!r.ok) throw new Error(`API error: ${r.status}`);
+  return r.json();
+});
 
 const formatDate = (dateString?: string | null) => {
   if (!dateString) return '-';
@@ -111,6 +114,199 @@ export default function CoBuyRequestsTab() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Freeform Sketch Preview — renders each product side with objects overlaid
+// ============================================================================
+
+interface ProductLayerInfo {
+  id: string;
+  name: string;
+  imageUrl: string;
+  zIndex: number;
+}
+
+interface ProductSideInfo {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  zoomScale?: number;
+  layers?: ProductLayerInfo[];
+}
+
+// Original freeform canvas dimensions used during creation
+const SRC_W = 340;
+const SRC_H = 420;
+// Preview dimensions (same aspect ratio)
+const PREVIEW_W = 220;
+const PREVIEW_H = 272;
+const SCALE_FACTOR = PREVIEW_W / SRC_W;
+
+function FreeformSketchPreview({
+  canvasState,
+  productSides,
+  productColorHex,
+}: {
+  canvasState: Record<string, any>;
+  productSides?: ProductSideInfo[];
+  productColorHex?: string;
+}) {
+  const sideIds = productSides?.map(s => s.id) ?? Object.keys(canvasState);
+
+  if (sideIds.length === 0) return <p className="text-xs text-gray-400">스케치 데이터 없음</p>;
+
+  return (
+    <div className="flex gap-3 flex-wrap">
+      {sideIds.map(sideId => {
+        const side = productSides?.find(s => s.id === sideId);
+        return (
+          <SketchSideCanvas
+            key={sideId}
+            sideId={sideId}
+            side={side}
+            stateValue={canvasState[sideId]}
+            productColorHex={productColorHex}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function SketchSideCanvas({
+  sideId,
+  side,
+  stateValue,
+  productColorHex,
+}: {
+  sideId: string;
+  side?: ProductSideInfo;
+  stateValue?: any;
+  productColorHex?: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let disposed = false;
+
+    const init = async () => {
+      const fabric = await import('fabric');
+      if (disposed) return;
+
+      const canvas = new fabric.StaticCanvas(canvasRef.current!, {
+        width: PREVIEW_W,
+        height: PREVIEW_H,
+        backgroundColor: '#EBEBEB',
+      });
+      fabricRef.current = canvas;
+
+      try {
+        // 1. Load product mockup — multi-layer or single imageUrl
+        const hasLayers = side?.layers && side.layers.length > 0;
+        const zoom = side?.zoomScale || 1.0;
+
+        const applyColorFilter = (img: any) => {
+          if (productColorHex && productColorHex !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color: productColorHex, mode: 'multiply', alpha: 1 })];
+            img.applyFilters();
+          }
+        };
+
+        if (hasLayers) {
+          // Multi-layer mode: load each layer sorted by zIndex
+          const sorted = [...side!.layers!].sort((a, b) => a.zIndex - b.zIndex);
+          for (const layer of sorted) {
+            if (disposed) return;
+            try {
+              const img = await fabric.FabricImage.fromURL(layer.imageUrl, { crossOrigin: 'anonymous' });
+              if (disposed) { canvas.dispose(); return; }
+              const imgW = img.width || 1;
+              const imgH = img.height || 1;
+              const baseScale = Math.min(PREVIEW_W / imgW, PREVIEW_H / imgH);
+              img.set({
+                scaleX: baseScale * zoom,
+                scaleY: baseScale * zoom,
+                originX: 'center',
+                originY: 'center',
+                left: PREVIEW_W / 2,
+                top: PREVIEW_H / 2,
+              });
+              applyColorFilter(img);
+              canvas.add(img);
+            } catch (e) {
+              console.error('Failed to load layer', layer.id, e);
+            }
+          }
+        } else if (side?.imageUrl) {
+          // Legacy single-image mode
+          try {
+            const img = await fabric.FabricImage.fromURL(side.imageUrl, { crossOrigin: 'anonymous' });
+            if (disposed) { canvas.dispose(); return; }
+            const imgW = img.width || 1;
+            const imgH = img.height || 1;
+            const baseScale = Math.min(PREVIEW_W / imgW, PREVIEW_H / imgH);
+            img.set({
+              scaleX: baseScale * zoom,
+              scaleY: baseScale * zoom,
+              originX: 'center',
+              originY: 'center',
+              left: PREVIEW_W / 2,
+              top: PREVIEW_H / 2,
+            });
+            applyColorFilter(img);
+            canvas.add(img);
+          } catch (e) {
+            console.error('Failed to load mockup image for', sideId, e);
+          }
+        }
+
+        // 2. Load user objects on top, scaled from original 340x420 to preview
+        if (stateValue) {
+          const sideData = typeof stateValue === 'string' ? JSON.parse(stateValue) : stateValue;
+          if (sideData?.objects?.length) {
+            const tempCanvas = new fabric.StaticCanvas(undefined, { width: SRC_W, height: SRC_H });
+            await tempCanvas.loadFromJSON({ version: sideData.version || '6.0.0', objects: sideData.objects });
+            if (disposed) { tempCanvas.dispose(); canvas.dispose(); return; }
+
+            const objs = tempCanvas.getObjects();
+            for (const obj of objs) {
+              tempCanvas.remove(obj);
+              obj.set({
+                left: (obj.left ?? 0) * SCALE_FACTOR,
+                top: (obj.top ?? 0) * SCALE_FACTOR,
+                scaleX: (obj.scaleX || 1) * SCALE_FACTOR,
+                scaleY: (obj.scaleY || 1) * SCALE_FACTOR,
+              });
+              canvas.add(obj);
+            }
+            tempCanvas.dispose();
+          }
+        }
+
+        canvas.renderAll();
+      } catch (e) {
+        console.error('Error rendering sketch for side', sideId, e);
+      }
+    };
+
+    init();
+
+    return () => {
+      disposed = true;
+      if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
+      fabricRef.current = null;
+    };
+  }, [sideId, side, stateValue]);
+
+  return (
+    <div className="flex flex-col items-center">
+      <canvas ref={canvasRef} className="rounded-lg" />
+      <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
     </div>
   );
 }
@@ -203,15 +399,31 @@ function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () =>
             <p className="text-sm text-gray-600 mb-3">{request.description}</p>
           )}
 
-          {/* Freeform Preview */}
-          {request.freeform_preview_url && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-gray-500 mb-1">사용자 스케치</p>
-              <div className="w-48 h-48 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
-                <img src={request.freeform_preview_url} alt="Freeform design" className="w-full h-full object-contain" />
-              </div>
+          {/* Selected Product Color */}
+          {(request.freeform_color_selections as any)?._productColor && (
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-medium text-gray-500">선택 색상</p>
+              <div
+                className="w-5 h-5 rounded-full border border-gray-300"
+                style={{ backgroundColor: (request.freeform_color_selections as any)._productColor.hex }}
+              />
+              <span className="text-xs text-gray-700">
+                {(request.freeform_color_selections as any)._productColor.name}
+                {(request.freeform_color_selections as any)._productColor.colorCode &&
+                  ` (${(request.freeform_color_selections as any)._productColor.colorCode})`}
+              </span>
             </div>
           )}
+
+          {/* Freeform Sketch — all product sides with user objects overlaid */}
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-500 mb-1.5">사용자 스케치</p>
+            <FreeformSketchPreview
+              canvasState={request.freeform_canvas_state || {}}
+              productSides={(request as any).product?.configuration}
+              productColorHex={(request.freeform_color_selections as any)?._productColor?.hex}
+            />
+          </div>
 
           {/* Admin Design Preview */}
           {request.admin_design_preview_url && (
@@ -259,7 +471,7 @@ function RequestDetail({ requestId, onBack }: { requestId: string; onBack: () =>
             {(request.status === 'in_progress' || request.status === 'feedback') && (
               <>
                 <a
-                  href={`/editor/${request.product_id}?mode=design`}
+                  href={`/editor/${request.product_id}?mode=design&cobuyRequestId=${request.id}`}
                   className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> 에디터 열기

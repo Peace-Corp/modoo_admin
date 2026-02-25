@@ -180,6 +180,7 @@ interface UnifiedEditorProps {
   templateId?: string;    // Optional: Pre-select template in template mode
   designId?: string;      // Optional: Load existing design in design mode
   returnUrl?: string;     // Optional: Custom back URL (overrides default)
+  cobuyRequestId?: string; // Optional: CoBuy request ID — shows freeform sketch reference panel
 }
 ```
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Pencil, Save, Download, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Save, Download, X, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { EditorModeConfig } from './hooks/useEditorMode';
 
@@ -14,6 +14,9 @@ interface EditorHeaderProps {
   isDownloading?: boolean;
   saveError?: string | null;
   children?: React.ReactNode;
+  showSketchToggle?: boolean;
+  isSketchOpen?: boolean;
+  onToggleSketch?: () => void;
 }
 
 export default function EditorHeader({
@@ -26,6 +29,9 @@ export default function EditorHeader({
   isDownloading,
   saveError,
   children,
+  showSketchToggle,
+  isSketchOpen,
+  onToggleSketch,
 }: EditorHeaderProps) {
   const router = useRouter();
 
@@ -34,7 +40,7 @@ export default function EditorHeader({
       {/* Left: Back + title */}
       <div className="flex items-center gap-2 min-w-0">
         <button
-          onClick={() => router.push(modeConfig.backUrl)}
+          onClick={() => router.back()}
           className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-700 rounded transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -72,6 +78,21 @@ export default function EditorHeader({
               편집 모드
             </button>
           )
+        )}
+
+        {/* Freeform sketch toggle */}
+        {showSketchToggle && onToggleSketch && (
+          <button
+            onClick={onToggleSketch}
+            className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded transition-colors ${
+              isSketchOpen
+                ? 'text-purple-300 bg-purple-900/40 border border-purple-700/50 hover:bg-purple-900/60'
+                : 'text-neutral-300 bg-neutral-700 hover:bg-neutral-600'
+            }`}
+          >
+            {isSketchOpen ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            스케치
+          </button>
         )}
 
         {/* Download (order mode) */}

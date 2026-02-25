@@ -15,6 +15,7 @@ function EditorPage() {
   const templateId = searchParams.get('templateId') || undefined;
   const designId = searchParams.get('designId') || undefined;
   const returnUrl = searchParams.get('returnUrl') || undefined;
+  const cobuyRequestId = searchParams.get('cobuyRequestId') || undefined;
 
   return (
     <UnifiedEditor
@@ -25,6 +26,7 @@ function EditorPage() {
       templateId={templateId}
       designId={designId}
       returnUrl={returnUrl}
+      cobuyRequestId={cobuyRequestId}
     />
   );
 }

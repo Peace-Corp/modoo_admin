@@ -22,18 +22,21 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const status = url.searchParams.get('status');
+    const id = url.searchParams.get('id');
 
     const admin = createAdminClient();
     let query = admin
       .from('cobuy_requests')
       .select(`
         *,
-        product:products (id, title, thumbnail_image_link),
+        product:products (id, title, thumbnail_image_link, configuration),
         profiles:profiles!cobuy_requests_user_id_fkey (email, name)
       `)
       .order('created_at', { ascending: false });
 
-    if (status && status !== 'all') {
+    if (id) {
+      query = query.eq('id', id);
+    } else if (status && status !== 'all') {
       query = query.eq('status', status);
     }
 

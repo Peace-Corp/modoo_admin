@@ -17,6 +17,7 @@ import DesignModePanel from './panels/DesignModePanel';
 import OrderModePanel from './panels/OrderModePanel';
 import OrderEditPanel from './panels/OrderEditPanel';
 import TemplateModePanel from './panels/TemplateModePanel';
+import FreeformSketchPanel from './FreeformSketchPanel';
 import {
   coerceImageUrlsBySide,
   coerceTextSvgExports,
@@ -42,6 +43,7 @@ interface UnifiedEditorProps {
   templateId?: string;
   designId?: string;
   returnUrl?: string;
+  cobuyRequestId?: string;
 }
 
 export default function UnifiedEditor({
@@ -52,6 +54,7 @@ export default function UnifiedEditor({
   templateId,
   designId,
   returnUrl,
+  cobuyRequestId,
 }: UnifiedEditorProps) {
   const router = useRouter();
   const modeConfig = useEditorMode({ mode, returnUrl });
@@ -82,6 +85,9 @@ export default function UnifiedEditor({
 
   // Canvas states for rendering (may come from order or template)
   const [canvasStates, setCanvasStates] = useState<Record<string, CanvasState | string | null>>({});
+
+  // Freeform sketch panel
+  const [showSketchPanel, setShowSketchPanel] = useState(false);
 
   // Snapshot for reverting on edit cancel (order mode)
   const editSnapshotRef = useRef<Record<string, object>>({});
@@ -174,10 +180,29 @@ export default function UnifiedEditor({
         editSnapshotRef.current = {};
         setIsEditing(false);
       } else if (mode === 'design') {
-        // Navigate back after design save, appending designId
-        const backUrl = returnUrl || '/designs';
-        const separator = backUrl.includes('?') ? '&' : '?';
-        router.push(`${backUrl}${separator}designId=${result.id}`);
+        // Auto-link design to cobuy request if opened from one
+        if (cobuyRequestId && result.id) {
+          try {
+            // Fetch saved design to get preview URL
+            const designRes = await fetch(`/api/admin/designs/${result.id}`);
+            const designJson = designRes.ok ? await designRes.json() : null;
+
+            await fetch('/api/admin/cobuy/requests', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: cobuyRequestId,
+                admin_design_id: result.id,
+                admin_design_preview_url: designJson?.data?.preview_url || null,
+              }),
+            });
+          } catch (err) {
+            console.error('Failed to link design to cobuy request:', err);
+          }
+        }
+
+        // Navigate back after design save
+        router.back();
       } else if (mode === 'template') {
         // Refresh templates list
         await editorData.refetchTemplates();
@@ -185,7 +210,7 @@ export default function UnifiedEditor({
     } else {
       setSaveError(result.error || '저장에 실패했습니다.');
     }
-  }, [executeSave, mode, router, returnUrl, editorData]);
+  }, [executeSave, mode, router, cobuyRequestId, editorData]);
 
   // Handle edit toggle (order mode) — snapshot on enter, restore on cancel
   const handleToggleEdit = useCallback(() => {
@@ -445,6 +470,9 @@ export default function UnifiedEditor({
             onDownload={mode === 'order' ? handleDownloadAll : undefined}
             isDownloading={isDownloading}
             saveError={saveError}
+            showSketchToggle={!!cobuyRequestId}
+            isSketchOpen={showSketchPanel}
+            onToggleSketch={() => setShowSketchPanel(v => !v)}
           />
           {mode === 'order' && isEditing && (
             <div className="text-[11px] text-amber-700 bg-amber-50/90 backdrop-blur-sm border-b border-amber-200 px-3 py-1">
@@ -473,6 +501,16 @@ export default function UnifiedEditor({
                 handleExitEditMode={handleExitEditMode}
                 variant="editor"
                 onSelectedObjectChange={handleSelectedObjectChange}
+              />
+            </div>
+          )}
+
+          {/* Floating sketch panel */}
+          {showSketchPanel && cobuyRequestId && (
+            <div className="pointer-events-auto absolute bottom-4 left-12 z-20">
+              <FreeformSketchPanel
+                cobuyRequestId={cobuyRequestId}
+                onClose={() => setShowSketchPanel(false)}
               />
             </div>
           )}
