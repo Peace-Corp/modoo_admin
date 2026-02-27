@@ -99,6 +99,7 @@ function SharedItemView({
       product_code: item.products.product_code,
       manufacturers: item.products.manufacturers,
       is_active: true,
+      is_featured: false,
       created_at: item.created_at,
       updated_at: item.created_at,
       category: null,

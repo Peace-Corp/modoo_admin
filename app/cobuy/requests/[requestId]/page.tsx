@@ -246,7 +246,7 @@ export default function CoBuyRequestDetailPage() {
 
   const [commentText, setCommentText] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
-  const [designIdInput, setDesignIdInput] = useState('');
+
   const [showShareLink, setShowShareLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showConfirmForm, setShowConfirmForm] = useState(false);
@@ -443,34 +443,6 @@ export default function CoBuyRequestDetailPage() {
                   <ExternalLink className="w-3.5 h-3.5" /> 에디터 열기
                 </a>
 
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={designIdInput}
-                    onChange={e => setDesignIdInput(e.target.value)}
-                    placeholder="디자인 ID"
-                    className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg w-48"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!designIdInput.trim()) return;
-                      const res = await fetch(`/api/admin/designs/${designIdInput.trim()}`);
-                      if (res.ok) {
-                        const design = await res.json();
-                        await updateRequest({
-                          admin_design_id: designIdInput.trim(),
-                          admin_design_preview_url: design.preview_url || null,
-                        });
-                      } else {
-                        alert('디자인을 찾을 수 없습니다.');
-                      }
-                    }}
-                    disabled={isUpdating}
-                    className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Link2 className="w-3.5 h-3.5" /> 디자인 연결
-                  </button>
-                </div>
               </>
             )}
 
