@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2 } from 'lucide-react';
+import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2, ChevronDown } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 type AdminRole = 'admin' | 'factory';
@@ -36,7 +36,21 @@ const navItems: NavItem[] = [
   { type: 'link', href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
   { type: 'link', href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
   { type: 'link', href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin'] },
-  { type: 'link', href: '/content', label: '콘텐츠 관리', icon: MessageSquare, roles: ['admin'] },
+  {
+    type: 'section',
+    label: '콘텐츠',
+    icon: MessageSquare,
+    roles: ['admin'],
+    children: [
+      { href: '/content/reviews', label: '리뷰' },
+      { href: '/content/examples', label: '제작 사례' },
+      { href: '/content/banners', label: '히어로 배너' },
+      { href: '/content/announcements', label: '공지' },
+      { href: '/content/faqs', label: 'FAQ' },
+      { href: '/content/inquiries', label: '문의' },
+      { href: '/content/chatbot', label: '챗봇 문의' },
+    ],
+  },
   { type: 'link', href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
   { type: 'link', href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
   {
@@ -221,24 +235,37 @@ function SidebarSection({
   pathname: string | null;
   onLinkClick: () => void;
 }) {
+  const hasActiveChild = children.some(
+    (child) => pathname === child.href || (pathname ?? '').startsWith(`${child.href}/`)
+  );
+  const [open, setOpen] = useState(hasActiveChild);
+
   return (
     <div>
-      <div className="flex items-center gap-3 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-        {Icon && <Icon className="w-4 h-4" />}
-        {label}
-      </div>
-      <div className="ml-4 space-y-0.5">
-        {children.map((child) => (
-          <SidebarLink
-            key={child.href}
-            href={child.href}
-            icon={child.icon}
-            label={child.label}
-            active={pathname === child.href || (pathname ?? '').startsWith(`${child.href}/`)}
-            onClick={onLinkClick}
-          />
-        ))}
-      </div>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+          hasActiveChild ? 'text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+        }`}
+      >
+        {Icon && <Icon className="w-5 h-5" />}
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="ml-4 space-y-0.5 mt-0.5">
+          {children.map((child) => (
+            <SidebarLink
+              key={child.href}
+              href={child.href}
+              icon={child.icon}
+              label={child.label}
+              active={pathname === child.href || (pathname ?? '').startsWith(`${child.href}/`)}
+              onClick={onLinkClick}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
