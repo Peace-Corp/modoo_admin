@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Copy, ExternalLink, Plus, RefreshCw } from 'lucide-react';
-import { CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
+import { AlertCircle, Calendar, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, ExternalLink, Plus, RefreshCw } from 'lucide-react';
+import { CoBuyCustomField, CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 
 const statusLabels: Record<CoBuyStatus, string> = {
@@ -65,18 +65,25 @@ const formatCurrency = (value?: number | null) => {
   return `${value.toLocaleString()}원`;
 };
 
-const renderFieldResponses = (responses?: Record<string, unknown> | null) => {
+const renderFieldResponses = (
+  responses?: Record<string, unknown> | null,
+  customFields?: CoBuyCustomField[]
+) => {
   if (!responses || Object.keys(responses).length === 0) {
     return '-';
   }
 
+  const fieldMap = new Map(customFields?.map((f) => [f.id, f.label]) ?? []);
+
   return (
-    <details className="text-xs text-gray-600">
-      <summary className="cursor-pointer">보기</summary>
-      <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-700">
-        {JSON.stringify(responses, null, 2)}
-      </pre>
-    </details>
+    <div className="text-xs text-gray-600 space-y-0.5">
+      {Object.entries(responses).map(([key, value]) => (
+        <div key={key}>
+          <span className="text-gray-500">{fieldMap.get(key) || key}:</span>{' '}
+          <span className="text-gray-700">{String(value)}</span>
+        </div>
+      ))}
+    </div>
   );
 };
 
@@ -94,6 +101,7 @@ export default function CoBuyTab() {
   const [actionLoading, setActionLoading] = useState<'status' | 'bulk' | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(!!resumeProductId && !!resumeDesignId);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   const { data: sessions = [], isLoading: loading, error: sessionsError, mutate: mutateSessions } = useSWR<CoBuySession[]>(
     `/api/admin/cobuy/sessions?status=${filterStatus}`
@@ -108,6 +116,7 @@ export default function CoBuyTab() {
   const handleSelectSession = (session: CoBuySession) => {
     setSelectedSession(session);
     setStatusUpdate(session.status);
+    setPreviewIndex(0);
   };
 
   const handleUpdateStatus = async () => {
@@ -207,6 +216,49 @@ export default function CoBuyTab() {
       totalPaid,
     };
   }, [participants]);
+
+  const sizeStats = useMemo(() => {
+    // Get all defined size labels from the session's custom fields
+    const sizeField = selectedSession?.custom_fields?.find((f) => f.id === 'size' && f.type === 'dropdown');
+    const allSizes = sizeField?.options ?? [];
+
+    const counts = new Map<string, number>();
+    for (const s of allSizes) counts.set(s, 0);
+    for (const p of participants) {
+      if (p.selected_size) {
+        counts.set(p.selected_size, (counts.get(p.selected_size) || 0) + 1);
+      }
+    }
+
+    // Use defined order from options, then append any extra sizes from participants
+    const ordered = allSizes.map((size) => ({ size, count: counts.get(size) || 0 }));
+    for (const [size, count] of counts) {
+      if (!allSizes.includes(size)) ordered.push({ size, count });
+    }
+    return ordered;
+  }, [participants, selectedSession?.custom_fields]);
+
+  const handleDownloadExcel = async () => {
+    if (participants.length === 0 || !selectedSession) return;
+
+    try {
+      const res = await fetch(`/api/admin/cobuy/participants-excel?sessionId=${selectedSession.id}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || '엑셀 다운로드에 실패했습니다.');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedSession.title}_참여자목록.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Excel download error:', error);
+      setDetailError(error instanceof Error ? error.message : '엑셀 다운로드에 실패했습니다.');
+    }
+  };
 
   if (loading) {
     return (
@@ -310,17 +362,110 @@ export default function CoBuyTab() {
               </div>
             </div>
 
+            {/* Image / Design Preview + Size Stats */}
+            {((selectedSession.cobuy_image_urls?.length || selectedSession.saved_design_screenshots?.preview_url) || sizeStats.length > 0) && (
+              <div className="bg-white border border-gray-200/60 rounded-md p-3 sm:p-4 shadow-sm">
+                <div className="space-y-4">
+                  {/* Preview */}
+                  {(selectedSession.cobuy_image_urls?.length || selectedSession.saved_design_screenshots?.preview_url) && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-gray-900 mb-2">
+                        {selectedSession.cobuy_image_urls?.length ? '이미지' : '디자인'}
+                      </h3>
+                      {selectedSession.cobuy_image_urls?.length ? (
+                        <div className="relative w-48">
+                          <img
+                            src={selectedSession.cobuy_image_urls[previewIndex]}
+                            alt={`이미지 ${previewIndex + 1}`}
+                            className="w-full rounded-md object-contain max-h-48 bg-gray-50"
+                          />
+                          {selectedSession.cobuy_image_urls.length > 1 && (
+                            <>
+                              <button
+                                onClick={() => setPreviewIndex((i) => (i - 1 + selectedSession.cobuy_image_urls!.length) % selectedSession.cobuy_image_urls!.length)}
+                                className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-black/40 text-white rounded-full hover:bg-black/60"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setPreviewIndex((i) => (i + 1) % selectedSession.cobuy_image_urls!.length)}
+                                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-black/40 text-white rounded-full hover:bg-black/60"
+                              >
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                              <div className="text-center text-[11px] text-gray-500 mt-1">
+                                {previewIndex + 1} / {selectedSession.cobuy_image_urls.length}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : selectedSession.saved_design_screenshots?.preview_url ? (
+                        <img
+                          src={selectedSession.saved_design_screenshots.preview_url}
+                          alt="디자인 미리보기"
+                          className="w-48 rounded-md object-contain max-h-48 bg-gray-50"
+                        />
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* Size Stats */}
+                  {sizeStats.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <h3 className="text-xs font-semibold text-gray-900 mb-2">사이즈별 수량</h3>
+                      <table className="w-full text-xs border border-gray-300">
+                        <thead>
+                          <tr>
+                            {sizeStats.map(({ size }) => (
+                              <th key={size} className="px-3 py-1.5 border border-gray-300 bg-gray-100 text-center font-medium text-gray-700 whitespace-nowrap">
+                                {size}
+                              </th>
+                            ))}
+                            <th className="px-3 py-1.5 border border-gray-300 bg-blue-50 text-center font-semibold text-blue-700 whitespace-nowrap">
+                              총 합계
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            {sizeStats.map(({ size, count }) => (
+                              <td key={size} className="px-3 py-1.5 border border-gray-300 text-center font-medium text-gray-900">
+                                {count}
+                              </td>
+                            ))}
+                            <td className="px-3 py-1.5 border border-gray-300 bg-blue-50 text-center font-bold text-blue-700">
+                              {sizeStats.reduce((sum, s) => sum + s.count, 0)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="bg-white border border-gray-200/60 rounded-md p-3 sm:p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">참여자 목록</h3>
-                <button
-                  onClick={() => mutateParticipants()}
-                  className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                  disabled={detailLoading}
-                >
-                  <RefreshCw className={`w-4 h-4 ${detailLoading ? 'animate-spin' : ''}`} />
-                  새로고침
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownloadExcel}
+                    disabled={participants.length === 0}
+                    className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">엑셀 다운로드</span>
+                  </button>
+                  <button
+                    onClick={() => mutateParticipants()}
+                    className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                    disabled={detailLoading}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${detailLoading ? 'animate-spin' : ''}`} />
+                    새로고침
+                  </button>
+                </div>
               </div>
 
               {detailLoading ? (
@@ -380,7 +525,7 @@ export default function CoBuyTab() {
                               {formatCurrency(participant.payment_amount ?? undefined)}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">
-                              {renderFieldResponses(participant.field_responses)}
+                              {renderFieldResponses(participant.field_responses, selectedSession?.custom_fields)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                               {formatDate(participant.joined_at)}
@@ -410,7 +555,7 @@ export default function CoBuyTab() {
                         </div>
                         <div className="text-[11px] text-gray-400">{formatDate(participant.joined_at)}</div>
                         {participant.field_responses && Object.keys(participant.field_responses).length > 0 && (
-                          <div className="text-[11px]">{renderFieldResponses(participant.field_responses)}</div>
+                          <div className="text-[11px]">{renderFieldResponses(participant.field_responses, selectedSession?.custom_fields)}</div>
                         )}
                       </div>
                     ))}

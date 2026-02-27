@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     let query = adminClient
       .from('cobuy_sessions')
-      .select('*, profiles(email, phone_number)')
+      .select('*, profiles(email, phone_number), saved_design_screenshots(preview_url)')
       .order('created_at', { ascending: false });
 
     if (status !== 'all') {
@@ -133,7 +133,7 @@ export async function PATCH(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', sessionId)
-      .select('*, profiles(email, phone_number)')
+      .select('*, profiles(email, phone_number), saved_design_screenshots(preview_url)')
       .single();
 
     if (error) {

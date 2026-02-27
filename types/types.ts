@@ -441,6 +441,10 @@ export interface CoBuySession {
     phone_number?: string | null;
   } | null;
   cancellation_requested_at?: string | null;
+  saved_design_screenshot_id?: string | null;
+  saved_design_screenshots?: {
+    preview_url: string | null;
+  } | null;
 }
 
 export interface CoBuyParticipant {

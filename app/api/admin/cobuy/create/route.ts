@@ -180,6 +180,9 @@ export async function POST(request: NextRequest) {
         profiles:user_id (
           email,
           phone_number
+        ),
+        saved_design_screenshots (
+          preview_url
         )
       `)
       .single();
