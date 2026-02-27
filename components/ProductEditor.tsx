@@ -121,6 +121,15 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [layerIdColorsLoading, setLayerIdColorsLoading] = useState<Record<string, boolean>>({});
   const [layerIdColorSearch, setLayerIdColorSearch] = useState<Record<string, string>>({});
 
+  // Custom color picker state (layer colors)
+  const [layerCustomColorHex, setLayerCustomColorHex] = useState<Record<string, string>>({});
+  const [layerCustomColorName, setLayerCustomColorName] = useState<Record<string, string>>({});
+
+  // Custom color picker state (single-image product colors)
+  const [customColorHex, setCustomColorHex] = useState('#000000');
+  const [customColorName, setCustomColorName] = useState('');
+  const [addingCustomColor, setAddingCustomColor] = useState(false);
+
   // UI state
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -756,6 +765,108 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       };
     });
     setSides(newSides);
+  };
+
+  // Add a custom color to all layers with a given ID
+  const addCustomLayerIdColor = (layerId: string) => {
+    const hex = layerCustomColorHex[layerId] || '#000000';
+    const colorCode = layerCustomColorName[layerId]?.trim();
+    if (!colorCode) {
+      alert('색상 이름을 입력해주세요.');
+      return;
+    }
+    // Check for duplicate
+    const existing = getLayerIdColorOptions(layerId);
+    if (existing.some(opt => opt.hex.toLowerCase() === hex.toLowerCase() && opt.colorCode === colorCode)) {
+      alert('이미 동일한 색상이 등록되어 있습니다.');
+      return;
+    }
+    const newSides = sides.map(side => {
+      if (!side.layers) return side;
+      const hasLayer = side.layers.some(l => l.id === layerId);
+      if (!hasLayer) return side;
+      return {
+        ...side,
+        layers: side.layers.map(layer => {
+          if (layer.id !== layerId) return layer;
+          return {
+            ...layer,
+            colorOptions: [...(layer.colorOptions || []), { hex, colorCode }],
+          };
+        }),
+      };
+    });
+    setSides(newSides);
+    setLayerCustomColorHex(prev => ({ ...prev, [layerId]: '#000000' }));
+    setLayerCustomColorName(prev => ({ ...prev, [layerId]: '' }));
+  };
+
+  // Add a custom color for single-image products (creates manufacturer_color then product_color)
+  const handleAddCustomProductColor = async () => {
+    if (!product?.id) {
+      alert('제품을 먼저 저장해주세요.');
+      return;
+    }
+    if (!linkedManufacturerId) {
+      alert('제조사를 먼저 연결해주세요.');
+      return;
+    }
+    const name = customColorName.trim();
+    if (!name) {
+      alert('색상 이름을 입력해주세요.');
+      return;
+    }
+    setAddingCustomColor(true);
+    try {
+      // Create manufacturer color
+      const mcRes = await fetch('/api/admin/manufacturer-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manufacturer_id: linkedManufacturerId,
+          name,
+          hex: customColorHex,
+          color_code: name,
+          is_active: true,
+          sort_order: 0,
+        }),
+      });
+      if (!mcRes.ok) {
+        const payload = await mcRes.json().catch(() => ({}));
+        throw new Error(payload?.error || '제조사 색상 생성에 실패했습니다.');
+      }
+      const mcPayload = await mcRes.json();
+      const newMC = mcPayload?.data as ManufacturerColor;
+
+      // Link to product
+      const pcRes = await fetch('/api/admin/product-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: product.id,
+          manufacturer_color_id: newMC.id,
+          is_active: true,
+          sort_order: productColors.length,
+        }),
+      });
+      if (!pcRes.ok) {
+        const payload = await pcRes.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 색상 추가에 실패했습니다.');
+      }
+      const pcPayload = await pcRes.json();
+      const created = pcPayload?.data as ProductColor;
+      setProductColors(prev => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+
+      // Also refresh manufacturer colors list
+      setManufacturerColors(prev => [...prev, newMC]);
+      setCustomColorHex('#000000');
+      setCustomColorName('');
+    } catch (error) {
+      console.error('Error adding custom color:', error);
+      alert(error instanceof Error ? error.message : '커스텀 색상 추가에 실패했습니다.');
+    } finally {
+      setAddingCustomColor(false);
+    }
   };
 
   const persistProductImageField = async (
@@ -1513,6 +1624,35 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     </div>
                   )}
 
+                  {/* Custom Color Picker */}
+                  <div className="space-y-2 border-t border-gray-200 pt-4">
+                    <p className="text-sm font-medium text-gray-900">커스텀 색상 추가</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={customColorHex}
+                        onChange={(e) => setCustomColorHex(e.target.value)}
+                        className="w-8 h-8 rounded border border-gray-300 cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={customColorName}
+                        onChange={(e) => setCustomColorName(e.target.value)}
+                        className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                        placeholder="색상 이름 (예: SKY BLUE)"
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomProductColor(); }}
+                      />
+                      <button
+                        onClick={handleAddCustomProductColor}
+                        disabled={addingCustomColor}
+                        className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap flex items-center gap-1"
+                      >
+                        {addingCustomColor && <Loader2 className="w-3 h-3 animate-spin" />}
+                        추가
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Currently Selected Colors */}
                   <div className="space-y-2 border-t border-gray-200 pt-4">
                     <div className="flex items-center justify-between">
@@ -1644,6 +1784,30 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                             )}
                           </div>
                         )}
+
+                        {/* Custom Color Picker */}
+                        <div className="flex items-center gap-2 border-t border-gray-100 pt-2">
+                          <input
+                            type="color"
+                            value={layerCustomColorHex[uLayer.id] || '#000000'}
+                            onChange={(e) => setLayerCustomColorHex(prev => ({ ...prev, [uLayer.id]: e.target.value }))}
+                            className="w-7 h-7 rounded border border-gray-300 cursor-pointer p-0.5"
+                          />
+                          <input
+                            type="text"
+                            value={layerCustomColorName[uLayer.id] || ''}
+                            onChange={(e) => setLayerCustomColorName(prev => ({ ...prev, [uLayer.id]: e.target.value }))}
+                            className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                            placeholder="색상 이름 (예: SKY BLUE)"
+                            onKeyDown={(e) => { if (e.key === 'Enter') addCustomLayerIdColor(uLayer.id); }}
+                          />
+                          <button
+                            onClick={() => addCustomLayerIdColor(uLayer.id)}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors whitespace-nowrap"
+                          >
+                            추가
+                          </button>
+                        </div>
 
                         {/* Selected Colors */}
                         <div className="space-y-1">

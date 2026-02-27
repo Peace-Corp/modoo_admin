@@ -29,7 +29,7 @@ export default function ProductsTab() {
       (product.manufacturers?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     return matchesSearch && matchesCategory;
-  });
+  }).sort((a, b) => Number(b.is_active) - Number(a.is_active));
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
