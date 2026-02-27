@@ -8,13 +8,15 @@ import {
   User,
   CheckCircle2,
   AlertCircle,
+  X,
 } from 'lucide-react';
 import { Product, CoBuyCustomField, CoBuyPricingTier, CoBuySession } from '@/types/types';
 import CustomFieldBuilder from './CustomFieldBuilder';
 
 interface AdminCoBuyFormProps {
-  product: Product;
-  savedDesignId: string;
+  product: Product | null;
+  savedDesignId: string | null;
+  cobuyImageUrls?: string[];
   onSuccess: (session: CoBuySession) => void;
   onBack: () => void;
 }
@@ -28,9 +30,12 @@ interface UserSearchResult {
 export default function AdminCoBuyForm({
   product,
   savedDesignId,
+  cobuyImageUrls,
   onSuccess,
   onBack,
 }: AdminCoBuyFormProps) {
+  const isImageMode = !!cobuyImageUrls?.length && !savedDesignId;
+
   // Basic info
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -44,6 +49,13 @@ export default function AdminCoBuyForm({
 
   // Design price
   const [designPrice, setDesignPrice] = useState<number | null>(null);
+
+  // Manual price (image mode)
+  const [manualPrice, setManualPrice] = useState<string>('');
+
+  // Manual size options (image mode without product)
+  const [sizeOptions, setSizeOptions] = useState<string[]>([]);
+  const [sizeInput, setSizeInput] = useState<string>('');
 
   // Pricing tiers
   const [pricingTiers, setPricingTiers] = useState<CoBuyPricingTier[]>([]);
@@ -62,8 +74,30 @@ export default function AdminCoBuyForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch design price and auto-set pricing tiers
+  const generateTiersFromPrice = (price: number) => {
+    const round = (v: number) => Math.round(v / 100) * 100;
+    return [
+      { minQuantity: 10, pricePerItem: round(price) },
+      { minQuantity: 30, pricePerItem: round(price * 0.95) },
+      { minQuantity: 50, pricePerItem: round(price * 0.9) },
+      { minQuantity: 100, pricePerItem: round(price * 0.85) },
+    ];
+  };
+
+  const defaultTiers: CoBuyPricingTier[] = [
+    { minQuantity: 10, pricePerItem: 25000 },
+    { minQuantity: 30, pricePerItem: 22000 },
+    { minQuantity: 50, pricePerItem: 20000 },
+    { minQuantity: 100, pricePerItem: 18000 },
+  ];
+
+  // Fetch design price (design mode only)
   useEffect(() => {
+    if (isImageMode || !savedDesignId) {
+      setPricingTiers(defaultTiers);
+      return;
+    }
+
     const fetchDesignPrice = async () => {
       try {
         const response = await fetch(`/api/admin/designs/${savedDesignId}`);
@@ -72,38 +106,36 @@ export default function AdminCoBuyForm({
         const price = data?.price_per_item;
         if (price && typeof price === 'number') {
           setDesignPrice(price);
-          // Auto-generate tiers: 0%, -5%, -10%, -15% discount
-          const round = (v: number) => Math.round(v / 100) * 100;
-          setPricingTiers([
-            { minQuantity: 10, pricePerItem: round(price) },
-            { minQuantity: 30, pricePerItem: round(price * 0.95) },
-            { minQuantity: 50, pricePerItem: round(price * 0.9) },
-            { minQuantity: 100, pricePerItem: round(price * 0.85) },
-          ]);
+          setPricingTiers(generateTiersFromPrice(price));
         } else {
-          // Fallback if no design price
-          setPricingTiers([
-            { minQuantity: 10, pricePerItem: 25000 },
-            { minQuantity: 30, pricePerItem: 22000 },
-            { minQuantity: 50, pricePerItem: 20000 },
-            { minQuantity: 100, pricePerItem: 18000 },
-          ]);
+          setPricingTiers(defaultTiers);
         }
       } catch {
-        setPricingTiers([
-          { minQuantity: 10, pricePerItem: 25000 },
-          { minQuantity: 30, pricePerItem: 22000 },
-          { minQuantity: 50, pricePerItem: 20000 },
-          { minQuantity: 100, pricePerItem: 18000 },
-        ]);
+        setPricingTiers(defaultTiers);
       }
     };
     fetchDesignPrice();
-  }, [savedDesignId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedDesignId, isImageMode]);
+
+  // Update pricing tiers when manual price changes
+  const handleManualPriceChange = (value: string) => {
+    setManualPrice(value);
+    const price = parseInt(value);
+    if (price && price > 0) {
+      setPricingTiers(generateTiersFromPrice(price));
+    }
+  };
 
   // Initialize custom fields with size field
   useEffect(() => {
-    const sizeOptions = product.size_options || [];
+    if (isImageMode && !product) {
+      // Image mode without product: no auto size field, admin will add via sizeOptionsText
+      setCustomFields([]);
+      return;
+    }
+
+    const sizeOptions = product?.size_options || [];
     const sizeLabels = sizeOptions.map((opt) =>
       typeof opt === 'string' ? opt : opt.label
     );
@@ -116,7 +148,29 @@ export default function AdminCoBuyForm({
       options: sizeLabels,
     };
     setCustomFields([sizeField]);
-  }, [product.size_options]);
+  }, [product, isImageMode]);
+
+  // Update size custom field when sizeOptions changes (image mode)
+  useEffect(() => {
+    if (!isImageMode || product) return;
+
+    if (sizeOptions.length > 0) {
+      const sizeField: CoBuyCustomField = {
+        id: 'size',
+        type: 'dropdown',
+        label: '사이즈',
+        required: true,
+        fixed: true,
+        options: sizeOptions,
+      };
+      setCustomFields((prev) => {
+        const withoutSize = prev.filter((f) => f.id !== 'size');
+        return [sizeField, ...withoutSize];
+      });
+    } else {
+      setCustomFields((prev) => prev.filter((f) => f.id !== 'size'));
+    }
+  }, [sizeOptions, isImageMode, product]);
 
   // Set default dates
   useEffect(() => {
@@ -143,9 +197,7 @@ export default function AdminCoBuyForm({
         `/api/admin/users/search?q=${encodeURIComponent(userSearchQuery)}`
       );
 
-      if (!response.ok) {
-        throw new Error('Failed to search users');
-      }
+      if (!response.ok) throw new Error('Failed to search users');
 
       const data = await response.json();
       setSearchResults(data.data || []);
@@ -175,11 +227,7 @@ export default function AdminCoBuyForm({
     const lastTier = pricingTiers[pricingTiers.length - 1];
     const newQuantity = lastTier ? lastTier.minQuantity + 50 : 10;
     const newPrice = lastTier ? Math.max(10000, lastTier.pricePerItem - 2000) : 25000;
-
-    setPricingTiers([
-      ...pricingTiers,
-      { minQuantity: newQuantity, pricePerItem: newPrice },
-    ]);
+    setPricingTiers([...pricingTiers, { minQuantity: newQuantity, pricePerItem: newPrice }]);
   };
 
   const updatePricingTier = (index: number, field: 'minQuantity' | 'pricePerItem', value: number) => {
@@ -210,29 +258,40 @@ export default function AdminCoBuyForm({
       setError('공동구매를 연결할 사용자를 선택해주세요');
       return;
     }
+    if (isImageMode && (!manualPrice || parseInt(manualPrice) <= 0)) {
+      setError('단가를 입력해주세요');
+      return;
+    }
 
     setIsSubmitting(true);
     setError('');
 
     try {
+      const payload: Record<string, unknown> = {
+        userId: selectedUser.id,
+        title: title.trim(),
+        description: description.trim() || null,
+        startDate: new Date(startDate).toISOString(),
+        endDate: new Date(endDate).toISOString(),
+        receiveByDate: receiveByDate ? new Date(receiveByDate).toISOString() : null,
+        minQuantity: minQuantity ? parseInt(minQuantity) : null,
+        maxQuantity: maxQuantity ? parseInt(maxQuantity) : null,
+        pricingTiers,
+        customFields,
+      };
+
+      if (isImageMode) {
+        payload.cobuyImageUrls = cobuyImageUrls;
+        payload.productId = product?.id || null;
+        payload.pricePerItem = parseInt(manualPrice);
+      } else {
+        payload.savedDesignId = savedDesignId;
+      }
+
       const response = await fetch('/api/admin/cobuy/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          savedDesignId,
-          userId: selectedUser.id,
-          title: title.trim(),
-          description: description.trim() || null,
-          startDate: new Date(startDate).toISOString(),
-          endDate: new Date(endDate).toISOString(),
-          receiveByDate: receiveByDate ? new Date(receiveByDate).toISOString() : null,
-          minQuantity: minQuantity ? parseInt(minQuantity) : null,
-          maxQuantity: maxQuantity ? parseInt(maxQuantity) : null,
-          pricingTiers,
-          customFields,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -271,10 +330,7 @@ export default function AdminCoBuyForm({
                   )}
                 </div>
               </div>
-              <button
-                onClick={handleRemoveUser}
-                className="text-gray-400 hover:text-red-500 transition-colors"
-              >
+              <button onClick={handleRemoveUser} className="text-gray-400 hover:text-red-500 transition-colors">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -359,6 +415,68 @@ export default function AdminCoBuyForm({
           </div>
         </section>
 
+        {/* Size Options (image mode without product) */}
+        {isImageMode && !product && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900">사이즈 옵션</h3>
+            <div>
+              {sizeOptions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {sizeOptions.map((size, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium"
+                    >
+                      {size}
+                      <button
+                        type="button"
+                        onClick={() => setSizeOptions((prev) => prev.filter((_, i) => i !== index))}
+                        className="text-blue-400 hover:text-blue-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={sizeInput}
+                  onChange={(e) => setSizeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const value = sizeInput.trim();
+                      if (value && !sizeOptions.includes(value)) {
+                        setSizeOptions((prev) => [...prev, value]);
+                        setSizeInput('');
+                      }
+                    }
+                  }}
+                  placeholder="예: S, M, L"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const value = sizeInput.trim();
+                    if (value && !sizeOptions.includes(value)) {
+                      setSizeOptions((prev) => [...prev, value]);
+                      setSizeInput('');
+                    }
+                  }}
+                  disabled={!sizeInput.trim()}
+                  className="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  추가
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">비워두면 사이즈 선택 없이 진행됩니다</p>
+            </div>
+          </section>
+        )}
+
         {/* Dates */}
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-900">일정</h3>
@@ -441,12 +559,34 @@ export default function AdminCoBuyForm({
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-900">가격 구간</h3>
-            {designPrice && (
+            {!isImageMode && designPrice && (
               <span className="text-xs text-gray-500">
                 원가: <span className="font-medium text-gray-800">{designPrice.toLocaleString()}원</span>
               </span>
             )}
           </div>
+
+          {/* Manual price input for image mode */}
+          {isImageMode && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                단가 (개당 가격) <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={manualPrice}
+                  onChange={(e) => handleManualPriceChange(e.target.value)}
+                  placeholder="예: 25000"
+                  min={1}
+                  step={1000}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-8"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">원</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">입력하면 가격 구간이 자동으로 생성됩니다</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <div className="grid grid-cols-[1fr_1fr_32px] gap-2 text-xs text-gray-500 px-0.5">
@@ -464,9 +604,7 @@ export default function AdminCoBuyForm({
                     min={1}
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-12"
                   />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
-                    벌 이상
-                  </span>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">벌 이상</span>
                 </div>
                 <div className="relative">
                   <input
@@ -477,9 +615,7 @@ export default function AdminCoBuyForm({
                     step={1000}
                     className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-6"
                   />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
-                    원
-                  </span>
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">원</span>
                 </div>
                 <button
                   onClick={() => removePricingTier(index)}
@@ -505,7 +641,9 @@ export default function AdminCoBuyForm({
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-900">참여자 정보 수집</h3>
           <p className="text-xs text-gray-500">
-            참여자로부터 수집할 정보를 설정하세요. 사이즈는 기본으로 포함됩니다.
+            {isImageMode && !product
+              ? '참여자로부터 수집할 추가 정보를 설정하세요.'
+              : '참여자로부터 수집할 정보를 설정하세요. 사이즈는 기본으로 포함됩니다.'}
           </p>
 
           <CustomFieldBuilder

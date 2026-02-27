@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, Calendar, ChevronLeft, ClipboardList, Copy, ExternalLink, Plus, RefreshCw } from 'lucide-react';
 import { CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 
@@ -281,7 +281,29 @@ export default function CoBuyTab() {
                     ? ` / ${selectedSession.max_participants}`
                     : ' / 무제한'}
                 </div>
-                <div className="text-gray-700">공유 토큰: {selectedSession.share_token}</div>
+                <div className="text-gray-700 flex items-center gap-2">
+                  <span className="truncate">공유 링크: {`${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`;
+                      navigator.clipboard.writeText(url).then(() => alert('링크가 복사되었습니다.'));
+                    }}
+                    className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                    title="링크 복사"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <a
+                    href={`${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                    title="새 탭에서 열기"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
                 <div className="text-gray-700">
                   주문 ID: {selectedSession.bulk_order_id || '-'}
                 </div>

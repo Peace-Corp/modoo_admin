@@ -432,6 +432,7 @@ export interface CoBuySession {
   max_participants: number | null;
   current_participant_count: number;
   custom_fields: CoBuyCustomField[];
+  cobuy_image_urls: string[] | null; // When set, indicates image-only CoBuy (no canvas design)
   bulk_order_id: string | null;
   created_at: string;
   updated_at: string;
