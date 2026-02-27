@@ -26,6 +26,7 @@ export default function LogoPlacementPreview({
 }: LogoPlacementPreviewProps) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
   const placeholderRef = useRef<fabric.Rect | null>(null);
+  const scaleRef = useRef<number>(1);
 
   const [isCanvasReady, setIsCanvasReady] = useState(false);
 
@@ -39,46 +40,67 @@ export default function LogoPlacementPreview({
   const currentWidth = placement?.width ?? DEFAULT_PLACEMENT.width;
   const currentHeight = placement?.height ?? DEFAULT_PLACEMENT.height;
 
-  // Read placement (position + size) directly from canvas
+  // Helper to get print area offset from canvas
+  const getPrintAreaOffset = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { left: 0, top: 0 };
+    // @ts-expect-error - Custom property set by SingleSideCanvas
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property set by SingleSideCanvas
+    const printAreaTop = canvas.printAreaTop || 0;
+    return { left: printAreaLeft, top: printAreaTop };
+  }, []);
+
+  // Read placement from canvas, converting to print-area-relative unscaled coordinates
   const updatePlacementFromCanvas = useCallback(() => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
     const ph = placeholderRef.current;
+    const canvasScale = scaleRef.current;
+    const { left: printAreaLeft, top: printAreaTop } = getPrintAreaOffset();
+
     const scaledW = (ph.width || 100) * (ph.scaleX || 1);
     const scaledH = (ph.height || 100) * (ph.scaleY || 1);
 
     onPlacementChange({
-      x: Math.round(ph.left || 0),
-      y: Math.round(ph.top || 0),
-      width: Math.round(scaledW),
-      height: Math.round(scaledH),
+      x: Math.round(((ph.left || 0) - printAreaLeft) / canvasScale),
+      y: Math.round(((ph.top || 0) - printAreaTop) / canvasScale),
+      width: Math.round(scaledW / canvasScale),
+      height: Math.round(scaledH / canvasScale),
     });
-  }, [onPlacementChange]);
+  }, [onPlacementChange, getPrintAreaOffset]);
 
-  // Sync placeholder rect from external values (inputs)
+  // Sync placeholder rect from external values (print-area-relative unscaled)
   const syncPlaceholderFromValues = useCallback((x: number, y: number, w: number, h: number) => {
     if (!placeholderRef.current || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ph = placeholderRef.current;
+    const canvasScale = scaleRef.current;
+    const { left: printAreaLeft, top: printAreaTop } = getPrintAreaOffset();
 
-    // Reset scale to 1 and set actual dimensions
     ph.set({
-      left: x,
-      top: y,
-      width: w,
-      height: h,
+      left: printAreaLeft + x * canvasScale,
+      top: printAreaTop + y * canvasScale,
+      width: w * canvasScale,
+      height: h * canvasScale,
       scaleX: 1,
       scaleY: 1,
     });
 
     canvas.renderAll();
-  }, []);
+  }, [getPrintAreaOffset]);
 
-  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, _canvasScale: number) => {
+  const handleCanvasReady = useCallback((canvas: fabric.Canvas, _sideId: string, canvasScale: number) => {
     if (!frontSide) return;
 
     canvasRef.current = canvas;
+    scaleRef.current = canvasScale;
+
+    // @ts-expect-error - Custom property set by SingleSideCanvas
+    const printAreaLeft = canvas.printAreaLeft || 0;
+    // @ts-expect-error - Custom property set by SingleSideCanvas
+    const printAreaTop = canvas.printAreaTop || 0;
 
     const initialX = placement?.x ?? DEFAULT_PLACEMENT.x;
     const initialY = placement?.y ?? DEFAULT_PLACEMENT.y;
@@ -86,10 +108,10 @@ export default function LogoPlacementPreview({
     const initialH = placement?.height ?? DEFAULT_PLACEMENT.height;
 
     const placeholder = new fabric.Rect({
-      left: initialX,
-      top: initialY,
-      width: initialW,
-      height: initialH,
+      left: printAreaLeft + initialX * canvasScale,
+      top: printAreaTop + initialY * canvasScale,
+      width: initialW * canvasScale,
+      height: initialH * canvasScale,
       fill: 'rgba(59, 130, 246, 0.15)',
       stroke: '#3B82F6',
       strokeWidth: 2,

@@ -634,10 +634,14 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           return canvasState;
         })();
 
-        // Apply initial color filter - check canvasState first, then prop, then store
-        const initialProductColor = parsedCanvasState?.productColor || productColor || useCanvasStore.getState().productColor;
-        // Sync initial product color to store so user can override it later
-        useCanvasStore.getState().setProductColor(initialProductColor);
+        // Apply initial color filter - check canvasState first, then prop, then default white
+        // Note: we do NOT fall back to the global store here because preview canvases
+        // can pollute it (e.g. a black product color leaking to all subsequent canvases)
+        const initialProductColor = parsedCanvasState?.productColor || productColor || '#FFFFFF';
+        // Only sync to global store in edit mode to allow user color changes
+        if (isEdit) {
+          useCanvasStore.getState().setProductColor(initialProductColor);
+        }
         console.log(`[SingleSideCanvas] Single-image mode: applying initial productColor: ${initialProductColor} for side: ${side.id}`);
 
         img.filters = [];
@@ -1083,13 +1087,16 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           useCanvasStore.getState().setLayerColor(side.id, layerId, color as string);
         }
       });
-    } else if (!hasLayers && parsed.productColor) {
+    } else if (!hasLayers && parsed.productColor && isEdit) {
       useCanvasStore.getState().setProductColor(parsed.productColor);
     }
-  }, [canvasState, side.id, side.layers]);
+  }, [canvasState, side.id, side.layers, isEdit]);
 
   // Effect to apply color filter when productColor changes (legacy single-image mode)
+  // Only applies in edit mode - preview canvases use their initial color and don't react to store changes
   useEffect(() => {
+    if (!isEdit) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 

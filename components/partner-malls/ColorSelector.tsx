@@ -50,6 +50,17 @@ export default function ColorSelector({
             (c: ProductColor) => c.is_active && c.manufacturer_colors
           );
           setColors(activeColors);
+
+          // Auto-select the first color if none is selected
+          if (!selectedColorId && activeColors.length > 0) {
+            const mc = activeColors[0].manufacturer_colors;
+            onColorSelect({
+              id: mc.id,
+              hex: mc.hex,
+              name: mc.name,
+              color_code: mc.color_code,
+            });
+          }
         }
       } catch (err) {
         console.error('Error fetching product colors:', err);
@@ -59,7 +70,7 @@ export default function ColorSelector({
     };
 
     fetchColors();
-  }, [productId]);
+  }, [productId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
@@ -77,7 +88,7 @@ export default function ColorSelector({
   }
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+    <div className="flex items-center gap-2 overflow-x-auto p-1">
       {colors.map((pc) => {
         const mc = pc.manufacturer_colors;
         const isSelected = selectedColorId === mc.id;
