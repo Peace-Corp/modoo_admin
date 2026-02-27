@@ -59,6 +59,7 @@ export default function CoBuyRequestsTab() {
 
   return (
     <div>
+      <h2 className="text-lg font-bold text-gray-900 mb-4">공동구매 요청 관리</h2>
       {/* Status Filter */}
       <div className="flex flex-wrap gap-2 mb-4">
         {['all', 'pending', 'in_progress', 'design_shared', 'feedback', 'confirmed', 'session_created', 'rejected'].map(status => (
