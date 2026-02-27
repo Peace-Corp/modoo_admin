@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AdminLayout from "@/components/AdminLayout";
+import SWRProvider from "@/components/SWRProvider";
 
 export const metadata: Metadata = {
   title: "모두의 유니폼 | 관리자 페이지",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <AdminLayout>{children}</AdminLayout>
+        <SWRProvider>
+          <AdminLayout>{children}</AdminLayout>
+        </SWRProvider>
       </body>
     </html>
   );

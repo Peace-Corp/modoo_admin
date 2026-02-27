@@ -11,6 +11,7 @@ import { calculateAllSidesPricing, ObjectPricing, PricingSummary } from '@/app/u
 interface ObjectPreviewPanelProps {
   sides: ProductSide[];
   quantity?: number;
+  compact?: boolean;
 }
 
 interface CanvasObjectInfo {
@@ -34,7 +35,7 @@ const PRINT_METHODS: { method: PrintMethod; label: string; shortLabel: string; d
   { method: 'applique', label: '아플리케', shortLabel: '아플리케', description: '입체감 있는 디자인' },
 ];
 
-const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity = 1 }) => {
+const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity = 1, compact = false }) => {
   const { canvasMap, canvasVersion, setObjectPrintMethod, getObjectPrintMethod } = useCanvasStore();
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [expandedObjects, setExpandedObjects] = useState<Set<string>>(new Set());
@@ -173,9 +174,9 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
   const totalPrice = pricingSummary?.totalAdditionalPrice || 0;
 
   return (
-    <div className="bg-white p-4 mb-4 rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-800">인쇄 옵션 설정</h3>
+    <div className={`bg-white ${compact ? 'p-2.5 mb-2.5' : 'p-4 mb-4'} rounded-lg border border-gray-200`}>
+      <div className={`flex items-center justify-between ${compact ? 'mb-2' : 'mb-3'}`}>
+        <h3 className={`${compact ? 'text-[11px]' : 'text-sm'} font-bold text-gray-800`}>인쇄 옵션 설정</h3>
         <button
           onClick={() => setIsPricingModalOpen(true)}
           className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
@@ -285,10 +286,10 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
               {/* Object Header - Always Visible */}
               <button
                 onClick={() => toggleObjectExpanded(objInfo.objectId)}
-                className="w-full p-3 flex items-center gap-3 hover:bg-gray-100 transition-colors"
+                className={`w-full ${compact ? 'p-2' : 'p-3'} flex items-center gap-3 hover:bg-gray-100 transition-colors`}
               >
                 {/* Preview Thumbnail */}
-                <div className="w-12 h-12 bg-white border border-gray-200 rounded flex items-center justify-center shrink-0 overflow-hidden">
+                <div className={`${compact ? 'w-9 h-9' : 'w-12 h-12'} bg-white border border-gray-200 rounded flex items-center justify-center shrink-0 overflow-hidden`}>
                   {objInfo.preview ? (
                     <img
                       src={objInfo.preview}
@@ -306,7 +307,7 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
                 <div className="flex-1 min-w-0 text-left">
                   <div className="flex items-center gap-2">
                     {getObjectIcon(objInfo.type)}
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-gray-700`}>
                       {getObjectTypeName(objInfo.type)}
                     </span>
                     <span className="text-xs text-gray-500">
@@ -330,9 +331,9 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
 
                 {/* Expand Icon */}
                 {isExpanded ? (
-                  <ChevronUp className="size-5 text-gray-400" />
+                  <ChevronUp className={`${compact ? 'size-4' : 'size-5'} text-gray-400`} />
                 ) : (
-                  <ChevronDown className="size-5 text-gray-400" />
+                  <ChevronDown className={`${compact ? 'size-4' : 'size-5'} text-gray-400`} />
                 )}
               </button>
 
@@ -409,7 +410,7 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
             총 <span className="font-semibold text-gray-800">{allObjects.length}개</span>의 인쇄 요소
           </p>
           {totalPrice > 0 && (
-            <p className="text-sm font-bold text-green-600">
+            <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-bold text-green-600`}>
               인쇄비: {totalPrice.toLocaleString('ko-KR')}원
             </p>
           )}

@@ -51,6 +51,7 @@ export async function GET() {
         title,
         content,
         status,
+        is_admin,
         created_at,
         updated_at,
         inquiry_products (

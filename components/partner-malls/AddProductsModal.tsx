@@ -36,6 +36,7 @@ interface ProductConfig {
   displayName: string;
   logoPlacement: Record<string, LogoPlacement>;
   previewUrl: string | null;
+  canvasState: Record<string, string>;
 }
 
 // Inline placement editor for a single product
@@ -51,7 +52,7 @@ function InlinePlacementEditor({
   logoUrl: string;
   productColor?: string;
   initialPlacement: Record<string, LogoPlacement>;
-  onDone: (placement: Record<string, LogoPlacement>, previewUrl: string | null) => void;
+  onDone: (placement: Record<string, LogoPlacement>, previewUrl: string | null, canvasState: Record<string, string>) => void;
   onCancel: () => void;
 }) {
   const canvasRef = useRef<fabric.Canvas | null>(null);
@@ -167,6 +168,33 @@ function InlinePlacementEditor({
     [firstSide, placeLogoOnCanvas]
   );
 
+  // Serialize canvas state (user objects only, matching editor format)
+  const serializeCanvasState = (): Record<string, string> => {
+    const canvas = canvasRef.current;
+    if (!canvas || !firstSide) return {};
+
+    const userObjects = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - Checking custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+
+    const canvasData = {
+      version: canvas.toJSON().version,
+      objects: userObjects.map(obj => {
+        const json = obj.toObject(['data']);
+        if (obj.type === 'image') {
+          const imgObj = obj as fabric.FabricImage;
+          json.src = imgObj.getSrc();
+        }
+        return json;
+      }),
+    };
+
+    return { [firstSide.id]: JSON.stringify(canvasData) };
+  };
+
   const handleDone = () => {
     const canvas = canvasRef.current;
     const logo = logoRef.current;
@@ -174,7 +202,7 @@ function InlinePlacementEditor({
 
     // If no logo was placed, still save with the default placement
     if (!logo) {
-      onDone(initialPlacement, null);
+      onDone(initialPlacement, null, {});
       return;
     }
 
@@ -206,7 +234,8 @@ function InlinePlacementEditor({
       console.error('Error capturing preview:', err);
     }
 
-    onDone({ [firstSide.id]: placement }, previewUrl);
+    const canvasState = serializeCanvasState();
+    onDone({ [firstSide.id]: placement }, previewUrl, canvasState);
   };
 
   const resetToCenter = () => {
@@ -389,6 +418,7 @@ export default function AddProductsModal({
           displayName: `${partnerMallName} ${product.title}`,
           logoPlacement: firstSide ? { [firstSide.id]: placement } : {},
           previewUrl: null,
+          canvasState: {},
         };
       });
 
@@ -410,6 +440,7 @@ export default function AddProductsModal({
       displayName: `${partnerMallName} ${config.product.title}`,
       logoPlacement: { ...config.logoPlacement },
       previewUrl: null,
+      canvasState: { ...config.canvasState },
     };
     setProductConfigs((prev) => [...prev, newConfig]);
   };
@@ -443,11 +474,12 @@ export default function AddProductsModal({
   const handlePlacementDone = (
     key: string,
     placement: Record<string, LogoPlacement>,
-    previewUrl: string | null
+    previewUrl: string | null,
+    canvasState: Record<string, string>
   ) => {
     setProductConfigs((prev) =>
       prev.map((c) =>
-        c.key === key ? { ...c, logoPlacement: placement, previewUrl } : c
+        c.key === key ? { ...c, logoPlacement: placement, previewUrl, canvasState } : c
       )
     );
     setEditingKey(null);
@@ -467,7 +499,7 @@ export default function AddProductsModal({
       const productsData = productConfigs.map((config) => ({
         product_id: config.productId,
         logo_placements: config.logoPlacement,
-        canvas_state: {},
+        canvas_state: config.canvasState || {},
         preview_url: config.previewUrl || null,
         display_name: config.displayName || null,
         manufacturer_color_id: config.color?.id ?? null,
@@ -588,8 +620,8 @@ export default function AddProductsModal({
               logoUrl={logoUrl}
               productColor={editingConfig.color?.hex}
               initialPlacement={editingConfig.logoPlacement}
-              onDone={(placement, previewUrl) =>
-                handlePlacementDone(editingConfig.key, placement, previewUrl)
+              onDone={(placement, previewUrl, canvasState) =>
+                handlePlacementDone(editingConfig.key, placement, previewUrl, canvasState)
               }
               onCancel={() => setEditingKey(null)}
             />

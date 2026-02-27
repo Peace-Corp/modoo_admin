@@ -3,27 +3,69 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2 } from 'lucide-react';
+import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2, ChevronDown } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 type AdminRole = 'admin' | 'factory';
 
-const navItems: Array<{
+type NavLink = {
+  type: 'link';
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: AdminRole[];
-}> = [
-  { href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
-  { href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
-  { href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin'] },
-  { href: '/content', label: '콘텐츠 관리', icon: MessageSquare, roles: ['admin'] },
-  { href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
-  { href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
-  { href: '/cobuy', label: '공동구매 관리', icon: ShoppingBag, roles: ['admin'] },
-  { href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin'] },
-  { href: '/coupons', label: '쿠폰 관리', icon: Ticket, roles: ['admin'] },
-  { href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
+};
+
+type NavChild = {
+  href: string;
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+};
+
+type NavSection = {
+  type: 'section';
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  roles: AdminRole[];
+  children: NavChild[];
+};
+
+type NavItem = NavLink | NavSection;
+
+const navItems: NavItem[] = [
+  { type: 'link', href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
+  { type: 'link', href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
+  { type: 'link', href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin'] },
+  {
+    type: 'section',
+    label: '콘텐츠',
+    icon: MessageSquare,
+    roles: ['admin'],
+    children: [
+      { href: '/content/reviews', label: '리뷰' },
+      { href: '/content/examples', label: '제작 사례' },
+      { href: '/content/banners', label: '히어로 배너' },
+      { href: '/content/announcements', label: '공지' },
+      { href: '/content/faqs', label: 'FAQ' },
+      { href: '/content/inquiries', label: '문의' },
+      { href: '/content/chatbot', label: '챗봇 문의' },
+    ],
+  },
+  { type: 'link', href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
+  { type: 'link', href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
+  {
+    type: 'section',
+    label: '공동구매',
+    icon: ShoppingBag,
+    roles: ['admin'],
+    children: [
+      { href: '/cobuy/requests', label: '요청 관리' },
+      { href: '/cobuy/sessions', label: '세션 관리' },
+    ],
+  },
+  { type: 'link', href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin'] },
+  { type: 'link', href: '/coupons', label: '쿠폰 관리', icon: Ticket, roles: ['admin'] },
+  { type: 'link', href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -33,7 +75,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const isLoginRoute = pathname?.startsWith('/login') ?? false;
   const isPublicRoute = pathname?.startsWith('/shared/') ?? false;
+  const isEditorRoute = pathname?.startsWith('/editor') ?? false;
   const skipAuth = isLoginRoute || isPublicRoute;
+  const skipLayout = skipAuth || isEditorRoute;
 
   const { authStatus, user, logout } = useAdminAuth({ skip: skipAuth });
 
@@ -57,6 +101,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </div>
     );
+  }
+
+  // Full-screen layout for editor (auth checked, no sidebar)
+  if (isEditorRoute) {
+    return <>{children}</>;
   }
 
   const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
@@ -115,16 +164,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <nav className="p-3 space-y-1">
             {navItems
               .filter((item) => !role || item.roles.includes(role))
-              .map((item) => (
-              <SidebarLink
-                key={item.href}
-                href={item.href}
-                icon={item.icon}
-                label={item.label}
-                active={pathname === item.href || (pathname ?? '').startsWith(`${item.href}/`)}
-                onClick={() => setSidebarOpen(false)}
-              />
-            ))}
+              .map((item) =>
+                item.type === 'section' ? (
+                  <SidebarSection
+                    key={item.label}
+                    label={item.label}
+                    icon={item.icon}
+                    pathname={pathname}
+                    onLinkClick={() => setSidebarOpen(false)}
+                    children={item.children}
+                  />
+                ) : (
+                  <SidebarLink
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    active={pathname === item.href || (pathname ?? '').startsWith(`${item.href}/`)}
+                    onClick={() => setSidebarOpen(false)}
+                  />
+                )
+            )}
           </nav>
         </aside>
 
@@ -142,7 +202,7 @@ function SidebarLink({
   onClick,
 }: {
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -156,8 +216,56 @@ function SidebarLink({
         ${active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}
       `}
     >
-      <Icon className="w-5 h-5" />
+      {Icon && <Icon className="w-5 h-5" />}
       {label}
     </Link>
+  );
+}
+
+function SidebarSection({
+  label,
+  icon: Icon,
+  children,
+  pathname,
+  onLinkClick,
+}: {
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  children: NavChild[];
+  pathname: string | null;
+  onLinkClick: () => void;
+}) {
+  const hasActiveChild = children.some(
+    (child) => pathname === child.href || (pathname ?? '').startsWith(`${child.href}/`)
+  );
+  const [open, setOpen] = useState(hasActiveChild);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+          hasActiveChild ? 'text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+        }`}
+      >
+        {Icon && <Icon className="w-5 h-5" />}
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="ml-4 space-y-0.5 mt-0.5">
+          {children.map((child) => (
+            <SidebarLink
+              key={child.href}
+              href={child.href}
+              icon={child.icon}
+              label={child.label}
+              active={pathname === child.href || (pathname ?? '').startsWith(`${child.href}/`)}
+              onClick={onLinkClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import type { Factory, ManufacturerColor, Profile } from '@/types/types';
 import {
   AlertCircle,
@@ -12,6 +13,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react';
 
@@ -47,8 +49,10 @@ interface ManufacturerColorsEditorProps {
 }
 
 function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorProps) {
-  const [colors, setColors] = useState<ManufacturerColor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawColors = [], isLoading: loading, mutate: mutateColors } = useSWR<ManufacturerColor[]>(
+    `/api/admin/manufacturer-colors?manufacturerId=${factory.id}&includeInactive=true`
+  );
+  const colors = useMemo(() => sortColors(rawColors), [rawColors]);
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState(emptyColorForm);
@@ -58,32 +62,6 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
   const [editDraft, setEditDraft] = useState<typeof emptyColorForm | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchColors();
-  }, [factory.id]);
-
-  const fetchColors = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/admin/manufacturer-colors?manufacturerId=${factory.id}&includeInactive=true`
-      );
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '색상 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setColors(sortColors(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching colors:', err);
-      setColors([]);
-      setError(err instanceof Error ? err.message : '색상 목록을 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const createColor = async () => {
     if (!form.name.trim()) {
@@ -123,7 +101,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 
       const payload = await response.json();
       const created = payload?.data as ManufacturerColor;
-      setColors((prev) => sortColors([created, ...prev]));
+      mutateColors(sortColors([created, ...rawColors]), { revalidate: false });
       setForm(emptyColorForm);
     } catch (err) {
       console.error('Error creating color:', err);
@@ -150,7 +128,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 
       const payload = await response.json();
       const updated = payload?.data as ManufacturerColor;
-      setColors((prev) => sortColors(prev.map((c) => (c.id === updated.id ? updated : c))));
+      mutateColors(sortColors(rawColors.map((c) => (c.id === updated.id ? updated : c))), { revalidate: false });
       return updated;
     } catch (err) {
       console.error('Error updating color:', err);
@@ -178,7 +156,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
         throw new Error(payload?.error || '색상 삭제에 실패했습니다.');
       }
 
-      setColors((prev) => prev.filter((c) => c.id !== colorId));
+      mutateColors(rawColors.filter((c) => c.id !== colorId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting color:', err);
       setError(err instanceof Error ? err.message : '색상 삭제에 실패했습니다.');
@@ -240,7 +218,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <button
           onClick={onBack}
           className="inline-flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -249,8 +227,8 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
           뒤로
         </button>
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{factory.name} - 색상 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {colors.length}개의 색상</p>
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900">{factory.name} - 색상 관리</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">총 {colors.length}개의 색상</p>
         </div>
       </div>
 
@@ -261,23 +239,23 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
         </div>
       )}
 
-      <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 sm:p-4 shadow-sm space-y-3 sm:space-y-4">
         <div className="flex items-center gap-2">
           <Palette className="w-5 h-5 text-gray-600" />
           <h3 className="text-base font-semibold text-gray-900">새 색상 등록</h3>
         </div>
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <label className="space-y-2 text-sm text-gray-700">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             색상명 *
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="예: 네이비"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             HEX 코드 *
             <div className="flex gap-2">
               <input
@@ -291,31 +269,31 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
                 value={form.hex}
                 onChange={(e) => setForm((prev) => ({ ...prev, hex: e.target.value }))}
                 placeholder="#000000"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
               />
             </div>
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             색상 코드 *
             <input
               type="text"
               value={form.color_code}
               onChange={(e) => setForm((prev) => ({ ...prev, color_code: e.target.value }))}
               placeholder="예: NV001"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             라벨
             <input
               type="text"
               value={form.label}
               onChange={(e) => setForm((prev) => ({ ...prev, label: e.target.value }))}
               placeholder="표시용 라벨"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             정렬 순서
             <input
               type="number"
@@ -323,7 +301,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, sort_order: parseInt(e.target.value) || 0 }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
         </div>
@@ -349,7 +327,7 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
       </div>
 
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -553,11 +531,68 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
           </table>
         </div>
 
+        <div className="md:hidden divide-y divide-gray-200">
+          {colors.map((color) => {
+            const isEditing = editingId === color.id;
+            const isUpdating = updatingId === color.id;
+            const isDeleting = deletingId === color.id;
+            return (
+              <div key={color.id} className="p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  {isEditing ? (
+                    <input type="color" value={editDraft?.hex || '#000000'} onChange={(e) => setEditDraft((prev) => prev ? {...prev, hex: e.target.value} : prev)} className="w-7 h-7 border border-gray-300 rounded cursor-pointer" />
+                  ) : (
+                    <div className="w-7 h-7 rounded border border-gray-300 shrink-0" style={{backgroundColor: color.hex}} />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {isEditing ? (
+                      <input type="text" value={editDraft?.name || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, name: e.target.value} : prev)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
+                    ) : (
+                      <span className="text-xs font-medium text-gray-900">{color.name}</span>
+                    )}
+                  </div>
+                  <button onClick={() => handleToggleActive(color)} disabled={isUpdating} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 transition-colors ${color.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {color.is_active ? <><ToggleRight className="w-3 h-3" />활성</> : <><ToggleLeft className="w-3 h-3" />비활성</>}
+                  </button>
+                </div>
+                {isEditing ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={editDraft?.hex || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, hex: e.target.value} : prev)} placeholder="HEX" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                    <input type="text" value={editDraft?.color_code || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, color_code: e.target.value} : prev)} placeholder="코드" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                    <input type="text" value={editDraft?.label || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, label: e.target.value} : prev)} placeholder="라벨" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                    <input type="number" value={editDraft?.sort_order || 0} onChange={(e) => setEditDraft((prev) => prev ? {...prev, sort_order: parseInt(e.target.value) || 0} : prev)} className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                    <span className="font-mono">{color.hex}</span>
+                    <span>{color.color_code}</span>
+                    <span>{color.label || '-'}</span>
+                    <span>순서: {color.sort_order ?? 0}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 pt-0.5">
+                  {isEditing ? (
+                    <>
+                      <button onClick={() => handleEditSave(color.id)} disabled={isUpdating} className="px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"><Save className="w-3.5 h-3.5 inline mr-0.5" />{isUpdating ? '저장 중...' : '저장'}</button>
+                      <button onClick={handleEditCancel} disabled={isUpdating} className="px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50">취소</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => handleEditStart(color)} className="px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100 rounded transition-colors">편집</button>
+                      <button onClick={() => deleteColor(color.id)} disabled={isDeleting} className="px-2 py-1 text-[11px] text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50 ml-auto"><Trash2 className="w-3.5 h-3.5 inline mr-0.5" />{isDeleting ? '삭제 중...' : '삭제'}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         {colors.length === 0 && (
-          <div className="text-center py-12">
-            <Palette className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">등록된 색상이 없습니다</h3>
-            <p className="text-gray-500">새 색상을 등록해보세요.</p>
+          <div className="text-center py-8 sm:py-12">
+            <Palette className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2">등록된 색상이 없습니다</h3>
+            <p className="text-xs sm:text-sm text-gray-500">새 색상을 등록해보세요.</p>
           </div>
         )}
       </div>
@@ -566,10 +601,9 @@ function ManufacturerColorsEditor({ factory, onBack }: ManufacturerColorsEditorP
 }
 
 export default function FactoriesTab() {
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [factoryUsers, setFactoryUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const { data: rawFactories = [], isLoading: loading, mutate: mutateFactories } = useSWR<Factory[]>('/api/admin/factories');
+  const factories = useMemo(() => sortFactories(rawFactories), [rawFactories]);
+  const { data: factoryUsers = [], isLoading: loadingUsers, mutate: mutateFactoryUsers } = useSWR<Profile[]>('/api/admin/users?role=factory');
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState(emptyForm);
@@ -585,53 +619,15 @@ export default function FactoriesTab() {
   // Color management view state
   const [selectedFactoryForColors, setSelectedFactoryForColors] = useState<Factory | null>(null);
 
-  useEffect(() => {
-    fetchFactories();
-    fetchFactoryUsers();
-  }, []);
+  // Account creation state
+  const [creatingAccountForId, setCreatingAccountForId] = useState<string | null>(null);
+  const [accountForm, setAccountForm] = useState({ email: '', password: '' });
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const unassignedFactoryUsers = useMemo(
     () => factoryUsers.filter((user) => !user.manufacturer_id),
     [factoryUsers]
   );
-
-  const fetchFactories = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/factories');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(sortFactories(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching factories:', err);
-      setFactories([]);
-      setError(err instanceof Error ? err.message : '공장 목록을 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFactoryUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const response = await fetch('/api/admin/users?role=factory');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 사용자 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactoryUsers(payload?.data || []);
-    } catch (err) {
-      console.error('Error fetching factory users:', err);
-      setFactoryUsers([]);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
 
   const createFactory = async () => {
     if (!form.name.trim()) {
@@ -660,7 +656,7 @@ export default function FactoriesTab() {
 
       const payload = await response.json();
       const created = payload?.data as Factory;
-      setFactories((prev) => sortFactories([created, ...prev]));
+      mutateFactories(sortFactories([created, ...rawFactories]), { revalidate: false });
       setForm(emptyForm);
     } catch (err) {
       console.error('Error creating factory:', err);
@@ -687,8 +683,9 @@ export default function FactoriesTab() {
 
       const payload = await response.json();
       const updated = payload?.data as Factory;
-      setFactories((prev) =>
-        sortFactories(prev.map((factory) => (factory.id === updated.id ? updated : factory)))
+      mutateFactories(
+        sortFactories(rawFactories.map((factory) => (factory.id === updated.id ? updated : factory))),
+        { revalidate: false }
       );
       return updated;
     } catch (err) {
@@ -761,10 +758,11 @@ export default function FactoriesTab() {
       const updatedUser = payload?.data as Profile | undefined;
       const nextManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
-      setFactoryUsers((prev) =>
-        prev.map((user) =>
+      mutateFactoryUsers(
+        factoryUsers.map((user) =>
           user.id === userId ? { ...user, manufacturer_id: nextManufacturerId } : user
-        )
+        ),
+        { revalidate: false }
       );
       return updatedUser ?? null;
     } catch (err) {
@@ -783,6 +781,47 @@ export default function FactoriesTab() {
     const updated = await updateUserFactory(selectedUserId, factoryId);
     if (updated) {
       setSelectedUserByFactory((prev) => ({ ...prev, [factoryId]: '' }));
+    }
+  };
+
+  const createFactoryAccount = async (factoryId: string) => {
+    if (!accountForm.email.trim()) {
+      setError('이메일을 입력해주세요.');
+      return;
+    }
+    if (!accountForm.password || accountForm.password.length < 6) {
+      setError('비밀번호는 6자 이상이어야 합니다.');
+      return;
+    }
+
+    setCreatingAccount(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/admin/factory-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manufacturer_id: factoryId,
+          email: accountForm.email.trim(),
+          password: accountForm.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '계정 생성에 실패했습니다.');
+      }
+
+      const payload = await response.json();
+      const created = payload?.data as Profile;
+      mutateFactoryUsers([created, ...factoryUsers], { revalidate: false });
+      setAccountForm({ email: '', password: '' });
+      setCreatingAccountForId(null);
+    } catch (err) {
+      console.error('Error creating factory account:', err);
+      setError(err instanceof Error ? err.message : '계정 생성에 실패했습니다.');
+    } finally {
+      setCreatingAccount(false);
     }
   };
 
@@ -808,8 +847,8 @@ export default function FactoriesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">공장 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {factories.length}개의 공장</p>
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900">공장 관리</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">총 {factories.length}개의 공장</p>
         </div>
       </div>
 
@@ -820,31 +859,31 @@ export default function FactoriesTab() {
         </div>
       )}
 
-      <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-200/60 rounded-md p-3 sm:p-4 shadow-sm space-y-3 sm:space-y-4">
         <div className="flex items-center gap-2">
           <FactoryIcon className="w-5 h-5 text-gray-600" />
           <h3 className="text-base font-semibold text-gray-900">새 공장 등록</h3>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="space-y-2 text-sm text-gray-700">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             공장명
             <input
               type="text"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             이메일
             <input
               type="email"
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
-          <label className="space-y-2 text-sm text-gray-700">
+          <label className="space-y-2 text-xs sm:text-sm text-gray-700">
             전화번호
             <input
               type="text"
@@ -852,7 +891,7 @@ export default function FactoriesTab() {
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, phone_number: event.target.value }))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
             />
           </label>
         </div>
@@ -878,7 +917,7 @@ export default function FactoriesTab() {
       </div>
 
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -1032,6 +1071,18 @@ export default function FactoriesTab() {
                                 색상 관리
                               </button>
                               <button
+                                onClick={() => {
+                                  setCreatingAccountForId((prev) =>
+                                    prev === factory.id ? null : factory.id
+                                  );
+                                  setAccountForm({ email: '', password: '' });
+                                }}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 text-green-700 hover:bg-green-50 rounded-md transition-colors"
+                              >
+                                <UserPlus className="w-4 h-4" />
+                                계정 생성
+                              </button>
+                              <button
                                 onClick={() =>
                                   setExpandedFactoryId((prev) =>
                                     prev === factory.id ? null : factory.id
@@ -1046,6 +1097,70 @@ export default function FactoriesTab() {
                         </div>
                       </td>
                     </tr>
+                    {creatingAccountForId === factory.id && (
+                      <tr className="bg-green-50">
+                        <td colSpan={6} className="px-4 py-3">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <UserPlus className="w-4 h-4 text-green-700" />
+                              <span className="text-sm font-medium text-gray-700">
+                                공장 계정 생성
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-end gap-3">
+                              <label className="space-y-1 text-sm text-gray-700">
+                                이메일 *
+                                <input
+                                  type="email"
+                                  value={accountForm.email}
+                                  onChange={(e) =>
+                                    setAccountForm((prev) => ({
+                                      ...prev,
+                                      email: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="factory@example.com"
+                                  className="w-60 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </label>
+                              <label className="space-y-1 text-sm text-gray-700">
+                                비밀번호 *
+                                <input
+                                  type="text"
+                                  value={accountForm.password}
+                                  onChange={(e) =>
+                                    setAccountForm((prev) => ({
+                                      ...prev,
+                                      password: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="6자 이상"
+                                  className="w-48 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </label>
+                              <button
+                                onClick={() => createFactoryAccount(factory.id)}
+                                disabled={creatingAccount}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                              >
+                                <Plus className="w-4 h-4" />
+                                {creatingAccount ? '생성 중...' : '생성'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCreatingAccountForId(null);
+                                  setAccountForm({ email: '', password: '' });
+                                }}
+                                disabled={creatingAccount}
+                                className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {isExpanded && (
                       <tr className="bg-gray-50">
                         <td colSpan={6} className="px-4 py-3">
@@ -1143,11 +1258,101 @@ export default function FactoriesTab() {
           </table>
         </div>
 
+        <div className="md:hidden divide-y divide-gray-200">
+          {factories.map((factory) => {
+            const isEditing = editingId === factory.id;
+            const isUpdating = updatingFactoryId === factory.id;
+            const isExpanded = expandedFactoryId === factory.id;
+            const members = factoryUsers.filter((user) => user.manufacturer_id === factory.id);
+            return (
+              <Fragment key={factory.id}>
+                <div className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      {isEditing ? (
+                        <input type="text" value={editDraft?.name || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, name: e.target.value} : prev)} className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
+                      ) : (
+                        <div className="text-xs font-semibold text-gray-900">{factory.name}</div>
+                      )}
+                    </div>
+                    <button onClick={() => handleToggleActive(factory)} disabled={isUpdating} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 transition-colors ${factory.is_active ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}>
+                      {factory.is_active ? <><ToggleRight className="w-3 h-3" />활성</> : <><ToggleLeft className="w-3 h-3" />비활성</>}
+                    </button>
+                  </div>
+                  {isEditing ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="email" value={editDraft?.email || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, email: e.target.value} : prev)} placeholder="이메일" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                      <input type="text" value={editDraft?.phone_number || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, phone_number: e.target.value} : prev)} placeholder="전화번호" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                      <span>{factory.email || '-'}</span>
+                      <span>{factory.phone_number || '-'}</span>
+                      <button onClick={() => setExpandedFactoryId((prev) => prev === factory.id ? null : factory.id)} className="text-blue-600 hover:text-blue-700"><Users className="w-3 h-3 inline mr-0.5" />{members.length}명</button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                    {isEditing ? (
+                      <>
+                        <button onClick={() => handleEditSave(factory.id)} disabled={isUpdating} className="px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"><Save className="w-3.5 h-3.5 inline mr-0.5" />{isUpdating ? '저장 중...' : '저장'}</button>
+                        <button onClick={handleEditCancel} disabled={isUpdating} className="px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50">취소</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => handleEditStart(factory)} className="px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100 rounded transition-colors">편집</button>
+                        <button onClick={() => setSelectedFactoryForColors(factory)} className="px-2 py-1 text-[11px] text-purple-700 hover:bg-purple-50 rounded transition-colors"><Palette className="w-3.5 h-3.5 inline mr-0.5" />색상</button>
+                        <button onClick={() => { setCreatingAccountForId((prev) => prev === factory.id ? null : factory.id); setAccountForm({email: '', password: ''}); }} className="px-2 py-1 text-[11px] text-green-700 hover:bg-green-50 rounded transition-colors"><UserPlus className="w-3.5 h-3.5 inline mr-0.5" />계정</button>
+                        <button onClick={() => setExpandedFactoryId((prev) => prev === factory.id ? null : factory.id)} className="px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors">사용자</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {creatingAccountForId === factory.id && (
+                  <div className="bg-green-50 px-3 py-3 space-y-2">
+                    <div className="flex items-center gap-2"><UserPlus className="w-3.5 h-3.5 text-green-700" /><span className="text-xs font-medium text-gray-700">공장 계정 생성</span></div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <input type="email" value={accountForm.email} onChange={(e) => setAccountForm((prev) => ({...prev, email: e.target.value}))} placeholder="factory@example.com" className="px-2.5 py-1.5 border border-gray-300 rounded text-xs" />
+                      <input type="text" value={accountForm.password} onChange={(e) => setAccountForm((prev) => ({...prev, password: e.target.value}))} placeholder="비밀번호 (6자 이상)" className="px-2.5 py-1.5 border border-gray-300 rounded text-xs" />
+                      <div className="flex gap-2">
+                        <button onClick={() => createFactoryAccount(factory.id)} disabled={creatingAccount} className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"><Plus className="w-3.5 h-3.5" />{creatingAccount ? '생성 중...' : '생성'}</button>
+                        <button onClick={() => { setCreatingAccountForId(null); setAccountForm({email: '', password: ''}); }} disabled={creatingAccount} className="px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded transition-colors disabled:opacity-50">취소</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {isExpanded && (
+                  <div className="bg-gray-50 px-3 py-3 space-y-3">
+                    <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Users className="w-3.5 h-3.5 text-gray-500" /><span className="text-xs font-medium text-gray-700">공장 사용자</span></div>{loadingUsers && <span className="text-[11px] text-gray-500">불러오는 중...</span>}</div>
+                    <div className="space-y-1.5">
+                      {members.length === 0 ? <p className="text-xs text-gray-500">배정된 사용자가 없습니다.</p> : members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between rounded border border-gray-200 bg-white px-2.5 py-1.5">
+                          <div><p className="text-xs font-medium text-gray-900">{member.email || member.id}</p><p className="text-[11px] text-gray-500">{member.id.slice(0,8)}...</p></div>
+                          <button onClick={() => updateUserFactory(member.id, null)} disabled={updatingUserId === member.id} className="text-[11px] text-red-600 hover:text-red-700 disabled:opacity-50">{updatingUserId === member.id ? '해제 중...' : '해제'}</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded border border-gray-200 bg-white p-2.5 space-y-2">
+                      <p className="text-xs font-medium text-gray-700">공장 사용자 배정</p>
+                      <div className="flex gap-2">
+                        <select value={selectedUserByFactory[factory.id] || ''} onChange={(e) => setSelectedUserByFactory((prev) => ({...prev, [factory.id]: e.target.value}))} disabled={loadingUsers || unassignedFactoryUsers.length === 0} className="flex-1 min-w-0 px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white disabled:opacity-50">
+                          <option value="">{unassignedFactoryUsers.length === 0 ? '배정 가능한 사용자 없음' : '사용자 선택'}</option>
+                          {unassignedFactoryUsers.map((user) => <option key={user.id} value={user.id}>{user.email || user.id}</option>)}
+                        </select>
+                        <button onClick={() => handleAssignUser(factory.id)} disabled={!selectedUserByFactory[factory.id] || loadingUsers || updatingUserId !== null} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"><Plus className="w-3.5 h-3.5" />배정</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+
         {factories.length === 0 && (
-          <div className="text-center py-12">
-            <FactoryIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">등록된 공장이 없습니다</h3>
-            <p className="text-gray-500">새 공장을 등록해보세요.</p>
+          <div className="text-center py-8 sm:py-12">
+            <FactoryIcon className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2">등록된 공장이 없습니다</h3>
+            <p className="text-xs sm:text-sm text-gray-500">새 공장을 등록해보세요.</p>
           </div>
         )}
       </div>

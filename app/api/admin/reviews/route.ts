@@ -34,24 +34,61 @@ const requireAdmin = async () => {
   return { user };
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const authResult = await requireAdmin();
     if (authResult.error) return authResult.error;
 
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '10');
+    const searchQuery = url.searchParams.get('search') || '';
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
     const adminClient = createAdminClient();
-    const { data, error } = await adminClient
+
+    // Get total count with search filter
+    let countQuery = adminClient
+      .from('reviews')
+      .select('*', { count: 'exact', head: true });
+
+    if (searchQuery) {
+      countQuery = countQuery.or(`title.ilike.%${searchQuery}%,author_name.ilike.%${searchQuery}%`);
+    }
+
+    const { count, error: countError } = await countQuery;
+
+    if (countError) {
+      return NextResponse.json({ error: countError.message }, { status: 500 });
+    }
+
+    // Get paginated data with search filter
+    let dataQuery = adminClient
       .from('reviews')
       .select(
         'id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)'
       )
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (searchQuery) {
+      dataQuery = dataQuery.or(`title.ilike.%${searchQuery}%,author_name.ilike.%${searchQuery}%`);
+    }
+
+    const { data, error } = await dataQuery;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    return NextResponse.json({
+      data: data || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit)
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : '리뷰 데이터를 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });

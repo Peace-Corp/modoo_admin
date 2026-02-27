@@ -1,42 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import type { InquiryRecord, InquiryStatus, InquiryReplyRecord } from './types';
-import { formatDate, getStatusStyle, getStatusLabel } from './utils';
+import { formatDate, getStatusStyle, getStatusLabel, isToday } from './utils';
 
 export default function InquiriesSection() {
-  const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: inquiries = [], error: swrError, isLoading: loading, mutate } = useSWR<InquiryRecord[]>('/api/admin/inquiries');
   const [error, setError] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchInquiries();
-  }, []);
-
-  const fetchInquiries = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/inquiries');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '문의 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setInquiries(payload?.data || []);
-    } catch (err) {
-      console.error('Error fetching inquiries:', err);
-      setInquiries([]);
-      setError(err instanceof Error ? err.message : '문의 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [adminFilter, setAdminFilter] = useState<'all' | 'real' | 'admin'>('real');
 
   const handleDeleteInquiry = async (inquiryId: string) => {
     const confirmed = window.confirm('이 문의를 삭제할까요? 관련된 답변도 함께 삭제됩니다.');
@@ -53,7 +30,7 @@ export default function InquiriesSection() {
         throw new Error(payload?.error || '문의 삭제에 실패했습니다.');
       }
 
-      setInquiries((prev) => prev.filter((inquiry) => inquiry.id !== inquiryId));
+      mutate(inquiries.filter((inquiry) => inquiry.id !== inquiryId), { revalidate: false });
       if (expandedInquiryId === inquiryId) {
         setExpandedInquiryId(null);
       }
@@ -87,12 +64,13 @@ export default function InquiriesSection() {
       const payload = await response.json();
       const reply = payload?.data as InquiryReplyRecord;
 
-      setInquiries((prev) =>
-        prev.map((inquiry) => {
+      mutate(
+        inquiries.map((inquiry) => {
           if (inquiry.id !== inquiryId) return inquiry;
           const replies = inquiry.inquiry_replies ? [...inquiry.inquiry_replies, reply] : [reply];
           return { ...inquiry, inquiry_replies: replies };
-        })
+        }),
+        { revalidate: false }
       );
 
       setReplyDrafts((prev) => ({ ...prev, [inquiryId]: '' }));
@@ -125,10 +103,11 @@ export default function InquiriesSection() {
       const payload = await response.json();
       const updated = payload?.data as { id: string; status: InquiryStatus };
 
-      setInquiries((prev) =>
-        prev.map((inquiry) =>
+      mutate(
+        inquiries.map((inquiry) =>
           inquiry.id === updated.id ? { ...inquiry, status: updated.status } : inquiry
-        )
+        ),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error updating inquiry status:', err);
@@ -138,24 +117,50 @@ export default function InquiriesSection() {
     }
   };
 
+  const filteredInquiries = inquiries.filter((inquiry) => {
+    if (adminFilter === 'real') return !inquiry.is_admin;
+    if (adminFilter === 'admin') return inquiry.is_admin;
+    return true;
+  });
+
   return (
     <div className="space-y-4">
-      {error && (
+      <div className="flex gap-2">
+        {([
+          ['real', '실제 문의'],
+          ['admin', '자동 생성'],
+          ['all', '전체'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setAdminFilter(value)}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              adminFilter === value
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
-      ) : inquiries.length === 0 ? (
+      ) : filteredInquiries.length === 0 ? (
         <div className="bg-white border border-gray-200/60 rounded-md p-6 text-center text-gray-500">
           등록된 문의가 없습니다.
         </div>
       ) : (
         <div className="grid gap-4">
-          {inquiries.map((inquiry) => {
+          {filteredInquiries.map((inquiry) => {
             const productNames = Array.from(
               new Set(
                 (inquiry.inquiry_products || []).map(
@@ -178,10 +183,18 @@ export default function InquiriesSection() {
                   className="w-full px-4 py-3 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
                 >
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
+                      {isToday(inquiry.created_at) && (
+                        <span className="text-xs text-red-500 font-bold">NEW</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">{formatDate(inquiry.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-3">
+                    {isToday(inquiry.created_at) && (
+                      <span className="text-xs text-red-500 font-bold">NEW</span>
+                    )}
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
                         inquiry.status

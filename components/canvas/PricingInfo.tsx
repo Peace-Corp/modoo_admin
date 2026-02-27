@@ -10,9 +10,10 @@ interface PricingInfoProps {
   basePrice: number;
   sides: ProductSide[];
   quantity?: number;
+  compact?: boolean;
 }
 
-export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingInfoProps) {
+export default function PricingInfo({ basePrice, sides, quantity = 1, compact = false }: PricingInfoProps) {
   const { canvasMap, canvasVersion } = useCanvasStore();
   const [pricingData, setPricingData] = useState<PricingSummary | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -71,7 +72,7 @@ export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingI
       <div className="flex flex-col gap-2">
         {/* Price Breakdown Header */}
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">가격 상세</p>
+          <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-gray-700`}>가격 상세</p>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
@@ -89,14 +90,14 @@ export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingI
         </div>
 
         {/* Base Price */}
-        <div className="flex justify-between text-sm">
+        <div className={`flex justify-between ${compact ? 'text-[11px]' : 'text-sm'}`}>
           <span className="text-gray-600">기본 가격</span>
           <span className="text-gray-900">{basePrice.toLocaleString('ko-KR')}원</span>
         </div>
 
         {/* Additional Prices per Side - Collapsed View */}
         {!isExpanded && sidesWithObjects.map((sidePricing: SidePricing) => (
-          <div key={sidePricing.sideId} className="flex justify-between text-sm">
+          <div key={sidePricing.sideId} className={`flex justify-between ${compact ? 'text-[11px]' : 'text-sm'}`}>
             <span className="text-gray-600">
               {sidePricing.sideName} 인쇄 ({sidePricing.objects.length}개)
             </span>
@@ -109,7 +110,7 @@ export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingI
         {/* Expanded View - Per Object Breakdown */}
         {isExpanded && sidesWithObjects.map((sidePricing: SidePricing) => (
           <div key={sidePricing.sideId} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
-            <div className="flex justify-between text-sm font-medium mb-2">
+            <div className={`flex justify-between ${compact ? 'text-[11px]' : 'text-sm'} font-medium mb-2`}>
               <span className="text-gray-700">{sidePricing.sideName}</span>
               <span className="text-gray-900">
                 +{sidePricing.totalPrice.toLocaleString('ko-KR')}원
@@ -149,7 +150,7 @@ export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingI
 
         {/* Print Cost Total */}
         {pricingData.totalAdditionalPrice > 0 && (
-          <div className="flex justify-between text-sm">
+          <div className={`flex justify-between ${compact ? 'text-[11px]' : 'text-sm'}`}>
             <span className="text-gray-600">
               인쇄비 합계 ({pricingData.totalObjectCount}개)
             </span>
@@ -160,7 +161,7 @@ export default function PricingInfo({ basePrice, sides, quantity = 1 }: PricingI
         )}
 
         {/* Total Price */}
-        <div className="flex justify-between text-base font-bold pt-1">
+        <div className={`flex justify-between ${compact ? 'text-xs' : 'text-base'} font-bold pt-1`}>
           <span className="text-gray-900">총 가격</span>
           <span className="text-black">{totalPrice.toLocaleString('ko-KR')}원</span>
         </div>

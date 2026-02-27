@@ -14,18 +14,19 @@ import LoadingModal from '@/components/LoadingModal';
 interface ToolbarProps {
   sides?: ProductSide[];
   handleExitEditMode?: () => void;
-  variant?: 'mobile' | 'desktop';
+  variant?: 'mobile' | 'desktop' | 'editor';
+  horizontal?: boolean;
   onSelectedObjectChange?: (obj: fabric.FabricObject | null) => void;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', onSelectedObjectChange }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', horizontal = false, onSelectedObjectChange }) => {
   const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedObject, setSelectedObject] = useState<fabric.FabricObject | null>(null);
   const [color, setColor] = useState("");
   const currentZoom = getZoomLevel();
-  const isDesktop = variant === 'desktop';
+  const isDesktop = variant === 'desktop' || variant === 'editor';
 
   // Loading modal state
   const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false);
@@ -473,6 +474,106 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   if (!isEditMode) return null;
 
   const currentSide = sides.find(side => side.id === activeSideId);
+
+  // Compact editor variant – dark vertical tool sidebar (Photoshop-like)
+  if (variant === 'editor') {
+    const editorBtnBase = 'p-1.5 rounded transition-colors flex items-center justify-center';
+    const editorBtnIdle = 'text-neutral-400 hover:text-white hover:bg-neutral-700';
+    const editorBtnDisabled = 'text-neutral-600 cursor-not-allowed';
+
+    return (
+      <>
+        <div className={horizontal
+          ? "h-9 bg-neutral-800 flex flex-row items-center px-2 gap-0.5 shrink-0 border-b border-neutral-700"
+          : "w-9 bg-neutral-800 flex flex-col items-center pt-2 pb-1 gap-0.5 shrink-0 border-r border-neutral-700"
+        }>
+          {/* Add tools */}
+          <button onClick={addText} className={`${editorBtnBase} ${editorBtnIdle}`} title="텍스트 추가">
+            <TextCursor className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={handleAddImageClick} className={`${editorBtnBase} ${editorBtnIdle}`} title="이미지 추가">
+            <FileImage className="w-3.5 h-3.5" />
+          </button>
+
+          <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
+
+          {/* Layer controls */}
+          <button onClick={bringToFront} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="맨 앞으로">
+            <ChevronsUp className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={bringForward} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="앞으로">
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={sendBackward} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="뒤로">
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={sendToBack} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="맨 뒤로">
+            <ChevronsDown className="w-3.5 h-3.5" />
+          </button>
+
+          <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
+
+          {/* Destructive */}
+          <button onClick={handleDeleteObject} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? 'text-red-400 hover:text-red-300 hover:bg-neutral-700' : editorBtnDisabled}`} title="삭제">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={handleResetCanvas} className={`${editorBtnBase} ${editorBtnIdle}`} title="초기화">
+            <RefreshCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Loading Modal for file conversion */}
+        <LoadingModal
+          isOpen={isLoadingModalOpen}
+          message={loadingMessage}
+          submessage={loadingSubmessage}
+        />
+
+        {/* Image Upload Modal */}
+        {isImagePopupOpen && (
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-200"
+            onClick={() => setIsImagePopupOpen(false)}
+          >
+            <div
+              className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="text-lg font-bold mb-4">이미지 파일 안내</h2>
+              <div className="space-y-3 text-sm text-gray-700">
+                <p><strong className="text-black">AI/PSD 파일</strong>을 권장드립니다.</p>
+                <p>다른 파일 형식(PNG, JPG 등)도 사용 가능하지만, 인쇄 품질 확인을 위해 연락드릴 수 있습니다.</p>
+              </div>
+              <label className="flex items-start gap-3 mt-5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={imageUploadAgreed}
+                  onChange={(e) => setImageUploadAgreed(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                />
+                <span className="text-sm text-gray-700">위 내용을 확인했습니다.</span>
+              </label>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setIsImagePopupOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleImagePopupConfirm}
+                  disabled={!imageUploadAgreed}
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   if (isDesktop) {
     return (

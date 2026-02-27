@@ -1,22 +1,19 @@
 'use client';
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { Factory, Profile, Coupon } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search } from 'lucide-react';
 
 export default function UsersTab() {
   const { user: currentUser } = useAuthStore();
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [updatingFactoryId, setUpdatingFactoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [loadingFactories, setLoadingFactories] = useState(false);
 
   // Coupon issuance states
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -33,51 +30,25 @@ export default function UsersTab() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchUsers();
+  // Build users SWR key
+  const usersKey = useMemo(() => {
+    if (!currentUser) return null;
+    let url = `/api/admin/users?role=${filterRole}`;
+    if (debouncedSearch) {
+      url += `&search=${encodeURIComponent(debouncedSearch)}`;
     }
-  }, [filterRole, debouncedSearch, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.role === 'admin') {
-      fetchFactories();
-    } else {
-      setFactories([]);
+    if (currentUser.role === 'factory' && currentUser.manufacturer_id) {
+      url += `&factoryId=${currentUser.manufacturer_id}`;
     }
-  }, [currentUser?.role]);
+    return url;
+  }, [currentUser, filterRole, debouncedSearch]);
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let url = `/api/admin/users?role=${filterRole}`;
-      if (debouncedSearch) {
-        url += `&search=${encodeURIComponent(debouncedSearch)}`;
-      }
-      if (currentUser?.role === 'factory' && currentUser.manufacturer_id) {
-        url += `&factoryId=${currentUser.manufacturer_id}`;
-      }
-      const response = await fetch(url, {
-        method: 'GET',
-      });
+  const { data: users = [], isLoading: loading, mutate: mutateUsers } = useSWR<Profile[]>(usersKey);
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || '사용자 목록을 불러오는데 실패했습니다.');
-      }
-
-      const payload = await response.json();
-      setUsers(payload?.data || []);
-      setSelectedUserIds(new Set());
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setUsers([]);
-      setError(error instanceof Error ? error.message : '사용자 목록을 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Factories: only fetch for admin
+  const { data: factories = [], isLoading: loadingFactories } = useSWR<Factory[]>(
+    currentUser?.role === 'admin' ? '/api/admin/factories' : null
+  );
 
   const updateUserRole = async (userId: string, newRole: 'customer' | 'admin' | 'factory') => {
     setUpdatingUserId(userId);
@@ -101,16 +72,15 @@ export default function UsersTab() {
       const updatedRole = updatedUser?.role ?? newRole;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? null;
 
-      setUsers((prev) => {
-        if (filterRole !== 'all' && updatedRole !== filterRole) {
-          return prev.filter((user) => user.id !== userId);
-        }
-        return prev.map((user) =>
+      if (filterRole !== 'all' && updatedRole !== filterRole) {
+        mutateUsers(users.filter((user) => user.id !== userId), { revalidate: false });
+      } else {
+        mutateUsers(users.map((user) =>
           user.id === userId
             ? { ...user, role: updatedRole, manufacturer_id: updatedManufacturerId }
             : user
-        );
-      });
+        ), { revalidate: false });
+      }
     } catch (error) {
       console.error('Error updating user role:', error);
       setError(error instanceof Error ? error.message : '사용자 권한 변경에 실패했습니다.');
@@ -140,34 +110,17 @@ export default function UsersTab() {
       const updatedUser = payload?.data as Profile | undefined;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
-      setUsers((prev) =>
-        prev.map((user) =>
+      mutateUsers(
+        users.map((user) =>
           user.id === userId ? { ...user, manufacturer_id: updatedManufacturerId } : user
-        )
+        ),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error updating factory assignment:', error);
       setError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
     } finally {
       setUpdatingFactoryId(null);
-    }
-  };
-
-  const fetchFactories = async () => {
-    setLoadingFactories(true);
-    try {
-      const response = await fetch('/api/admin/factories', { method: 'GET' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching factories:', error);
-      setFactories([]);
-    } finally {
-      setLoadingFactories(false);
     }
   };
 
@@ -316,16 +269,17 @@ export default function UsersTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">사용자 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {users.length}명의 사용자</p>
+          <h2 className="text-base font-semibold text-gray-900">사용자 관리</h2>
+          <p className="text-xs text-gray-500 mt-1">총 {users.length}명의 사용자</p>
         </div>
         {currentUser?.role === 'admin' && selectedUserIds.size > 0 && (
           <button
             onClick={() => openCouponModal(Array.from(selectedUserIds))}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            <Ticket className="w-4 h-4" />
-            쿠폰 발급하기 ({selectedUserIds.size}명)
+            <Ticket className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline text-xs">쿠폰 발급하기 ({selectedUserIds.size}명)</span>
+            <span className="sm:hidden text-xs">쿠폰 ({selectedUserIds.size})</span>
           </button>
         )}
       </div>
@@ -333,21 +287,21 @@ export default function UsersTab() {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-red-800">{error}</p>
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <p className="text-xs text-red-800">{error}</p>
         </div>
       )}
 
       {/* Success Message */}
       {successMessage && (
         <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center gap-3">
-          <Ticket className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <p className="text-green-800">{successMessage}</p>
+          <Ticket className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <p className="text-xs text-green-800">{successMessage}</p>
         </div>
       )}
 
       {/* Search & Filters */}
-      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm space-y-3">
+      <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm space-y-2 sm:space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -355,7 +309,7 @@ export default function UsersTab() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="이메일, 이름, 전화번호로 검색..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         {currentUser?.role === 'admin' && (
@@ -369,7 +323,7 @@ export default function UsersTab() {
               <button
                 key={filter.value}
                 onClick={() => setFilterRole(filter.value)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   filterRole === filter.value
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -384,7 +338,7 @@ export default function UsersTab() {
 
       {/* Users Table */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -444,18 +398,18 @@ export default function UsersTab() {
                   )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <UserIcon className="w-4 h-4 text-gray-400" />
-                      <div className="text-sm font-mono text-gray-600">{user.id.slice(0, 8)}...</div>
+                      <UserIcon className="w-3.5 h-3.5 text-gray-400" />
+                      <div className="text-xs font-mono text-gray-600">{user.id.slice(0, 8)}...</div>
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{user.email}</div>
+                    <div className="text-xs font-medium text-gray-900">{user.email}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.name || '-'}</div>
+                    <div className="text-xs text-gray-900">{user.name || '-'}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
+                    <div className="text-xs text-gray-900">
                       {user.phone_number || '-'}
                     </div>
                   </td>
@@ -496,14 +450,14 @@ export default function UsersTab() {
                         )}
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">
+                      <span className="text-xs text-gray-500">
                         {getFactoryName(user.manufacturer_id)}
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-900">
-                      <Calendar className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-1 text-xs text-gray-900">
+                      <Calendar className="w-3.5 h-3.5 text-gray-400" />
                       {formatDate(user.created_at)}
                     </div>
                   </td>
@@ -547,11 +501,97 @@ export default function UsersTab() {
           </table>
         </div>
 
+        {/* Mobile Card List */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {currentUser?.role === 'admin' && users.length > 0 && (
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+              <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+              <span className="text-[11px] text-gray-600">전체 선택</span>
+            </div>
+          )}
+          {users.map((user) => (
+            <div key={user.id} className="p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                {currentUser?.role === 'admin' && (
+                  <input
+                    type="checkbox"
+                    checked={selectedUserIds.has(user.id)}
+                    onChange={() => toggleSelectUser(user.id)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5 shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-gray-900 truncate">{user.email}</div>
+                      <div className="text-[11px] text-gray-500">{user.name || '-'}</div>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${getRoleColor(user.role)}`}>
+                      {user.role === 'admin' && <Shield className="w-3 h-3" />}
+                      {user.role === 'factory' && <FactoryIcon className="w-3 h-3" />}
+                      {getRoleLabel(user.role)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500 mt-1">
+                    <span className="flex items-center gap-1"><UserIcon className="w-3 h-3 text-gray-400" />{user.id.slice(0, 8)}...</span>
+                    <span>{user.phone_number || '-'}</span>
+                    <span>{getFactoryName(user.manufacturer_id)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-0.5">
+                    <Calendar className="w-3 h-3" />
+                    {formatDate(user.created_at)}
+                  </div>
+                  {currentUser?.role === 'admin' && (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <select
+                        value={user.role}
+                        onChange={(e) => updateUserRole(user.id, e.target.value as 'customer' | 'admin' | 'factory')}
+                        disabled={updatingUserId === user.id}
+                        className="px-2 py-1 text-[11px] border border-gray-300 rounded bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        <option value="customer">일반 사용자</option>
+                        <option value="factory">공장</option>
+                        <option value="admin">관리자</option>
+                      </select>
+                      {user.role === 'factory' && (
+                        <select
+                          value={user.manufacturer_id || ''}
+                          onChange={(e) => updateUserFactory(user.id, e.target.value || null)}
+                          disabled={loadingFactories || updatingFactoryId === user.id}
+                          className="px-2 py-1 text-[11px] border border-gray-300 rounded bg-white text-gray-700 disabled:opacity-50"
+                        >
+                          <option value="">공장 선택</option>
+                          {factories.map((factory) => (
+                            <option key={factory.id} value={factory.id}>{factory.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        onClick={() => openCouponModal([user.id])}
+                        className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors ml-auto"
+                        title="쿠폰 발급"
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                      </button>
+                      {(updatingUserId === user.id || updatingFactoryId === user.id) && (
+                        <div className="flex items-center gap-1 text-[11px] text-gray-500">
+                          <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                          처리중...
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {users.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">사용자가 없습니다</h3>
-            <p className="text-gray-500">등록된 사용자가 없습니다.</p>
+          <div className="text-center py-8 sm:py-12">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">사용자가 없습니다</h3>
+            <p className="text-xs text-gray-500">등록된 사용자가 없습니다.</p>
           </div>
         )}
       </div>
@@ -562,8 +602,8 @@ export default function UsersTab() {
           <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b">
               <div>
-                <h3 className="text-lg font-semibold">쿠폰 발급</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <h3 className="text-sm font-semibold">쿠폰 발급</h3>
+                <p className="text-xs text-gray-500 mt-1">
                   {couponTargetUserIds.length}명의 사용자에게 쿠폰을 발급합니다.
                 </p>
               </div>
@@ -582,8 +622,8 @@ export default function UsersTab() {
                 </div>
               ) : activeCoupons.length === 0 ? (
                 <div className="text-center py-8">
-                  <Ticket className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">발급 가능한 활성 쿠폰이 없습니다.</p>
+                  <Ticket className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <p className="text-xs text-gray-500">발급 가능한 활성 쿠폰이 없습니다.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -606,7 +646,7 @@ export default function UsersTab() {
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-gray-900">
+                          <span className="font-mono text-xs font-medium text-gray-900">
                             {coupon.code}
                           </span>
                           <span className="text-xs text-blue-600 font-medium">
@@ -616,7 +656,7 @@ export default function UsersTab() {
                           </span>
                         </div>
                         {coupon.display_name && (
-                          <p className="text-sm text-gray-500 truncate">{coupon.display_name}</p>
+                          <p className="text-xs text-gray-500 truncate">{coupon.display_name}</p>
                         )}
                         {coupon.max_uses && (
                           <p className="text-xs text-gray-400">
@@ -633,14 +673,14 @@ export default function UsersTab() {
             <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
               <button
                 onClick={() => setShowCouponModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                className="px-3 py-1.5 text-xs text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleIssueCoupon}
                 disabled={!selectedCouponId || issuingCoupon}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 {issuingCoupon ? '발급 중...' : '발급하기'}
               </button>

@@ -8,6 +8,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       savedDesignId,
+      cobuyImageUrls,
+      productId,
+      pricePerItem,
       userId,
       title,
       description,
@@ -20,10 +23,18 @@ export async function POST(request: NextRequest) {
       customFields,
     } = body;
 
+    const isImageOnly = Array.isArray(cobuyImageUrls) && cobuyImageUrls.length > 0;
+
     // Validate required fields
-    if (!savedDesignId) {
+    if (!isImageOnly && !savedDesignId) {
       return NextResponse.json(
-        { error: 'savedDesignId is required' },
+        { error: 'savedDesignId or cobuyImageUrls is required' },
+        { status: 400 }
+      );
+    }
+    if (isImageOnly && !pricePerItem) {
+      return NextResponse.json(
+        { error: 'pricePerItem is required for image-only CoBuy' },
         { status: 400 }
       );
     }
@@ -60,52 +71,87 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch saved design
-    const { data: savedDesign, error: designError } = await supabase
-      .from('saved_designs')
-      .select('*')
-      .eq('id', savedDesignId)
-      .single();
+    let screenshotId: string;
 
-    if (designError || !savedDesign) {
-      return NextResponse.json(
-        { error: 'Saved design not found' },
-        { status: 404 }
-      );
-    }
+    if (isImageOnly) {
+      // Image-only mode: create a stub screenshot with the first image as preview
+      const screenshotData = {
+        user_id: userId,
+        product_id: productId || null,
+        title: title,
+        color_selections: {},
+        canvas_state: {},
+        preview_url: cobuyImageUrls[0],
+        price_per_item: pricePerItem,
+        image_urls: {},
+        text_svg_exports: null,
+        custom_fonts: [],
+      };
 
-    // Create design screenshot (snapshot) for the cobuy session
-    const screenshotData = {
-      user_id: userId,
-      product_id: savedDesign.product_id,
-      title: savedDesign.title,
-      color_selections: savedDesign.color_selections,
-      canvas_state: savedDesign.canvas_state,
-      preview_url: savedDesign.preview_url,
-      price_per_item: savedDesign.price_per_item,
-      image_urls: savedDesign.image_urls,
-      text_svg_exports: savedDesign.text_svg_exports,
-      custom_fonts: savedDesign.custom_fonts,
-    };
+      const { data: screenshot, error: screenshotError } = await supabase
+        .from('saved_design_screenshots')
+        .insert(screenshotData)
+        .select()
+        .single();
 
-    const { data: screenshot, error: screenshotError } = await supabase
-      .from('saved_design_screenshots')
-      .insert(screenshotData)
-      .select()
-      .single();
+      if (screenshotError) {
+        console.error('Error creating image screenshot:', screenshotError);
+        return NextResponse.json(
+          { error: 'Failed to create image snapshot' },
+          { status: 500 }
+        );
+      }
 
-    if (screenshotError) {
-      console.error('Error creating design screenshot:', screenshotError);
-      return NextResponse.json(
-        { error: 'Failed to create design snapshot' },
-        { status: 500 }
-      );
+      screenshotId = screenshot.id;
+    } else {
+      // Design mode: fetch saved design and create screenshot from it
+      const { data: savedDesign, error: designError } = await supabase
+        .from('saved_designs')
+        .select('*')
+        .eq('id', savedDesignId)
+        .single();
+
+      if (designError || !savedDesign) {
+        return NextResponse.json(
+          { error: 'Saved design not found' },
+          { status: 404 }
+        );
+      }
+
+      const screenshotData = {
+        user_id: userId,
+        product_id: savedDesign.product_id,
+        title: savedDesign.title,
+        color_selections: savedDesign.color_selections,
+        canvas_state: savedDesign.canvas_state,
+        preview_url: savedDesign.preview_url,
+        price_per_item: savedDesign.price_per_item,
+        image_urls: savedDesign.image_urls,
+        text_svg_exports: savedDesign.text_svg_exports,
+        custom_fonts: savedDesign.custom_fonts,
+      };
+
+      const { data: screenshot, error: screenshotError } = await supabase
+        .from('saved_design_screenshots')
+        .insert(screenshotData)
+        .select()
+        .single();
+
+      if (screenshotError) {
+        console.error('Error creating design screenshot:', screenshotError);
+        return NextResponse.json(
+          { error: 'Failed to create design snapshot' },
+          { status: 500 }
+        );
+      }
+
+      screenshotId = screenshot.id;
     }
 
     // Create cobuy session
-    const sessionData = {
+    const sessionData: Record<string, unknown> = {
       user_id: userId,
-      saved_design_screenshot_id: screenshot.id,
+      saved_design_screenshot_id: screenshotId,
       title,
       description: description || null,
       start_date: startDate,
@@ -122,6 +168,10 @@ export async function POST(request: NextRequest) {
       current_total_quantity: 0,
     };
 
+    if (isImageOnly) {
+      sessionData.cobuy_image_urls = cobuyImageUrls;
+    }
+
     const { data: session, error: sessionError } = await supabase
       .from('cobuy_sessions')
       .insert(sessionData)
@@ -130,6 +180,9 @@ export async function POST(request: NextRequest) {
         profiles:user_id (
           email,
           phone_number
+        ),
+        saved_design_screenshots (
+          preview_url
         )
       `)
       .single();

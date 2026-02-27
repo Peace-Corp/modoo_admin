@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     let query = adminClient
       .from('cobuy_sessions')
-      .select('*, profiles(email, phone_number)')
+      .select('*, profiles(email, phone_number), saved_design_screenshots(preview_url)')
       .order('created_at', { ascending: false });
 
     if (status !== 'all') {
@@ -69,6 +69,17 @@ export async function GET(request: Request) {
     const message = error instanceof Error ? error.message : '공동구매 데이터를 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+/**
+ * Extract storage path from a Supabase Storage public URL.
+ * URL format: https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
+ */
+function extractStoragePath(url: string, bucket: string): string | null {
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.slice(idx + marker.length);
 }
 
 export async function PATCH(request: Request) {
@@ -89,6 +100,32 @@ export async function PATCH(request: Request) {
     }
 
     const adminClient = createAdminClient();
+
+    // When cancelling, clean up uploaded images from storage
+    if (status === 'cancelled') {
+      const { data: session } = await adminClient
+        .from('cobuy_sessions')
+        .select('cobuy_image_urls')
+        .eq('id', sessionId)
+        .single();
+
+      if (session?.cobuy_image_urls?.length) {
+        const paths = session.cobuy_image_urls
+          .map((url: string) => extractStoragePath(url, 'products'))
+          .filter(Boolean) as string[];
+
+        if (paths.length > 0) {
+          const { error: deleteError } = await adminClient.storage
+            .from('products')
+            .remove(paths);
+
+          if (deleteError) {
+            console.error('Failed to delete cobuy images from storage:', deleteError);
+          }
+        }
+      }
+    }
+
     const { data, error } = await adminClient
       .from('cobuy_sessions')
       .update({
@@ -96,7 +133,7 @@ export async function PATCH(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', sessionId)
-      .select('*, profiles(email, phone_number)')
+      .select('*, profiles(email, phone_number), saved_design_screenshots(preview_url)')
       .single();
 
     if (error) {
@@ -106,6 +143,63 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '상태 업데이트에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get('sessionId');
+
+    if (!sessionId) {
+      return NextResponse.json({ error: '세션 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Fetch session to get image URLs before deletion
+    const { data: session } = await adminClient
+      .from('cobuy_sessions')
+      .select('cobuy_image_urls, saved_design_screenshot_id')
+      .eq('id', sessionId)
+      .single();
+
+    // Delete uploaded images from storage
+    if (session?.cobuy_image_urls?.length) {
+      const paths = session.cobuy_image_urls
+        .map((u: string) => extractStoragePath(u, 'products'))
+        .filter(Boolean) as string[];
+
+      if (paths.length > 0) {
+        await adminClient.storage.from('products').remove(paths);
+      }
+    }
+
+    // Delete the session (cascade should handle participants)
+    const { error } = await adminClient
+      .from('cobuy_sessions')
+      .delete()
+      .eq('id', sessionId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Clean up stub screenshot if it exists
+    if (session?.saved_design_screenshot_id) {
+      await adminClient
+        .from('saved_design_screenshots')
+        .delete()
+        .eq('id', session.saved_design_screenshot_id);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '세션 삭제에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

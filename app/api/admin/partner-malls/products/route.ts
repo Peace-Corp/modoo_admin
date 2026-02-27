@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     const colorHex = payload?.color_hex ?? null;
     const colorName = payload?.color_name ?? null;
     const colorCode = payload?.color_code ?? null;
+    const price = payload?.price ?? null;
 
     if (!partnerMallId || typeof partnerMallId !== 'string') {
       return NextResponse.json({ error: '파트너몰 ID가 필요합니다.' }, { status: 400 });
@@ -120,6 +121,7 @@ export async function POST(request: Request) {
         color_hex: colorHex,
         color_name: colorName,
         color_code: colorCode,
+        price: price,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -174,6 +176,7 @@ export async function PUT(request: Request) {
       color_hex?: string | null;
       color_name?: string | null;
       color_code?: string | null;
+      price?: number | null;
     }) => ({
       partner_mall_id: partnerMallId,
       product_id: p.product_id,
@@ -185,6 +188,7 @@ export async function PUT(request: Request) {
       color_hex: p.color_hex ?? null,
       color_name: p.color_name ?? null,
       color_code: p.color_code ?? null,
+      price: p.price ?? null,
       created_at: now,
       updated_at: now,
     }));
@@ -269,6 +273,13 @@ export async function PATCH(request: Request) {
 
     if (payload?.color_code !== undefined) {
       updateData.color_code = payload.color_code;
+    }
+
+    if (payload?.price !== undefined) {
+      if (payload.price !== null && typeof payload.price !== 'number') {
+        return NextResponse.json({ error: '가격 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.price = payload.price;
     }
 
     if (Object.keys(updateData).length === 1) {

@@ -1,5 +1,5 @@
 import CoBuyTab from '@/components/CoBuyTab';
 
-export default function CoBuyPage() {
+export default function CoBuySessionsPage() {
   return <CoBuyTab />;
 }

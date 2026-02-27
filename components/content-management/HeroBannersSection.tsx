@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent } from 'react';
+import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
@@ -13,38 +14,14 @@ import {
 } from './utils';
 
 export default function HeroBannersSection() {
-  const [heroBanners, setHeroBanners] = useState<HeroBannerRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawBanners, error: swrError, isLoading: loading, mutate } = useSWR<HeroBannerRecord[]>('/api/admin/hero-banners');
+  const heroBanners = rawBanners ? sortHeroBanners(rawBanners) : [];
   const [error, setError] = useState<string | null>(null);
   const [bannerForm, setBannerForm] = useState<HeroBannerFormState>(emptyHeroBannerForm);
   const [bannerFormOpen, setBannerFormOpen] = useState(false);
   const [bannerFormError, setBannerFormError] = useState<string | null>(null);
   const [savingBanner, setSavingBanner] = useState(false);
   const [uploadingBannerImage, setUploadingBannerImage] = useState(false);
-
-  useEffect(() => {
-    fetchHeroBanners();
-  }, []);
-
-  const fetchHeroBanners = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/hero-banners');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '히어로 배너 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setHeroBanners(sortHeroBanners(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching hero banners:', err);
-      setHeroBanners([]);
-      setError(err instanceof Error ? err.message : '히어로 배너 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleBannerFormToggle = () => {
     setBannerFormOpen((prev) => !prev);
@@ -159,12 +136,10 @@ export default function HeroBannersSection() {
       const responsePayload = await response.json();
       const savedBanner = responsePayload?.data as HeroBannerRecord;
 
-      setHeroBanners((prev) => {
-        const updated = bannerForm.id
-          ? prev.map((banner) => (banner.id === savedBanner.id ? savedBanner : banner))
-          : [savedBanner, ...prev];
-        return sortHeroBanners(updated);
-      });
+      const updated = bannerForm.id
+        ? (rawBanners || []).map((banner) => (banner.id === savedBanner.id ? savedBanner : banner))
+        : [savedBanner, ...(rawBanners || [])];
+      mutate(updated, { revalidate: false });
 
       setBannerForm(emptyHeroBannerForm);
       setBannerFormOpen(false);
@@ -191,7 +166,7 @@ export default function HeroBannersSection() {
         throw new Error(payload?.error || '히어로 배너 삭제에 실패했습니다.');
       }
 
-      setHeroBanners((prev) => prev.filter((banner) => banner.id !== bannerId));
+      mutate((rawBanners || []).filter((banner) => banner.id !== bannerId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting hero banner:', err);
       setError(err instanceof Error ? err.message : '히어로 배너 삭제에 실패했습니다.');
@@ -219,8 +194,9 @@ export default function HeroBannersSection() {
 
       const payload = await response.json();
       const updatedBanner = payload?.data as HeroBannerRecord;
-      setHeroBanners((prev) =>
-        sortHeroBanners(prev.map((item) => (item.id === updatedBanner.id ? updatedBanner : item)))
+      mutate(
+        (rawBanners || []).map((item) => (item.id === updatedBanner.id ? updatedBanner : item)),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error toggling hero banner:', err);
@@ -230,9 +206,9 @@ export default function HeroBannersSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

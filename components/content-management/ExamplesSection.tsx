@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ChangeEvent } from 'react';
+import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
@@ -13,9 +14,9 @@ import {
 } from './utils';
 
 export default function ExamplesSection() {
-  const [productionExamples, setProductionExamples] = useState<ProductionExampleRecord[]>([]);
+  const { data: rawExamples, error: swrError, isLoading: loading, mutate } = useSWR<ProductionExampleRecord[]>('/api/admin/production-examples');
+  const productionExamples = rawExamples ? sortExamples(rawExamples) : [];
   const [products, setProducts] = useState<ProductSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exampleForm, setExampleForm] = useState<ExampleFormState>(emptyExampleForm);
   const [exampleFormOpen, setExampleFormOpen] = useState(false);
@@ -24,29 +25,8 @@ export default function ExamplesSection() {
   const [uploadingExampleImage, setUploadingExampleImage] = useState(false);
 
   useEffect(() => {
-    fetchProductionExamples();
     fetchProducts();
   }, []);
-
-  const fetchProductionExamples = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/admin/production-examples');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '제작 사례 데이터를 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setProductionExamples(sortExamples(payload?.data || []));
-    } catch (err) {
-      console.error('Error fetching production examples:', err);
-      setProductionExamples([]);
-      setError(err instanceof Error ? err.message : '제작 사례 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -177,12 +157,10 @@ export default function ExamplesSection() {
       const responsePayload = await response.json();
       const savedExample = responsePayload?.data as ProductionExampleRecord;
 
-      setProductionExamples((prev) => {
-        const updated = exampleForm.id
-          ? prev.map((example) => (example.id === savedExample.id ? savedExample : example))
-          : [savedExample, ...prev];
-        return sortExamples(updated);
-      });
+      const updated = exampleForm.id
+        ? (rawExamples || []).map((example) => (example.id === savedExample.id ? savedExample : example))
+        : [savedExample, ...(rawExamples || [])];
+      mutate(updated, { revalidate: false });
 
       setExampleForm(emptyExampleForm);
       setExampleFormOpen(false);
@@ -209,7 +187,7 @@ export default function ExamplesSection() {
         throw new Error(payload?.error || '제작 사례 삭제에 실패했습니다.');
       }
 
-      setProductionExamples((prev) => prev.filter((example) => example.id !== exampleId));
+      mutate((rawExamples || []).filter((example) => example.id !== exampleId), { revalidate: false });
     } catch (err) {
       console.error('Error deleting production example:', err);
       setError(err instanceof Error ? err.message : '제작 사례 삭제에 실패했습니다.');
@@ -237,8 +215,9 @@ export default function ExamplesSection() {
 
       const payload = await response.json();
       const updatedExample = payload?.data as ProductionExampleRecord;
-      setProductionExamples((prev) =>
-        sortExamples(prev.map((item) => (item.id === updatedExample.id ? updatedExample : item)))
+      mutate(
+        (rawExamples || []).map((item) => (item.id === updatedExample.id ? updatedExample : item)),
+        { revalidate: false }
       );
     } catch (err) {
       console.error('Error toggling production example:', err);
@@ -248,9 +227,9 @@ export default function ExamplesSection() {
 
   return (
     <div className="space-y-4">
-      {error && (
+      {(swrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {error}
+          {swrError?.message || error}
         </div>
       )}
 

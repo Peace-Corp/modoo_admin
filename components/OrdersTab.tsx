@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock, Plus } from 'lucide-react';
+import { Package, Calendar, Clock, Plus, Factory as FactoryIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
+import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 
 // Extended order type with item count from API
 type OrderWithItemCount = Order & {
@@ -14,103 +16,56 @@ type OrderWithItemCount = Order & {
 
 export default function OrdersTab() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
-  const [orders, setOrders] = useState<OrderWithItemCount[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [showOrderCreator, setShowOrderCreator] = useState(false);
-  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
-  // Track if initial data has been fetched to avoid duplicate fetches
-  const initialFetchDone = useRef(false);
+  // Detect return from editor: /orders?resumeProductId=xxx&designId=yyy
+  const resumeProductId = searchParams.get('resumeProductId');
+  const resumeDesignId = searchParams.get('designId');
+
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [allocationOrder, setAllocationOrder] = useState<OrderWithItemCount | null>(null);
 
   const isFactoryUser = user?.role === 'factory';
 
-  const fetchOrders = useCallback(async (status: string = 'all') => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const params = new URLSearchParams();
-      if (user?.role === 'factory' && user.manufacturer_id) {
-        params.set('factoryId', user.manufacturer_id);
-      }
-      if (status !== 'all') {
-        params.set('status', status);
-      }
-      const url = `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || '주문 데이터를 불러오지 못했습니다.');
-      }
-
-      const payload = await response.json();
-      setOrders(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      setOrders([]);
-      setErrorMessage(error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
+  // Build orders SWR key based on user role and filter
+  const ordersKey = useMemo(() => {
+    if (!user) return null;
+    const params = new URLSearchParams();
+    if (user.role === 'factory' && user.manufacturer_id) {
+      params.set('factoryId', user.manufacturer_id);
     }
-  }, [user?.role, user?.manufacturer_id]);
-
-  const fetchFactories = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/factories');
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 목록을 불러오지 못했습니다.');
-      }
-      const payload = await response.json();
-      setFactories(payload?.data || []);
-    } catch (error) {
-      console.error('Error fetching factories:', error);
-      setFactories([]);
+    if (filterStatus !== 'all') {
+      params.set('status', filterStatus);
     }
-  }, []);
+    return `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
+  }, [user, filterStatus]);
 
-  // Initial data fetch - parallel loading of orders and factories
-  useEffect(() => {
-    if (!user || initialFetchDone.current) return;
-    initialFetchDone.current = true;
+  const { data: orders = [], isLoading: loading, mutate: mutateOrders } = useSWR<OrderWithItemCount[]>(ordersKey);
 
-    const loadData = async () => {
-      if (user.role === 'admin') {
-        // Admin: fetch orders and factories in parallel
-        await Promise.all([fetchOrders(filterStatus), fetchFactories()]);
-      } else if (user.role === 'factory') {
-        // Factory user: fetch orders and set factory info from user profile
-        await fetchOrders(filterStatus);
-        if (user.manufacturer_id) {
-          setFactories([
-            {
-              id: user.manufacturer_id,
-              name: user.manufacturer_name || user.email || '공장',
-              email: user.email || null,
-              phone_number: user.phone || null,
-              is_active: true,
-              created_at: user.created_at || new Date().toISOString(),
-              updated_at: user.created_at || new Date().toISOString(),
-            },
-          ]);
-        }
-      } else {
-        await fetchOrders(filterStatus);
-      }
-    };
+  // Factories: fetch for admin, compute from profile for factory user
+  const { data: fetchedFactories = [] } = useSWR<Factory[]>(
+    user?.role === 'admin' ? '/api/admin/factories' : null
+  );
 
-    loadData();
-  }, [user, fetchOrders, fetchFactories, filterStatus]);
-
-  // Re-fetch orders when filter changes (server-side filtering)
-  useEffect(() => {
-    if (!user || !initialFetchDone.current) return;
-    fetchOrders(filterStatus);
-  }, [filterStatus, user, fetchOrders]);
+  const factories = useMemo(() => {
+    if (user?.role === 'admin') return fetchedFactories;
+    if (user?.role === 'factory' && user.manufacturer_id) {
+      return [{
+        id: user.manufacturer_id,
+        name: user.manufacturer_name || user.email || '공장',
+        email: user.email || null,
+        phone_number: user.phone || null,
+        is_active: true,
+        created_at: user.created_at || new Date().toISOString(),
+        updated_at: user.created_at || new Date().toISOString(),
+      }];
+    }
+    return [];
+  }, [user, fetchedFactories]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -209,8 +164,9 @@ export default function OrdersTab() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '주문 상태 변경에 실패했습니다.');
       }
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, order_status: newStatus } : o))
+      mutateOrders(
+        orders.map((o) => (o.id === orderId ? { ...o, order_status: newStatus } : o)),
+        { revalidate: false }
       );
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -218,7 +174,7 @@ export default function OrdersTab() {
     } finally {
       setUpdatingStatusId(null);
     }
-  }, []);
+  }, [orders, mutateOrders]);
 
   if (loading) {
     return (
@@ -234,22 +190,23 @@ export default function OrdersTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">주문 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900">주문 관리</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">총 {filteredOrders.length}개의 주문</p>
         </div>
         {!isFactoryUser && (
           <button
             onClick={() => setShowOrderCreator(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-md hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>주문 생성</span>
+            <span className="hidden sm:inline">주문 생성</span>
+            <span className="sm:hidden">생성</span>
           </button>
         )}
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+      <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
@@ -262,7 +219,7 @@ export default function OrdersTab() {
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
                 filterStatus === filter.value
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -277,11 +234,11 @@ export default function OrdersTab() {
       {/* Orders List */}
       <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
         {errorMessage && (
-          <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">
+          <div className="px-4 py-3 text-xs sm:text-sm text-red-700 bg-red-50 border-b border-red-100">
             {errorMessage}
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               {isFactoryUser ? (
@@ -341,6 +298,9 @@ export default function OrdersTab() {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     배송 방법
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    작업
                   </th>
                 </tr>
               )}
@@ -466,6 +426,15 @@ export default function OrdersTab() {
                             : '픽업'}
                         </span>
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => setAllocationOrder(order)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                        >
+                          <FactoryIcon className="w-3 h-3" />
+                          공장배정
+                        </button>
+                      </td>
                     </>
                   )}
                 </tr>
@@ -474,11 +443,89 @@ export default function OrdersTab() {
           </table>
         </div>
 
+        {/* Mobile Card List */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {filteredOrders.map((order) => (
+            <div
+              key={order.id}
+              onClick={() => handleOrderClick(order.id)}
+              className="p-3 space-y-2 cursor-pointer hover:bg-gray-50 transition-colors"
+            >
+              {isFactoryUser ? (
+                /* Factory user mobile card */
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs font-mono text-blue-600 truncate">{order.id}</div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${getStatusColor(order.order_status)}`}>
+                      {order.order_status === 'pending' ? '대기중' : order.order_status === 'processing' ? '처리중' : order.order_status === 'completed' ? '완료' : order.order_status === 'cancelled' ? '취소' : order.order_status === 'refunded' ? '환불' : order.order_status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span>수량: {getOrderItemCount(order)}</span>
+                    <span className="font-medium text-gray-700">{order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />마감: {formatDateShort(order.deadline)}</span>
+                    <span>결제: {formatDateShort(order.factory_payment_date)}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getFactoryPaymentStatusColor(order.factory_payment_status)}`}>
+                      {getFactoryPaymentStatusLabel(order.factory_payment_status)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                /* Admin mobile card */
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-gray-900 truncate">{order.customer_name}</div>
+                      <div className="text-[11px] text-gray-400 truncate">{order.customer_email}</div>
+                    </div>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={order.order_status}
+                        onChange={(e) => handleStatusChange(order.id, e.target.value as any)}
+                        disabled={updatingStatusId === order.id}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getStatusColor(order.order_status)}`}
+                      >
+                        <option value="pending">대기중</option>
+                        <option value="processing">처리중</option>
+                        <option value="completed">완료</option>
+                        <option value="cancelled">취소</option>
+                        <option value="refunded">환불</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span className="font-medium text-gray-700">{order.total_amount.toLocaleString()}원</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{order.payment_status}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-gray-400">
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.created_at)}</span>
+                      <span className={getFactoryLabel(order.assigned_manufacturer_id) === '미배정' ? 'text-red-500' : ''}>{getFactoryLabel(order.assigned_manufacturer_id)}</span>
+                      <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAllocationOrder(order); }}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors shrink-0"
+                    >
+                      <FactoryIcon className="w-3 h-3" />
+                      공장배정
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
         {filteredOrders.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">주문이 없습니다</h3>
-            <p className="text-gray-500">새로운 주문이 들어오면 여기에 표시됩니다.</p>
+          <div className="text-center py-8 sm:py-12">
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 mb-2">주문이 없습니다</h3>
+            <p className="text-xs sm:text-sm text-gray-500">새로운 주문이 들어오면 여기에 표시됩니다.</p>
           </div>
         )}
       </div>
@@ -486,10 +533,33 @@ export default function OrdersTab() {
       {/* Order Creator Modal */}
       {showOrderCreator && (
         <AdminOrderCreator
-          onClose={() => setShowOrderCreator(false)}
+          onClose={() => {
+            setShowOrderCreator(false);
+            if (resumeProductId || resumeDesignId) {
+              router.replace('/orders');
+            }
+          }}
           onSuccess={() => {
             setShowOrderCreator(false);
-            fetchOrders(filterStatus);
+            if (resumeProductId || resumeDesignId) {
+              router.replace('/orders');
+            }
+            mutateOrders();
+          }}
+          initialProductId={resumeProductId ?? undefined}
+          initialDesignId={resumeDesignId ?? undefined}
+        />
+      )}
+
+      {/* Factory Allocation Modal */}
+      {allocationOrder && (
+        <FactoryAllocationModal
+          order={allocationOrder}
+          factories={factories}
+          onClose={() => setAllocationOrder(null)}
+          onSuccess={() => {
+            setAllocationOrder(null);
+            mutateOrders();
           }}
         />
       )}
