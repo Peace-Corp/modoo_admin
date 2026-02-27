@@ -326,6 +326,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
               lockScalingY: true,
               hasControls: false,
               hasBorders: false,
+              shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.3)', blur: 15, offsetX: 0, offsetY: 4 }),
               data: {
                 id: 'background-product-image',
                 layerId: layer.id
@@ -610,6 +611,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           lockScalingY: true, // Prevent scaling
           hasControls: false, // Remove all controls
           hasBorders: false, // Remove borders
+          shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.3)', blur: 15, offsetX: 0, offsetY: 4 }),
           data: { id: 'background-product-image' }, // Custom data to identify this as the background
         });
 

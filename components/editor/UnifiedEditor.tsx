@@ -8,6 +8,7 @@ import { DesignTemplate, CanvasState } from '@/types/types';
 import { useEditorMode, EditorMode } from './hooks/useEditorMode';
 import { useEditorData } from './hooks/useEditorData';
 import { useEditorSave } from './hooks/useEditorSave';
+import { serializeCanvasState } from '@/lib/canvasUtils';
 import EditorHeader from './EditorHeader';
 import EditorCanvas from './EditorCanvas';
 
@@ -35,6 +36,17 @@ import {
   sleep,
 } from '@/lib/downloadUtils';
 
+interface PartnerMallAddData {
+  partnerMallId: string;
+  partnerMallName: string;
+  logoUrl: string;
+  displayName: string;
+  manufacturerColorId: string | null;
+  colorHex: string | null;
+  colorName: string | null;
+  colorCode: string | null;
+}
+
 interface UnifiedEditorProps {
   productId: string;
   mode: EditorMode;
@@ -44,6 +56,7 @@ interface UnifiedEditorProps {
   designId?: string;
   returnUrl?: string;
   cobuyRequestId?: string;
+  partnerMallAdd?: boolean;
 }
 
 export default function UnifiedEditor({
@@ -55,6 +68,7 @@ export default function UnifiedEditor({
   designId,
   returnUrl,
   cobuyRequestId,
+  partnerMallAdd,
 }: UnifiedEditorProps) {
   const router = useRouter();
   const modeConfig = useEditorMode({ mode, returnUrl });
@@ -89,8 +103,91 @@ export default function UnifiedEditor({
   // Freeform sketch panel
   const [showSketchPanel, setShowSketchPanel] = useState(false);
 
+  // Partner mall add state
+  const [partnerMallAddData, setPartnerMallAddData] = useState<PartnerMallAddData | null>(null);
+
   // Snapshot for reverting on edit cancel (order mode)
   const editSnapshotRef = useRef<Record<string, object>>({});
+
+  // Load partner mall add data and place logo
+  useEffect(() => {
+    if (!partnerMallAdd) return;
+
+    const loadPartnerMallAddData = async () => {
+      const raw = sessionStorage.getItem('adminPartnerMallAddData');
+      if (!raw) return;
+
+      try {
+        const data: PartnerMallAddData = JSON.parse(raw);
+        setPartnerMallAddData(data);
+        sessionStorage.removeItem('adminPartnerMallAddData');
+
+        // Wait for canvases to be ready
+        const sides = editorData.product?.configuration || [];
+        const checkCanvasesReady = () => sides.every(side => canvasMap[side.id]);
+
+        let attempts = 0;
+        while (!checkCanvasesReady() && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        if (!checkCanvasesReady()) return;
+
+        // Set product color
+        if (data.colorHex) {
+          useCanvasStore.getState().setProductColor(data.colorHex);
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Place the mall logo on the first side canvas
+        if (data.logoUrl && sides.length > 0) {
+          const firstSide = sides[0];
+          const canvas = canvasMap[firstSide.id];
+          if (!canvas) return;
+
+          try {
+            const logoImg = await fabric.FabricImage.fromURL(data.logoUrl, { crossOrigin: 'anonymous' });
+            // @ts-expect-error - Custom property
+            const printAreaLeft = canvas.printAreaLeft || 0;
+            // @ts-expect-error - Custom property
+            const printAreaTop = canvas.printAreaTop || 0;
+            // @ts-expect-error - Custom property
+            const scaledPrintW = canvas.printAreaWidth || firstSide.printArea.width;
+            const canvasScale = scaledPrintW / firstSide.printArea.width;
+
+            const centerX = firstSide.printArea.width / 2;
+            const centerY = firstSide.printArea.height / 2;
+            const maxWidth = firstSide.printArea.width * 0.2;
+            const maxHeight = firstSide.printArea.height * 0.2;
+            const logoScale = Math.min(
+              maxWidth / (logoImg.width || 100),
+              maxHeight / (logoImg.height || 100)
+            );
+
+            logoImg.set({
+              left: printAreaLeft + centerX * canvasScale,
+              top: printAreaTop + centerY * canvasScale,
+              scaleX: logoScale * canvasScale,
+              scaleY: logoScale * canvasScale,
+              originX: 'center',
+              originY: 'center',
+              data: { id: 'partner-mall-logo' },
+            });
+
+            canvas.add(logoImg);
+            canvas.setActiveObject(logoImg);
+            canvas.renderAll();
+          } catch (err) {
+            console.error('Failed to load mall logo:', err);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load partner mall add data:', err);
+      }
+    };
+
+    loadPartnerMallAddData();
+  }, [partnerMallAdd, canvasMap, editorData.product]);
 
   // Sync editing state with canvas store
   useEffect(() => {
@@ -132,6 +229,13 @@ export default function UnifiedEditor({
     }
   }, [editorData.savedDesign, mode]);
 
+  // Pre-fill design title for partner mall add mode
+  useEffect(() => {
+    if (partnerMallAddData) {
+      setDesignTitle(partnerMallAddData.displayName);
+    }
+  }, [partnerMallAddData]);
+
   // Update template form when selectedTemplate changes
   useEffect(() => {
     const tmpl = editorData.selectedTemplate;
@@ -166,8 +270,76 @@ export default function UnifiedEditor({
     templateIsActive,
   });
 
+  // Save to partner mall (override for partnerMallAdd mode)
+  const handleSaveToPartnerMall = useCallback(async () => {
+    if (!partnerMallAddData || !editorData.product) return;
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const { canvasMap: currentCanvasMap, layerColors } = useCanvasStore.getState();
+      const sides = editorData.product.configuration || [];
+
+      // Serialize canvas state
+      const canvasState: Record<string, string> = {};
+      for (const side of sides) {
+        const canvas = currentCanvasMap[side.id];
+        if (canvas) {
+          canvasState[side.id] = serializeCanvasState(canvas, layerColors[side.id] || {});
+        }
+      }
+
+      // Generate preview
+      let previewUrl: string | null = null;
+      const firstCanvas = currentCanvasMap[sides[0]?.id];
+      if (firstCanvas) {
+        try {
+          firstCanvas.discardActiveObject();
+          firstCanvas.renderAll();
+          previewUrl = firstCanvas.toDataURL({ format: 'png', quality: 0.8, multiplier: 0.5 });
+        } catch (err) {
+          console.error('Error generating preview:', err);
+        }
+      }
+
+      const response = await fetch('/api/admin/partner-malls/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partner_mall_id: partnerMallAddData.partnerMallId,
+          product_id: productId,
+          logo_placements: {},
+          canvas_state: canvasState,
+          preview_url: previewUrl,
+          display_name: partnerMallAddData.displayName,
+          manufacturer_color_id: partnerMallAddData.manufacturerColorId,
+          color_hex: partnerMallAddData.colorHex,
+          color_name: partnerMallAddData.colorName,
+          color_code: partnerMallAddData.colorCode,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '제품 추가에 실패했습니다.');
+      }
+
+      router.push(returnUrl || `/partner_malls/${partnerMallAddData.partnerMallId}`);
+    } catch (err) {
+      console.error('Save to partner mall error:', err);
+      setSaveError(err instanceof Error ? err.message : '제품 추가에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [partnerMallAddData, editorData.product, productId, router, returnUrl]);
+
   // Handle save
   const handleSave = useCallback(async () => {
+    // Override save for partner mall add mode
+    if (partnerMallAddData) {
+      return handleSaveToPartnerMall();
+    }
+
     setIsSaving(true);
     setSaveError(null);
 
@@ -210,7 +382,7 @@ export default function UnifiedEditor({
     } else {
       setSaveError(result.error || '저장에 실패했습니다.');
     }
-  }, [executeSave, mode, router, cobuyRequestId, editorData]);
+  }, [executeSave, mode, router, cobuyRequestId, editorData, partnerMallAddData, handleSaveToPartnerMall]);
 
   // Handle edit toggle (order mode) — snapshot on enter, restore on cancel
   const handleToggleEdit = useCallback(() => {

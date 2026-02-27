@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import * as fabric from 'fabric';
-import { X, Loader2, ChevronLeft, Plus, Trash2, Edit2, RotateCcw, Check, Package } from 'lucide-react';
+import { X, Loader2, ChevronLeft, Plus, Trash2, Edit2, RotateCcw, Check, Package, ExternalLink } from 'lucide-react';
 import { Product, LogoPlacement, ProductSide, PartnerMallPreset } from '@/types/types';
 import ProductMultiSelect from './ProductMultiSelect';
 import ColorSelector, { SelectedColor } from './ColorSelector';
@@ -371,6 +372,23 @@ export default function AddProductsModal({
   const [step, setStep] = useState<'select' | 'configure'>('select');
   const [productConfigs, setProductConfigs] = useState<ProductConfig[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Open full editor for a product config
+  const handleOpenEditor = (config: ProductConfig) => {
+    sessionStorage.setItem('adminPartnerMallAddData', JSON.stringify({
+      partnerMallId,
+      partnerMallName,
+      logoUrl,
+      displayName: config.displayName,
+      manufacturerColorId: config.color?.id ?? null,
+      colorHex: config.color?.hex ?? null,
+      colorName: config.color?.name ?? null,
+      colorCode: config.color?.color_code ?? null,
+    }));
+
+    router.push(`/editor/${config.productId}?mode=design&partnerMallAdd=true&returnUrl=/partner_malls/${partnerMallId}`);
+  };
 
   // Handle moving from product selection to configuration
   const handleSelectionConfirm = useCallback(async () => {
@@ -690,6 +708,15 @@ export default function AddProductsModal({
                           onColorSelect={(color) => updateColor(config.key, color)}
                         />
                       </div>
+
+                      {/* Open in full editor */}
+                      <button
+                        onClick={() => handleOpenEditor(config)}
+                        className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        편집기에서 열기
+                      </button>
                     </div>
 
                     {/* Actions */}
