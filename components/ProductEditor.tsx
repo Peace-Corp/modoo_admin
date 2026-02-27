@@ -108,11 +108,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [togglingColorId, setTogglingColorId] = useState<string | null>(null);
   const [colorSearch, setColorSearch] = useState('');
 
-  // Layer-specific manufacturer selection (for layered products)
+  // Layer-specific manufacturer selection (for layered products - per side/layer index)
   // Key format: `${sideIndex}-${layerIndex}`, value: manufacturerId
   const [layerManufacturerIds, setLayerManufacturerIds] = useState<Record<string, string>>({});
   const [layerManufacturerColors, setLayerManufacturerColors] = useState<Record<string, ManufacturerColor[]>>({});
   const [layerColorsLoading, setLayerColorsLoading] = useState<Record<string, boolean>>({});
+
+  // Layer-ID-based manufacturer selection (for "사이즈 & 색상" tab - shared across sides)
+  // Key: layer.id, value: manufacturerId
+  const [layerIdManufacturerIds, setLayerIdManufacturerIds] = useState<Record<string, string>>({});
+  const [layerIdManufacturerColors, setLayerIdManufacturerColors] = useState<Record<string, ManufacturerColor[]>>({});
+  const [layerIdColorsLoading, setLayerIdColorsLoading] = useState<Record<string, boolean>>({});
+  const [layerIdColorSearch, setLayerIdColorSearch] = useState<Record<string, string>>({});
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -646,6 +653,108 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       ...side,
       layers,
     };
+    setSides(newSides);
+  };
+
+  // ── Layer-ID-based color management (shared across sides) ──
+
+  // Collect unique layers by ID across all sides
+  const uniqueLayers = (() => {
+    const map = new Map<string, { id: string; name: string }>();
+    for (const side of sides) {
+      if (!side.layers) continue;
+      for (const layer of side.layers) {
+        if (!map.has(layer.id)) {
+          map.set(layer.id, { id: layer.id, name: layer.name });
+        }
+      }
+    }
+    return Array.from(map.values());
+  })();
+
+  // Get current colorOptions for a layer ID (from the first occurrence)
+  const getLayerIdColorOptions = (layerId: string): Array<{ hex: string; colorCode: string }> => {
+    for (const side of sides) {
+      if (!side.layers) continue;
+      const layer = side.layers.find(l => l.id === layerId);
+      if (layer) return layer.colorOptions || [];
+    }
+    return [];
+  };
+
+  const fetchLayerIdManufacturerColors = async (layerId: string, manufacturerId: string) => {
+    setLayerIdColorsLoading(prev => ({ ...prev, [layerId]: true }));
+    try {
+      const response = await fetch(`/api/admin/manufacturer-colors?manufacturerId=${manufacturerId}`);
+      if (!response.ok) throw new Error('Failed to fetch colors');
+      const payload = await response.json();
+      setLayerIdManufacturerColors(prev => ({ ...prev, [layerId]: payload?.data || [] }));
+    } catch (error) {
+      console.error('Error fetching layer manufacturer colors:', error);
+    } finally {
+      setLayerIdColorsLoading(prev => ({ ...prev, [layerId]: false }));
+    }
+  };
+
+  const handleLayerIdManufacturerChange = (layerId: string, manufacturerId: string) => {
+    setLayerIdManufacturerIds(prev => ({ ...prev, [layerId]: manufacturerId }));
+    if (manufacturerId) {
+      void fetchLayerIdManufacturerColors(layerId, manufacturerId);
+    } else {
+      setLayerIdManufacturerColors(prev => ({ ...prev, [layerId]: [] }));
+    }
+  };
+
+  const isLayerIdColorSelected = (layerId: string, hex: string, colorCode: string) => {
+    const options = getLayerIdColorOptions(layerId);
+    return options.some(opt => opt.hex.toLowerCase() === hex.toLowerCase() && opt.colorCode === colorCode);
+  };
+
+  // Toggle a color for a layer ID — applies to ALL layers with that ID across all sides
+  const handleToggleLayerIdColor = (layerId: string, mColor: ManufacturerColor) => {
+    const newSides = sides.map(side => {
+      if (!side.layers) return side;
+      const hasLayer = side.layers.some(l => l.id === layerId);
+      if (!hasLayer) return side;
+      return {
+        ...side,
+        layers: side.layers.map(layer => {
+          if (layer.id !== layerId) return layer;
+          const colorOptions = [...(layer.colorOptions || [])];
+          const existingIndex = colorOptions.findIndex(
+            opt => opt.hex.toLowerCase() === mColor.hex.toLowerCase() && opt.colorCode === mColor.color_code
+          );
+          if (existingIndex >= 0) {
+            colorOptions.splice(existingIndex, 1);
+          } else {
+            colorOptions.push({ hex: mColor.hex, colorCode: mColor.color_code });
+          }
+          return { ...layer, colorOptions };
+        }),
+      };
+    });
+    setSides(newSides);
+  };
+
+  // Remove a color option from all layers with a given ID
+  const removeLayerIdColorOption = (layerId: string, hex: string, colorCode: string) => {
+    const newSides = sides.map(side => {
+      if (!side.layers) return side;
+      const hasLayer = side.layers.some(l => l.id === layerId);
+      if (!hasLayer) return side;
+      return {
+        ...side,
+        layers: side.layers.map(layer => {
+          if (layer.id !== layerId) return layer;
+          return {
+            ...layer,
+            colorOptions: (layer.colorOptions || []).filter(
+              opt => !(opt.hex.toLowerCase() === hex.toLowerCase() && opt.colorCode === colorCode)
+            ),
+          };
+        }),
+      };
+    });
     setSides(newSides);
   };
 
@@ -1319,7 +1428,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
           </div>
 
-          {/* Product Colors (Single Image Products Only) */}
+          {/* Product Colors (Single Image Products) */}
           {!hasLayeredItem && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
@@ -1441,6 +1550,130 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     </div>
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {/* Layer Colors (Layered Products) */}
+          {hasLayeredItem && (
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-900">레이어 색상 옵션</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  각 레이어별로 색상을 설정합니다. 같은 ID의 레이어는 색상을 공유합니다.
+                </p>
+              </div>
+
+              {uniqueLayers.length === 0 ? (
+                <p className="text-sm text-gray-500">레이어가 없습니다. 면 편집에서 레이어를 추가해주세요.</p>
+              ) : (
+                <div className="space-y-4">
+                  {uniqueLayers.map(uLayer => {
+                    const colorOptions = getLayerIdColorOptions(uLayer.id);
+                    const selectedManufacturerId = layerIdManufacturerIds[uLayer.id] || '';
+                    const availableColors = layerIdManufacturerColors[uLayer.id] || [];
+                    const isLoading = layerIdColorsLoading[uLayer.id] || false;
+                    const search = layerIdColorSearch[uLayer.id] || '';
+
+                    return (
+                      <div key={uLayer.id} className="border border-gray-200 rounded-md p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{uLayer.name}</span>
+                            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">ID: {uLayer.id}</span>
+                          </div>
+                          <span className="text-xs text-gray-500">{colorOptions.length}개 색상</span>
+                        </div>
+
+                        {/* Manufacturer Dropdown */}
+                        <select
+                          value={selectedManufacturerId}
+                          onChange={(e) => handleLayerIdManufacturerChange(uLayer.id, e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                          disabled={manufacturersLoading}
+                        >
+                          <option value="">-- 제조사 선택 --</option>
+                          {manufacturers.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+
+                        {/* Color Grid */}
+                        {selectedManufacturerId && (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={search}
+                              onChange={(e) => setLayerIdColorSearch(prev => ({ ...prev, [uLayer.id]: e.target.value }))}
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                              placeholder="색상 코드 검색..."
+                            />
+                            {isLoading ? (
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" /> 색상 로딩 중...
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-3 gap-1.5 max-h-40 overflow-y-auto">
+                                {[...availableColors]
+                                  .filter(c => !search || c.color_code.toLowerCase().includes(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase()))
+                                  .sort((a, b) => a.color_code.localeCompare(b.color_code))
+                                  .map(mColor => {
+                                    const selected = isLayerIdColorSelected(uLayer.id, mColor.hex, mColor.color_code);
+                                    return (
+                                      <button
+                                        key={mColor.id}
+                                        onClick={() => handleToggleLayerIdColor(uLayer.id, mColor)}
+                                        className={`flex items-center gap-1.5 p-1.5 border rounded text-left transition-all ${
+                                          selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                        title={`${mColor.name} (${mColor.color_code})`}
+                                      >
+                                        <div className="relative shrink-0">
+                                          <div className="w-4 h-4 rounded border border-gray-300" style={{ backgroundColor: mColor.hex }} />
+                                          {selected && (
+                                            <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                                              <Check className="w-2 h-2 text-white" />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-gray-700 truncate">{mColor.color_code}</span>
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Selected Colors */}
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-500">선택된 색상 ({colorOptions.length})</p>
+                          {colorOptions.length === 0 ? (
+                            <p className="text-xs text-gray-400">등록된 컬러 옵션이 없습니다.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {[...colorOptions].sort((a, b) => a.colorCode.localeCompare(b.colorCode)).map(option => (
+                                <div
+                                  key={`${uLayer.id}-${option.colorCode}-${option.hex}`}
+                                  className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-[10px]"
+                                >
+                                  <div className="w-3 h-3 rounded border border-gray-300" style={{ backgroundColor: option.hex }} />
+                                  <span className="text-gray-600">{option.colorCode || option.hex}</span>
+                                  <button
+                                    onClick={() => removeLayerIdColorOption(uLayer.id, option.hex, option.colorCode)}
+                                    className="p-0.5 text-gray-400 hover:text-red-600 rounded"
+                                  >
+                                    <X className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
