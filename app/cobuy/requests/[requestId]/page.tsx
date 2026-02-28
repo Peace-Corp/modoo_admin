@@ -233,6 +233,200 @@ function SketchSideCanvas({
 }
 
 // ============================================================================
+// Admin Design Preview (all sides)
+// ============================================================================
+
+// Must match UnifiedEditor / EditorCanvas canvas size
+const EDITOR_W = 400;
+const EDITOR_H = 500;
+const ADMIN_DISPLAY_SCALE = 0.55; // CSS scale-down for preview
+
+interface AdminDesignData {
+  canvas_state: Record<string, any>;
+  color_selections: Record<string, any> | null;
+}
+
+function AdminDesignPreview({
+  designId,
+  productSides,
+}: {
+  designId: string;
+  productSides?: ProductSideInfo[];
+}) {
+  const [design, setDesign] = useState<AdminDesignData | null>(null);
+
+  useEffect(() => {
+    const fetchDesign = async () => {
+      try {
+        const res = await fetch(`/api/admin/designs/${designId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        setDesign(json.data);
+      } catch { /* ignore */ }
+    };
+    fetchDesign();
+  }, [designId]);
+
+  if (!design) {
+    return (
+      <div className="flex justify-center py-6">
+        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-400" />
+      </div>
+    );
+  }
+
+  const sideIds = productSides?.map(s => s.id) ?? Object.keys(design.canvas_state || {});
+  if (sideIds.length === 0) return <p className="text-xs text-gray-400">디자인 데이터 없음</p>;
+
+  const productColor = (design.color_selections as any)?.productColor;
+
+  return (
+    <div className="flex gap-3 flex-wrap">
+      {sideIds.map(sideId => {
+        const raw = design.canvas_state?.[sideId];
+        const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
+        const sideLayerColors = parsed?.layerColors as Record<string, string> | undefined;
+        return (
+          <AdminDesignSideCanvas
+            key={sideId}
+            sideId={sideId}
+            side={productSides?.find(s => s.id === sideId)}
+            canvasState={parsed}
+            productColorHex={productColor}
+            layerColors={sideLayerColors}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AdminDesignSideCanvas({
+  sideId,
+  side,
+  canvasState,
+  productColorHex,
+  layerColors,
+}: {
+  sideId: string;
+  side?: ProductSideInfo;
+  canvasState?: any;
+  productColorHex?: string;
+  layerColors?: Record<string, string>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let disposed = false;
+
+    const init = async () => {
+      const fabric = await import('fabric');
+      if (disposed) return;
+
+      const canvas = new fabric.StaticCanvas(canvasRef.current!, {
+        width: EDITOR_W,
+        height: EDITOR_H,
+        backgroundColor: '#EBEBEB',
+      });
+      fabricRef.current = canvas;
+
+      try {
+        const hasLayers = side?.layers && side.layers.length > 0;
+        const zoom = side?.zoomScale || 1.0;
+
+        const applyColorFilter = (img: any, colorHex?: string) => {
+          const color = colorHex || productColorHex;
+          if (color && color !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
+            img.applyFilters();
+          }
+        };
+
+        if (hasLayers) {
+          const sorted = [...side!.layers!].sort((a, b) => a.zIndex - b.zIndex);
+          for (const layer of sorted) {
+            if (disposed) return;
+            try {
+              const img = await fabric.FabricImage.fromURL(layer.imageUrl, { crossOrigin: 'anonymous' });
+              if (disposed) { canvas.dispose(); return; }
+              const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
+              img.set({
+                scaleX: baseScale * zoom, scaleY: baseScale * zoom,
+                originX: 'center', originY: 'center',
+                left: EDITOR_W / 2, top: EDITOR_H / 2,
+              });
+              applyColorFilter(img, layerColors?.[layer.id]);
+              canvas.add(img);
+            } catch (e) { console.error('Failed to load layer', layer.id, e); }
+          }
+        } else if (side?.imageUrl) {
+          try {
+            const img = await fabric.FabricImage.fromURL(side.imageUrl, { crossOrigin: 'anonymous' });
+            if (disposed) { canvas.dispose(); return; }
+            const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
+            img.set({
+              scaleX: baseScale * zoom, scaleY: baseScale * zoom,
+              originX: 'center', originY: 'center',
+              left: EDITOR_W / 2, top: EDITOR_H / 2,
+            });
+            applyColorFilter(img);
+            canvas.add(img);
+          } catch (e) { console.error('Failed to load mockup for', sideId, e); }
+        }
+
+        // Load design objects — they were saved at EDITOR_W x EDITOR_H coordinates
+        if (canvasState?.objects?.length) {
+          const designObjects = canvasState.objects.filter(
+            (obj: any) => obj?.data?.id !== 'background-product-image'
+          );
+          if (designObjects.length > 0) {
+            const tempCanvas = new fabric.StaticCanvas(undefined, { width: EDITOR_W, height: EDITOR_H });
+            await tempCanvas.loadFromJSON({ version: canvasState.version || '6.0.0', objects: designObjects });
+            if (disposed) { tempCanvas.dispose(); canvas.dispose(); return; }
+            const objs = tempCanvas.getObjects();
+            for (const obj of objs) {
+              tempCanvas.remove(obj);
+              canvas.add(obj);
+            }
+            tempCanvas.dispose();
+          }
+        }
+
+        canvas.renderAll();
+      } catch (e) {
+        console.error('Error rendering admin design for side', sideId, e);
+      }
+    };
+
+    init();
+
+    return () => {
+      disposed = true;
+      if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
+      fabricRef.current = null;
+    };
+  }, [sideId, side, canvasState, productColorHex, layerColors]);
+
+  const displayW = Math.round(EDITOR_W * ADMIN_DISPLAY_SCALE);
+  const displayH = Math.round(EDITOR_H * ADMIN_DISPLAY_SCALE);
+
+  return (
+    <div className="flex flex-col items-center">
+      <div style={{ width: displayW, height: displayH, overflow: 'hidden' }}>
+        <canvas
+          ref={canvasRef}
+          className="rounded-lg"
+          style={{ transform: `scale(${ADMIN_DISPLAY_SCALE})`, transformOrigin: 'top left' }}
+        />
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
+    </div>
+  );
+}
+
+// ============================================================================
 // Request Detail Page
 // ============================================================================
 
@@ -424,12 +618,13 @@ export default function CoBuyRequestDetailPage() {
           </div>
 
           {/* Admin Design Preview */}
-          {request.admin_design_preview_url && (
+          {request.admin_design_id && (
             <div className="mb-3">
-              <p className="text-xs font-medium text-gray-500 mb-1">관리자 디자인</p>
-              <div className="w-48 h-48 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
-                <img src={request.admin_design_preview_url} alt="Admin design" className="w-full h-full object-contain" />
-              </div>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">관리자 디자인</p>
+              <AdminDesignPreview
+                designId={request.admin_design_id}
+                productSides={(request as any).product?.configuration}
+              />
             </div>
           )}
 

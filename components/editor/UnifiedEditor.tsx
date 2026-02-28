@@ -101,7 +101,7 @@ export default function UnifiedEditor({
   const [canvasStates, setCanvasStates] = useState<Record<string, CanvasState | string | null>>({});
 
   // Freeform sketch panel
-  const [showSketchPanel, setShowSketchPanel] = useState(false);
+  const [showSketchPanel, setShowSketchPanel] = useState(!!cobuyRequestId);
 
   // Partner mall add state
   const [partnerMallAddData, setPartnerMallAddData] = useState<PartnerMallAddData | null>(null);
