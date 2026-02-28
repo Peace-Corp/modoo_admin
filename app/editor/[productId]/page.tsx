@@ -17,6 +17,7 @@ function EditorPage() {
   const returnUrl = searchParams.get('returnUrl') || undefined;
   const cobuyRequestId = searchParams.get('cobuyRequestId') || undefined;
   const partnerMallAdd = searchParams.get('partnerMallAdd') === 'true';
+  const presetType = searchParams.get('presetType') || undefined;
 
   return (
     <UnifiedEditor
@@ -29,6 +30,7 @@ function EditorPage() {
       returnUrl={returnUrl}
       cobuyRequestId={cobuyRequestId}
       partnerMallAdd={partnerMallAdd}
+      presetType={presetType}
     />
   );
 }

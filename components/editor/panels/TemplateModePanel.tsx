@@ -1,12 +1,15 @@
 'use client';
 
 import { Plus, Trash2, Eye, EyeOff, Save } from 'lucide-react';
-import { DesignTemplate } from '@/types/types';
+import { DesignTemplate, Product, ProductSide } from '@/types/types';
+import { useCanvasStore } from '@/store/useCanvasStore';
 import TextStylePanel from '@/components/canvas/TextStylePanel';
+import LayerColorSelector from '@/components/canvas/LayerColorSelector';
 import { isCurvedText } from '@/lib/curvedText';
 import * as fabric from 'fabric';
 
 interface TemplateModePanelProps {
+  product: Product;
   templates: DesignTemplate[];
   selectedTemplate: DesignTemplate | null;
   onSelectTemplate: (template: DesignTemplate | null) => void;
@@ -27,6 +30,7 @@ interface TemplateModePanelProps {
 }
 
 export default function TemplateModePanel({
+  product,
   templates,
   selectedTemplate,
   onSelectTemplate,
@@ -45,6 +49,12 @@ export default function TemplateModePanel({
   isSaving,
   isCreating,
 }: TemplateModePanelProps) {
+  const { activeSideId } = useCanvasStore();
+
+  const sides: ProductSide[] = product.configuration || [];
+  const currentSide = sides.find((s) => s.id === activeSideId) || sides[0];
+  const hasLayers = currentSide?.layers && currentSide.layers.length > 0;
+
   const isTextSelected = selectedTextObject && (
     selectedTextObject.type === 'i-text' ||
     selectedTextObject.type === 'text' ||
@@ -64,6 +74,14 @@ export default function TemplateModePanel({
             variant="desktop"
             compact
           />
+        </div>
+      )}
+
+      {/* Layer Colors */}
+      {isEditingTemplate && hasLayers && currentSide?.layers && (
+        <div className="p-2.5 border-b">
+          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">레이어 색상</h3>
+          <LayerColorSelector sideId={activeSideId || ''} layers={currentSide.layers} compact />
         </div>
       )}
 

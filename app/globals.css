@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Freshman';
+  src: url('/fonts/Freshman.ttf') format('truetype');
+  font-display: swap;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

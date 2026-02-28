@@ -19,6 +19,7 @@ interface UseEditorSaveParams {
   templateDescription?: string;
   templateSortOrder?: number;
   templateIsActive?: boolean;
+  presetType?: string;
 }
 
 interface EditorSaveResult {
@@ -36,6 +37,7 @@ export function useEditorSave({
   templateDescription,
   templateSortOrder,
   templateIsActive,
+  presetType,
 }: UseEditorSaveParams): EditorSaveResult {
   const { canvasMap, productColor, layerColors } = useCanvasStore();
 
@@ -58,7 +60,7 @@ export function useEditorSave({
       console.error('Save error:', err);
       return { success: false, error: message };
     }
-  }, [mode, product, canvasMap, productColor, layerColors, orderItem, savedDesign, selectedTemplate, designTitle, templateTitle, templateDescription, templateSortOrder, templateIsActive]);
+  }, [mode, product, canvasMap, productColor, layerColors, orderItem, savedDesign, selectedTemplate, designTitle, templateTitle, templateDescription, templateSortOrder, templateIsActive, presetType]);
 
   async function saveDesignMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {
     // Serialize canvas state from all sides
@@ -198,7 +200,7 @@ export function useEditorSave({
       }
     }
 
-    const body = {
+    const body: Record<string, unknown> = {
       product_id: product!.id,
       title: templateTitle || '새 템플릿',
       description: templateDescription || null,
@@ -208,13 +210,16 @@ export function useEditorSave({
       sort_order: templateSortOrder ?? 0,
       is_active: templateIsActive ?? true,
     };
+    if (presetType) {
+      body.type = presetType;
+    }
 
     const isUpdate = !!selectedTemplate;
-    const url = isUpdate
-      ? `/api/admin/design-templates?id=${selectedTemplate!.id}`
-      : '/api/admin/design-templates';
+    if (isUpdate) {
+      body.id = selectedTemplate!.id;
+    }
 
-    const response = await fetch(url, {
+    const response = await fetch('/api/admin/design-templates', {
       method: isUpdate ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

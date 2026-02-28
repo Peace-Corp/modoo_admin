@@ -41,6 +41,7 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const productId = url.searchParams.get('productId');
+    const type = url.searchParams.get('type');
 
     const adminClient = createAdminClient();
     let query = adminClient
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
 
     if (productId) {
       query = query.eq('product_id', productId);
+    }
+    if (type) {
+      query = query.eq('type', type);
     }
 
     const { data, error } = await query;
@@ -79,6 +83,7 @@ export async function POST(request: Request) {
     const layerColors = payload?.layer_colors ?? {};
     const sortOrder = payload?.sort_order ?? 0;
     const isActive = payload?.is_active ?? true;
+    const type = payload?.type ?? 'template';
 
     if (!productId || typeof productId !== 'string') {
       return NextResponse.json({ error: '제품 ID가 필요합니다.' }, { status: 400 });
@@ -100,6 +105,7 @@ export async function POST(request: Request) {
         layer_colors: layerColors,
         sort_order: sortOrder,
         is_active: isActive,
+        type,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -159,6 +165,10 @@ export async function PATCH(request: Request) {
 
     if (payload?.is_active !== undefined) {
       updateData.is_active = payload.is_active;
+    }
+
+    if (typeof payload?.type === 'string') {
+      updateData.type = payload.type;
     }
 
     if (Object.keys(updateData).length === 1) {

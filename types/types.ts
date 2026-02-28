@@ -505,6 +505,7 @@ export interface CoBuyRequest {
   delivery_preferences: Record<string, unknown> | null;
   custom_fields: CoBuyCustomField[];
   is_public: boolean;
+  uploaded_image_paths: string[];
   promo_image_url: string | null;
   guest_name: string | null;
   guest_email: string | null;
@@ -546,6 +547,7 @@ export interface DesignTemplate {
   layer_colors: Record<string, string> | null;
   sort_order: number | null;
   is_active: boolean | null;
+  type: string; // 'template' | 'cobuy_preset'
   created_at: string;
   updated_at: string;
 }

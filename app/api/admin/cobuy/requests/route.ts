@@ -78,6 +78,27 @@ export async function PATCH(request: Request) {
     if (admin_design_preview_url !== undefined) updateData.admin_design_preview_url = admin_design_preview_url;
     if (confirmed_price !== undefined) updateData.confirmed_price = confirmed_price;
 
+    // On rejection, clean up uploaded images from storage
+    if (status === 'rejected') {
+      const { data: existing } = await admin
+        .from('cobuy_requests')
+        .select('uploaded_image_paths, freeform_preview_url')
+        .eq('id', id)
+        .single();
+
+      if (existing) {
+        const pathsToDelete: string[] = [...(existing.uploaded_image_paths || [])];
+        // Extract storage path from preview URL
+        if (existing.freeform_preview_url) {
+          const match = existing.freeform_preview_url.match(/user-designs\/(.+)$/);
+          if (match) pathsToDelete.push(match[1]);
+        }
+        if (pathsToDelete.length > 0) {
+          await admin.storage.from('user-designs').remove(pathsToDelete);
+        }
+      }
+    }
+
     const { data, error } = await admin
       .from('cobuy_requests')
       .update(updateData)

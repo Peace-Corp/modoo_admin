@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Pencil, Send, Copy, Check } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/types';
+import '@/lib/curvedText';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
   pending: '대기중',
@@ -58,11 +59,9 @@ interface ProductSideInfo {
   layers?: ProductLayerInfo[];
 }
 
-const SRC_W = 340;
-const SRC_H = 420;
-const PREVIEW_W = 220;
-const PREVIEW_H = 272;
-const SCALE_FACTOR = PREVIEW_W / SRC_W;
+const SRC_W = 400;
+const SRC_H = 500;
+const SKETCH_DISPLAY_SCALE = 0.55;
 
 function FreeformSketchPreview({
   canvasState,
@@ -123,8 +122,8 @@ function SketchSideCanvas({
       if (disposed) return;
 
       const canvas = new fabric.StaticCanvas(canvasRef.current!, {
-        width: PREVIEW_W,
-        height: PREVIEW_H,
+        width: SRC_W,
+        height: SRC_H,
         backgroundColor: '#EBEBEB',
       });
       fabricRef.current = canvas;
@@ -150,14 +149,14 @@ function SketchSideCanvas({
               if (disposed) { canvas.dispose(); return; }
               const imgW = img.width || 1;
               const imgH = img.height || 1;
-              const baseScale = Math.min(PREVIEW_W / imgW, PREVIEW_H / imgH);
+              const baseScale = Math.min(SRC_W / imgW, SRC_H / imgH);
               img.set({
                 scaleX: baseScale * zoom,
                 scaleY: baseScale * zoom,
                 originX: 'center',
                 originY: 'center',
-                left: PREVIEW_W / 2,
-                top: PREVIEW_H / 2,
+                left: SRC_W / 2,
+                top: SRC_H / 2,
               });
               applyColorFilter(img, layerColors?.[layer.id]);
               canvas.add(img);
@@ -171,14 +170,14 @@ function SketchSideCanvas({
             if (disposed) { canvas.dispose(); return; }
             const imgW = img.width || 1;
             const imgH = img.height || 1;
-            const baseScale = Math.min(PREVIEW_W / imgW, PREVIEW_H / imgH);
+            const baseScale = Math.min(SRC_W / imgW, SRC_H / imgH);
             img.set({
               scaleX: baseScale * zoom,
               scaleY: baseScale * zoom,
               originX: 'center',
               originY: 'center',
-              left: PREVIEW_W / 2,
-              top: PREVIEW_H / 2,
+              left: SRC_W / 2,
+              top: SRC_H / 2,
             });
             applyColorFilter(img);
             canvas.add(img);
@@ -197,12 +196,6 @@ function SketchSideCanvas({
             const objs = tempCanvas.getObjects();
             for (const obj of objs) {
               tempCanvas.remove(obj);
-              obj.set({
-                left: (obj.left ?? 0) * SCALE_FACTOR,
-                top: (obj.top ?? 0) * SCALE_FACTOR,
-                scaleX: (obj.scaleX || 1) * SCALE_FACTOR,
-                scaleY: (obj.scaleY || 1) * SCALE_FACTOR,
-              });
               canvas.add(obj);
             }
             tempCanvas.dispose();
@@ -226,7 +219,12 @@ function SketchSideCanvas({
 
   return (
     <div className="flex flex-col items-center">
-      <canvas ref={canvasRef} className="rounded-lg" />
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ width: SRC_W * SKETCH_DISPLAY_SCALE, height: SRC_H * SKETCH_DISPLAY_SCALE }}
+      >
+        <canvas ref={canvasRef} className="origin-top-left" style={{ transform: `scale(${SKETCH_DISPLAY_SCALE})` }} />
+      </div>
       <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
     </div>
   );
@@ -543,7 +541,10 @@ export default function CoBuyRequestDetailPage() {
           </div>
 
           {request.description && (
-            <p className="text-sm text-gray-600 mb-3">{request.description}</p>
+            <div className="mb-3">
+              <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">참고사항</p>
+              <p className="text-sm text-gray-600">{request.description}</p>
+            </div>
           )}
 
           {/* Selected Colors */}
