@@ -287,7 +287,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const saved = JSON.parse(canvasHistory[activeSideId][prevIdx]);
     if (saved.length > 0) {
       const objects = await fabric.util.enlivenObjects(saved);
-      objects.forEach((obj: fabric.FabricObject) => canvas.add(obj));
+      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
     }
     canvas.discardActiveObject();
     canvas.renderAll();
@@ -324,7 +324,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const saved = JSON.parse(history[nextIdx]);
     if (saved.length > 0) {
       const objects = await fabric.util.enlivenObjects(saved);
-      objects.forEach((obj: fabric.FabricObject) => canvas.add(obj));
+      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
     }
     canvas.discardActiveObject();
     canvas.renderAll();
