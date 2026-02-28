@@ -55,7 +55,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   const lastCanvasStateRef = useRef<string | null>(null);
   const lastCanvasSideRef = useRef<string | null>(null);
 
-  const { registerCanvas, unregisterCanvas, productColor: productColorFromStore, markImageLoaded, incrementCanvasVersion, initializeLayerColors, layerColors, resetZoom } = useCanvasStore();
+  const { registerCanvas, unregisterCanvas, productColor: productColorFromStore, markImageLoaded, incrementCanvasVersion, initializeLayerColors, layerColors, resetZoom, saveHistory } = useCanvasStore();
 
   // Loading state to track when all images are loaded
   const [isLoading, setIsLoading] = useState(true);
@@ -304,10 +304,8 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
             const imgWidth = img.width || 0;
             const imgHeight = img.height || 0;
 
-            // Get zoom scale from side configuration
-            const zoomScale = side.zoomScale || 1.0;
             const baseScale = Math.min(width / imgWidth, height / imgHeight);
-            const scale = baseScale * zoomScale;
+            const scale = baseScale;
 
             scaleRef.current = scale;
             img.set({
@@ -510,6 +508,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           // Set layersReady to trigger the color application effect
           setLayersReady(true);
           setIsLoading(false);
+          saveHistory(side.id); // Save initial (empty) history snapshot
           console.log(`[SingleSideCanvas] All layers loaded and rendered for side: ${side.id} ✓`);
         });
       }).catch((error) => {
@@ -587,12 +586,9 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         const imgWidth = img.width || 0;
         const imgHeight = img.height || 0;
 
-        // Get zoom scale from side configuration (default to 1.0 if not provided)
-        const zoomScale = side.zoomScale || 1.0;
-
         // for changing the scaling of the image based on the canvas's width and height
         const baseScale = Math.min(width / imgWidth, height / imgHeight);
-        const scale = baseScale * zoomScale;
+        const scale = baseScale;
         scaleRef.current = scale;
 
         img.set({
@@ -722,6 +718,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
           // Single image loaded and rendered - mark as ready
           setIsLoading(false);
+          saveHistory(side.id); // Save initial (empty) history snapshot
           console.log(`[SingleSideCanvas] Single image loaded and rendered for side: ${side.id} ✓`);
         });
       })
@@ -822,6 +819,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
 
         // Increment canvas version to trigger updates in components that depend on canvas state
         incrementCanvasVersion();
+        saveHistory(side.id);
 
         normalizeStacking(canvas, side);
     })
@@ -847,6 +845,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         }
         // Increment canvas version when object is modified (color, size, etc.)
         incrementCanvasVersion();
+        saveHistory(side.id);
     });
 
     // Increment canvas version when object is removed
@@ -857,6 +856,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         if (!obj || obj.excludeFromExport || (obj.data?.id === 'background-product-image')) return;
 
         incrementCanvasVersion();
+        saveHistory(side.id);
     });
 
     canvas.on('object:moving', (e) => {
@@ -1215,7 +1215,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         console.log(`[SingleSideCanvas] Custom fonts loaded and ready.`);
       }
 
-      suppressObjectAddedRef.current = renderFromCanvasStateOnly;
+      suppressObjectAddedRef.current = true; // Always suppress during state loading to avoid per-object history entries
       const objects = await fabric.util.enlivenObjects(parsedState.objects);
 
       objects.forEach((obj) => {
@@ -1263,6 +1263,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         });
       }
       suppressObjectAddedRef.current = false;
+      saveHistory(side.id); // Save initial snapshot after canvas state is loaded
 
       if (onCanvasReady) {
         onCanvasReady(canvas, side.id, scaleRef.current);

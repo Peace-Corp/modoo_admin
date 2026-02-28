@@ -102,11 +102,11 @@ export default function OrderModePanel({
       const canvasState = parseCanvasState(canvasStateRaw);
       if (!canvasState || !Array.isArray(canvasState.objects)) continue;
 
-      const realDimensions = side.realLifeDimensions;
       const printArea = side.printArea;
       let pixelToMmRatio = 1;
-      if (realDimensions && realDimensions.printAreaWidthMm > 0 && printArea.width > 0) {
-        pixelToMmRatio = realDimensions.printAreaWidthMm / printArea.width;
+      const productWidthMm = side.realLifeDimensions?.productWidthMm || 0;
+      if (productWidthMm > 0 && printArea.width > 0) {
+        pixelToMmRatio = productWidthMm / printArea.width;
       }
 
       for (const obj of canvasState.objects) {

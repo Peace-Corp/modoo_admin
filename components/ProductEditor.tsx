@@ -5,7 +5,7 @@ import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufactu
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
-import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2, Layers } from 'lucide-react';
+import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
 import PrintAreaEditor from './PrintAreaEditor';
 
@@ -24,8 +24,6 @@ const buildPrintArea = (printArea?: ProductSide['printArea']) => ({
 
 const buildRealLifeDimensions = (dimensions?: ProductSide['realLifeDimensions']) => ({
   productWidthMm: Math.max(0, Math.round(dimensions?.productWidthMm ?? 0)),
-  printAreaWidthMm: Math.max(0, Math.round(dimensions?.printAreaWidthMm ?? 0)),
-  printAreaHeightMm: Math.max(0, Math.round(dimensions?.printAreaHeightMm ?? 0)),
 });
 
 const normalizeLayer = (layer: Partial<ProductLayer>, index: number): ProductLayer => ({
@@ -48,7 +46,6 @@ const normalizeSide = (side: Partial<ProductSide>, index: number): ProductSide =
   printArea: buildPrintArea(side.printArea),
   layers: Array.isArray(side.layers) ? side.layers.map((layer, layerIndex) => normalizeLayer(layer, layerIndex)) : [],
   realLifeDimensions: buildRealLifeDimensions(side.realLifeDimensions),
-  zoomScale: typeof side.zoomScale === 'number' ? side.zoomScale : 1.0,
 });
 
 const normalizeSides = (rawSides: ProductSide[] | null | undefined) =>
@@ -152,6 +149,12 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   // Tab state
   type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall' | 'print-area' | 'template';
   const [activeTab, setActiveTab] = useState<EditorTab>('basic');
+  const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(['settings']));
+  const toggleSection = (key: string) => setOpenSections(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   const tabs: { id: EditorTab; label: string }[] = [
     { id: 'basic', label: '기본 정보' },
@@ -469,7 +472,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       printArea: buildPrintArea(),
       layers: [],
       realLifeDimensions: buildRealLifeDimensions(),
-      zoomScale: 1.0,
     };
     setSides([...sides, newSide]);
   };
@@ -503,19 +505,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       ...newSides[index],
       realLifeDimensions: {
         ...buildRealLifeDimensions(newSides[index].realLifeDimensions),
-        [field]: Math.max(0, Math.round(value)),
-      },
-    };
-    setSides(newSides);
-  };
-
-  // Update print area
-  const updatePrintArea = (index: number, field: string, value: number) => {
-    const newSides = [...sides];
-    newSides[index] = {
-      ...newSides[index],
-      printArea: {
-        ...newSides[index].printArea,
         [field]: Math.max(0, Math.round(value)),
       },
     };
@@ -1072,7 +1061,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           layers: hasLayers ? side.layers : [],
           printArea: buildPrintArea(side.printArea),
           realLifeDimensions: buildRealLifeDimensions(side.realLifeDimensions),
-          zoomScale: typeof side.zoomScale === 'number' ? side.zoomScale : 1.0,
         };
       });
 
@@ -1854,22 +1842,22 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
       {/* Sides & Print Area Tab */}
       {activeTab === 'sides' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
         {/* Left - Sides List */}
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">제품 면 ({sides.length})</h3>
+        <div className="lg:self-start lg:sticky lg:top-20">
+          <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900">면 ({sides.length})</h3>
               <button
                 onClick={handleAddSide}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                면 추가
+                <Plus className="w-3.5 h-3.5" />
+                추가
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {sides.map((side, index) => {
                 const previewUrl = getSidePreviewUrl(side);
                 const layered = isLayeredSide(side);
@@ -1877,70 +1865,35 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 return (
                   <div
                     key={`${side.id}-${index}`}
-                    className={`border rounded-md p-3 cursor-pointer transition-all ${
+                    className={`border rounded-md p-2 cursor-pointer transition-all ${
                       currentSideIndex === index
                         ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setCurrentSideIndex(index)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       {previewUrl ? (
                         <img
                           src={previewUrl}
                           alt={side.name}
-                          className="w-16 h-16 object-cover rounded border border-gray-200"
+                          className="w-10 h-10 object-cover rounded border border-gray-200"
                         />
                       ) : (
-                        <div className="w-16 h-16 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                          <ImageIcon className="w-6 h-6 text-gray-400" />
+                        <div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                          <ImageIcon className="w-4 h-4 text-gray-400" />
                         </div>
                       )}
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <input
-                            type="text"
-                            value={side.name}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              updateSideField(index, 'name', e.target.value);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full px-2 py-1 text-sm font-medium border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                            placeholder="면 이름"
-                          />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-900 truncate">{side.name}</div>
+                        <div className="flex items-center gap-1 mt-0.5">
                           <span
-                            className={`px-2 py-0.5 text-[10px] rounded-full ${
+                            className={`px-1.5 py-0 text-[10px] rounded-full ${
                               layered ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
                             }`}
                           >
                             {layered ? `레이어 ${layerCount}` : '단일'}
                           </span>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          {!layered && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                triggerFileInput(index);
-                              }}
-                              disabled={uploading}
-                              className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
-                            >
-                              <Upload className="w-3 h-3" />
-                              {side.imageUrl ? '변경' : '업로드'}
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSide(index);
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            삭제
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -1949,8 +1902,8 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               })}
 
               {sides.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <p className="text-sm">면을 추가해주세요.</p>
+                <div className="text-center py-6 text-gray-500">
+                  <p className="text-xs">면을 추가해주세요.</p>
                 </div>
               )}
             </div>
@@ -1990,25 +1943,42 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
 
               {/* Side Settings */}
-              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">면 설정</h3>
-                <div className="space-y-3">
+              <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+                <button
+                  onClick={() => toggleSection('settings')}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <h3 className="text-sm font-semibold text-gray-900">면 설정</h3>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${openSections.has('settings') ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.has('settings') && (
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">면 ID</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">면 이름</label>
+                    <input
+                      type="text"
+                      value={currentSide.name}
+                      onChange={(e) => updateSideField(currentSideIndex, 'name', e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="면 이름"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">면 ID</label>
                     <input
                       type="text"
                       value={currentSide.id}
                       onChange={(e) => updateSideField(currentSideIndex, 'id', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                       placeholder="예: front"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">렌더링 모드</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">렌더링 모드</label>
                     <select
                       value={isCurrentSideLayered ? 'layered' : 'single'}
                       onChange={(e) => setSideMode(currentSideIndex, e.target.value as 'single' | 'layered')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     >
                       <option value="single">단일 이미지</option>
                       <option value="layered">레이어</option>
@@ -2016,18 +1986,18 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   </div>
                   {!isCurrentSideLayered && (
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">이미지 URL</label>
+                      <label className="block text-xs font-medium text-gray-700">이미지 URL</label>
                       <input
                         type="text"
                         value={currentSide.imageUrl}
                         onChange={(e) => updateSideField(currentSideIndex, 'imageUrl', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                         placeholder="https://..."
                       />
                       <button
                         onClick={() => triggerFileInput(currentSideIndex)}
                         disabled={uploading}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                       >
                         <Upload className="w-4 h-4" />
                         이미지 업로드
@@ -2037,124 +2007,67 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Print Area Configuration */}
-              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">인쇄 영역 (픽셀)</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">X 위치</label>
-                    <input
-                      type="number"
-                      value={currentSide.printArea.x}
-                      onChange={(e) => updatePrintArea(currentSideIndex, 'x', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Y 위치</label>
-                    <input
-                      type="number"
-                      value={currentSide.printArea.y}
-                      onChange={(e) => updatePrintArea(currentSideIndex, 'y', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">너비</label>
-                  <input
-                      type="number"
-                      value={currentSide.printArea.width}
-                      onChange={(e) => updatePrintArea(currentSideIndex, 'width', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">높이</label>
-                    <input
-                      type="number"
-                      value={currentSide.printArea.height}
-                      onChange={(e) => updatePrintArea(currentSideIndex, 'height', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={() => handleRemoveSide(currentSideIndex)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      면 삭제
+                    </button>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* Real Life Dimensions */}
-              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">실제 치수 (mm)</h3>
-                <div className="space-y-3">
+              <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+                <button
+                  onClick={() => toggleSection('dimensions')}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <h3 className="text-sm font-semibold text-gray-900">실제 치수 (mm)</h3>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${openSections.has('dimensions') ? 'rotate-180' : ''}`} />
+                </button>
+                {openSections.has('dimensions') && (
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">제품 너비</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">제품 너비</label>
                     <input
                       type="number"
                       value={currentSide.realLifeDimensions?.productWidthMm || 0}
                       onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'productWidthMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">인쇄 영역 너비</label>
-                    <input
-                      type="number"
-                      value={currentSide.realLifeDimensions?.printAreaWidthMm || 0}
-                      onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaWidthMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">인쇄 영역 높이</label>
-                    <input
-                      type="number"
-                      value={currentSide.realLifeDimensions?.printAreaHeightMm || 0}
-                      onChange={(e) => updateRealLifeDimensions(currentSideIndex, 'printAreaHeightMm', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* Zoom Scale */}
-              <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">줌 배율</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    배율 (0.1 - 5.0)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="5.0"
-                    value={currentSide.zoomScale || 1.0}
-                    onChange={(e) => updateSideField(currentSideIndex, 'zoomScale', parseFloat(e.target.value) || 1.0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    현재: {((currentSide.zoomScale || 1.0) * 100).toFixed(0)}%
-                  </p>
-                </div>
+                )}
               </div>
 
               {/* Layer Configuration */}
               {isCurrentSideLayered && (
-                <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">레이어 설정</h3>
+                <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => toggleSection('layers')}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <h3 className="text-sm font-semibold text-gray-900">레이어 설정</h3>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${openSections.has('layers') ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openSections.has('layers') && (
+                  <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-3">
+                  <div className="flex justify-end">
                     <button
                       onClick={() => addLayer(currentSideIndex)}
-                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-3.5 h-3.5" />
                       레이어 추가
                     </button>
                   </div>
 
                   {currentSideLayers.map((layer, layerIndex) => (
-                    <div key={`${layer.id}-${layerIndex}`} className="border border-gray-200 rounded-md p-3 space-y-3">
+                    <div key={layerIndex} className="border border-gray-200 rounded-md p-3 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
@@ -2321,6 +2234,8 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     </div>
                   ))}
                 </div>
+                )}
+              </div>
               )}
             </>
           ) : (

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { useCanvasStore } from '@/store/useCanvasStore';
-import { Plus, TextCursor, Layers, FileImage, Trash2, RefreshCcw, ZoomIn, ZoomOut, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown } from 'lucide-react';
+import { Plus, TextCursor, Layers, FileImage, Trash2, RefreshCcw, ZoomIn, ZoomOut, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, Undo2, Redo2 } from 'lucide-react';
 import { ProductSide } from '@/types/types';
 import TextStylePanel from './TextStylePanel';
 import { isCurvedText } from '@/lib/curvedText';
@@ -20,7 +20,7 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', horizontal = false, onSelectedObjectChange }) => {
-  const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel } = useCanvasStore();
+  const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel, undo, redo, canUndo, canRedo } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedObject, setSelectedObject] = useState<fabric.FabricObject | null>(null);
@@ -509,6 +509,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
           </button>
           <button onClick={sendToBack} disabled={!selectedObject} className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`} title="맨 뒤로">
             <ChevronsDown className="w-3.5 h-3.5" />
+          </button>
+
+          <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
+
+          {/* Undo/Redo */}
+          <button onClick={() => undo()} disabled={!canUndo()} className={`${editorBtnBase} ${canUndo() ? editorBtnIdle : editorBtnDisabled}`} title="실행 취소">
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => redo()} disabled={!canRedo()} className={`${editorBtnBase} ${canRedo() ? editorBtnIdle : editorBtnDisabled}`} title="다시 실행">
+            <Redo2 className="w-3.5 h-3.5" />
           </button>
 
           <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />

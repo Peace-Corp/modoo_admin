@@ -45,7 +45,6 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
       };
     }
 
-    // Calculate pixel-to-mm ratio
     const pixelToMmRatio = productWidthMm / imageSize.width;
 
     return {
@@ -86,14 +85,8 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
       const maxWidth = container.clientWidth - 32;
       const maxHeight = 600;
 
-      // Get zoom scale from current side configuration
-      const zoomScale = currentSide.zoomScale || 1.0;
-
       // Calculate base scale to fit the image in the container
-      const baseScaleFactor = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
-
-      // Apply zoom scale on top of base scale
-      const scaleFactor = baseScaleFactor * zoomScale;
+      const scaleFactor = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
       setScale(scaleFactor);
 
       // Set canvas to a fixed size (matching the container)
@@ -261,12 +254,6 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
       newSides[currentSideIndex] = {
         ...currentSide,
         printArea: pa,
-        realLifeDimensions: {
-          ...(currentSide.realLifeDimensions || {}),
-          printAreaWidthMm: realDimensions.printAreaWidthMm,
-          printAreaHeightMm: realDimensions.printAreaHeightMm,
-          productWidthMm: currentSide.realLifeDimensions?.productWidthMm || 0,
-        },
       };
       setSides(newSides);
     }
@@ -317,12 +304,6 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
     newSides[currentSideIndex] = {
       ...currentSide,
       printArea: newPrintArea,
-      realLifeDimensions: {
-        ...(currentSide.realLifeDimensions || {}),
-        printAreaWidthMm: realDimensions.printAreaWidthMm,
-        printAreaHeightMm: realDimensions.printAreaHeightMm,
-        productWidthMm: currentSide.realLifeDimensions?.productWidthMm || 0,
-      },
     };
     setSides(newSides);
   };
@@ -332,22 +313,9 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
     newSides[currentSideIndex] = {
       ...currentSide,
       realLifeDimensions: {
-        ...(currentSide.realLifeDimensions || {
-          printAreaWidthMm: 0,
-          printAreaHeightMm: 0,
-          productWidthMm: 0,
-        }),
+        ...(currentSide.realLifeDimensions || { productWidthMm: 0 }),
         [field]: Math.max(0, Math.round(value)),
       },
-    };
-    setSides(newSides);
-  };
-
-  const updateZoomScale = (value: number) => {
-    const newSides = [...sides];
-    newSides[currentSideIndex] = {
-      ...currentSide,
-      zoomScale: Math.max(0.1, Math.min(5.0, value)), // Clamp between 0.1 and 5.0
     };
     setSides(newSides);
   };
@@ -476,64 +444,15 @@ export default function PrintAreaEditor({ product, onSave, onCancel }: PrintArea
           {/* Real Life Dimensions */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-2">실제 치수 (mm)</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              인쇄 영역은 자동 계산됩니다. 제품 너비를 먼저 설정하세요.
-            </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">제품 너비 (기준값)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">제품 너비</label>
                 <input
                   type="number"
                   value={currentSide?.realLifeDimensions?.productWidthMm || 0}
                   onChange={(e) => updateRealLifeDimensions('productWidthMm', parseInt(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  인쇄 영역 너비 <span className="text-xs text-gray-500">(자동 계산)</span>
-                </label>
-                <input
-                  type="number"
-                  value={currentSide?.realLifeDimensions?.printAreaWidthMm || 0}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  인쇄 영역 높이 <span className="text-xs text-gray-500">(자동 계산)</span>
-                </label>
-                <input
-                  type="number"
-                  value={currentSide?.realLifeDimensions?.printAreaHeightMm || 0}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Zoom Scale */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-4">줌 배율</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  배율 (0.1 - 5.0)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  max="5.0"
-                  value={currentSide?.zoomScale || 1.0}
-                  onChange={(e) => updateZoomScale(parseFloat(e.target.value) || 1.0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  현재: {((currentSide?.zoomScale || 1.0) * 100).toFixed(0)}%
-                </p>
               </div>
             </div>
           </div>
