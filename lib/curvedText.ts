@@ -231,21 +231,24 @@ export class CurvedText extends fabric.FabricObject {
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius + offsetY;
 
-      // Account for character size
-      const halfChar = charHeight / 2;
-      minX = Math.min(minX, x - halfChar);
-      minY = Math.min(minY, y - halfChar);
-      maxX = Math.max(maxX, x + halfChar);
-      maxY = Math.max(maxY, y + halfChar);
+      // Use diagonal of character box to account for rotation
+      const halfDiag = Math.sqrt((charW / 2) ** 2 + (charHeight / 2) ** 2);
+      minX = Math.min(minX, x - halfDiag);
+      minY = Math.min(minY, y - halfDiag);
+      maxX = Math.max(maxX, x + halfDiag);
+      maxY = Math.max(maxY, y + halfDiag);
 
       currentArcPos += charW + spacing;
     });
 
     if (minX === Infinity) return null;
 
+    // Add padding for stroke
+    const strokePad = this.strokeWidth || 0;
+
     return {
-      width: maxX - minX,
-      height: maxY - minY
+      width: maxX - minX + strokePad * 2,
+      height: maxY - minY + strokePad * 2
     };
   }
 
@@ -768,7 +771,6 @@ ${charElements.join('\n')}
       angle: object.angle as number,
       scaleX: object.scaleX as number,
       scaleY: object.scaleY as number,
-      _fromSavedState: true,
     });
 
     // Preserve the data property (contains objectId and other metadata)
