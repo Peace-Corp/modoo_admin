@@ -170,14 +170,14 @@ function SketchSideCanvas({
             if (disposed) { canvas.dispose(); return; }
             const imgW = img.width || 1;
             const imgH = img.height || 1;
-            const baseScale = Math.min(PREVIEW_W / imgW, PREVIEW_H / imgH);
+            const baseScale = Math.min(SRC_W / imgW, SRC_H / imgH);
             img.set({
               scaleX: baseScale * zoom,
               scaleY: baseScale * zoom,
               originX: 'center',
               originY: 'center',
-              left: PREVIEW_W / 2,
-              top: PREVIEW_H / 2,
+              left: SRC_W / 2,
+              top: SRC_H / 2,
             });
             applyColorFilter(img);
             canvas.add(img);

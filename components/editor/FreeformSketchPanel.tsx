@@ -181,7 +181,7 @@ export default function FreeformSketchPanel({ cobuyRequestId, onClose, onResetTo
                 취소
               </button>
               <button
-                onClick={() => { setShowResetConfirm(false); onResetToSketch(); }}
+                onClick={() => { setShowResetConfirm(false); onResetToSketch?.(); }}
                 className="px-3 py-1.5 text-[11px] text-white bg-amber-600 hover:bg-amber-500 rounded"
               >
                 초기화
@@ -277,7 +277,7 @@ function SketchCanvas({
             const enlivened = await fabric.util.enlivenObjects(sideData.objects);
             if (disposed) { canvas.dispose(); return; }
             for (const obj of enlivened) {
-              canvas.add(obj as fabric.FabricObject);
+              canvas.add(obj as any);
             }
           }
         }
