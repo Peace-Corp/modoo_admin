@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import useSWR from 'swr';
 import { CoBuyRequest } from '@/types/types';
 import '@/lib/curvedText';
@@ -27,15 +27,17 @@ interface ProductSideInfo {
 interface FreeformSketchPanelProps {
   cobuyRequestId: string;
   onClose: () => void;
+  onResetToSketch?: () => void;
 }
 
-export default function FreeformSketchPanel({ cobuyRequestId, onClose }: FreeformSketchPanelProps) {
+export default function FreeformSketchPanel({ cobuyRequestId, onClose, onResetToSketch }: FreeformSketchPanelProps) {
   const { data: requests } = useSWR<CoBuyRequest[]>(
     `/api/admin/cobuy/requests?id=${cobuyRequestId}`,
     fetcher
   );
   const request = requests?.[0];
   const [activeSideIndex, setActiveSideIndex] = useState(0);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   if (!request) {
     return (
@@ -151,10 +153,43 @@ export default function FreeformSketchPanel({ cobuyRequestId, onClose }: Freefor
         })()}
       </div>
 
-      {/* Request title */}
-      <div className="px-3 py-2 border-t border-neutral-700">
-        <p className="text-[10px] text-neutral-400 truncate">{request.title}</p>
+      {/* Footer */}
+      <div className="px-3 py-2 border-t border-neutral-700 flex items-center justify-between gap-2">
+        <p className="text-[10px] text-neutral-400 truncate flex-1">{request.title}</p>
+        {onResetToSketch && (
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-amber-400 shrink-0"
+          >
+            <RotateCcw className="w-3 h-3" />
+            초기화
+          </button>
+        )}
       </div>
+
+      {/* Reset confirmation modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowResetConfirm(false)}>
+          <div className="bg-neutral-800 border border-neutral-600 rounded-lg p-4 w-72 shadow-xl" onClick={e => e.stopPropagation()}>
+            <p className="text-[13px] text-neutral-200 font-medium mb-1">스케치로 초기화</p>
+            <p className="text-[11px] text-neutral-400 mb-4">현재 캔버스의 모든 작업을 지우고 사용자 스케치 상태로 되돌립니다.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-3 py-1.5 text-[11px] text-neutral-300 bg-neutral-700 hover:bg-neutral-600 rounded"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { setShowResetConfirm(false); onResetToSketch(); }}
+                className="px-3 py-1.5 text-[11px] text-white bg-amber-600 hover:bg-amber-500 rounded"
+              >
+                초기화
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

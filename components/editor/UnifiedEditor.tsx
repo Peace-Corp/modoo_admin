@@ -267,6 +267,80 @@ export default function UnifiedEditor({
     applyCobuyData();
   }, [cobuyRequestId, designId, canvasMap, editorData.product]);
 
+  // Reset all canvases to the user's freeform sketch state
+  const handleResetToSketch = useCallback(async () => {
+    if (!cobuyRequestId) return;
+    try {
+      const res = await fetch(`/api/admin/cobuy/requests?id=${cobuyRequestId}`);
+      if (!res.ok) return;
+      const requests = await res.json();
+      const req = requests?.[0];
+      if (!req) return;
+
+      const sides = editorData.product?.configuration || [];
+      const store = useCanvasStore.getState();
+
+      // Apply colors
+      const colorSelections = req.freeform_color_selections as Record<string, any> | null;
+      if (colorSelections) {
+        if (colorSelections._productColor?.hex) {
+          store.setProductColor(colorSelections._productColor.hex);
+        }
+        for (const sideId of Object.keys(colorSelections)) {
+          if (sideId === '_productColor') continue;
+          const sideColors = colorSelections[sideId];
+          if (!sideColors || typeof sideColors !== 'object') continue;
+          for (const [layerId, hex] of Object.entries(sideColors)) {
+            if (typeof hex === 'string') {
+              store.setLayerColor(sideId, layerId, hex);
+            }
+          }
+        }
+      }
+
+      // Clear and reload objects for each side
+      const canvasState = req.freeform_canvas_state as Record<string, any> | null;
+      for (const side of sides) {
+        const canvas = canvasMap[side.id];
+        if (!canvas) continue;
+
+        // Remove only user objects (keep mockup/system objects)
+        const objects = canvas.getObjects();
+        for (const obj of [...objects]) {
+          const objData = (obj as any).data;
+          const isSystem = objData?.id === 'background-product-image' ||
+            objData?.id === 'center-line' ||
+            objData?.id === 'visual-guide-box' ||
+            (obj as any).excludeFromExport === true;
+          if (!isSystem) canvas.remove(obj);
+        }
+
+        // Load freeform objects
+        if (canvasState) {
+          const raw = canvasState[side.id];
+          if (raw) {
+            try {
+              const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              const objs = parsed.objects || [];
+              if (objs.length > 0) {
+                const enlivened = await fabric.util.enlivenObjects(objs);
+                for (const obj of enlivened) {
+                  canvas.add(obj as fabric.FabricObject);
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to load freeform objects for side ${side.id}:`, err);
+            }
+          }
+        }
+
+        canvas.renderAll();
+      }
+    } catch (err) {
+      console.error('Failed to reset to sketch:', err);
+    }
+  }, [cobuyRequestId, canvasMap, editorData.product]);
+
   // Sync editing state with canvas store
   useEffect(() => {
     setEditMode(isEditing);
@@ -762,6 +836,7 @@ export default function UnifiedEditor({
               <FreeformSketchPanel
                 cobuyRequestId={cobuyRequestId}
                 onClose={() => setShowSketchPanel(false)}
+                onResetToSketch={handleResetToSketch}
               />
             </div>
           )}
