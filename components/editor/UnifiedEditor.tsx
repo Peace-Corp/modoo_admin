@@ -189,6 +189,57 @@ export default function UnifiedEditor({
     loadPartnerMallAddData();
   }, [partnerMallAdd, canvasMap, editorData.product]);
 
+  // Apply saved layer colors from CoBuy request when entering editor
+  useEffect(() => {
+    if (!cobuyRequestId) return;
+
+    const applyCobuyColors = async () => {
+      try {
+        const res = await fetch(`/api/admin/cobuy/requests?id=${cobuyRequestId}`);
+        if (!res.ok) return;
+        const requests = await res.json();
+        const req = requests?.[0];
+        if (!req) return;
+
+        const colorSelections = req.freeform_color_selections as Record<string, any> | null;
+        if (!colorSelections) return;
+
+        // Wait for canvases to be ready
+        const sides = editorData.product?.configuration || [];
+        const checkCanvasesReady = () => sides.every((side: any) => canvasMap[side.id]);
+        let attempts = 0;
+        while (!checkCanvasesReady() && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        if (!checkCanvasesReady()) return;
+
+        const store = useCanvasStore.getState();
+
+        // Apply product-level color
+        if (colorSelections._productColor?.hex) {
+          store.setProductColor(colorSelections._productColor.hex);
+        }
+
+        // Apply per-layer colors
+        for (const sideId of Object.keys(colorSelections)) {
+          if (sideId === '_productColor') continue;
+          const sideColors = colorSelections[sideId];
+          if (!sideColors || typeof sideColors !== 'object') continue;
+          for (const [layerId, hex] of Object.entries(sideColors)) {
+            if (typeof hex === 'string') {
+              store.setLayerColor(sideId, layerId, hex);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to apply CoBuy colors:', err);
+      }
+    };
+
+    applyCobuyColors();
+  }, [cobuyRequestId, canvasMap, editorData.product]);
+
   // Sync editing state with canvas store
   useEffect(() => {
     setEditMode(isEditing);
