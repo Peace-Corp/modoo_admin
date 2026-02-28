@@ -4,18 +4,17 @@ import { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import useSWR from 'swr';
 import { CoBuyRequest } from '@/types/types';
+import '@/lib/curvedText';
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`API error: ${r.status}`);
   return r.json();
 });
 
-// Canvas dimensions matching the freeform editor
-const SRC_W = 340;
-const SRC_H = 420;
-const PREVIEW_W = 200;
-const PREVIEW_H = 247;
-const SCALE_FACTOR = PREVIEW_W / SRC_W;
+// Canvas renders at full size, shrunk via CSS
+const SRC_W = 400;
+const SRC_H = 500;
+const DISPLAY_SCALE = 0.5;
 
 interface ProductSideInfo {
   id: string;
@@ -186,8 +185,8 @@ function SketchCanvas({
       if (disposed) return;
 
       const canvas = new fabric.StaticCanvas(canvasRef.current!, {
-        width: PREVIEW_W,
-        height: PREVIEW_H,
+        width: SRC_W,
+        height: SRC_H,
         backgroundColor: '#EBEBEB',
       });
       fabricRef.current = canvas;
@@ -211,11 +210,11 @@ function SketchCanvas({
             try {
               const img = await fabric.FabricImage.fromURL(layer.imageUrl, { crossOrigin: 'anonymous' });
               if (disposed) { canvas.dispose(); return; }
-              const baseScale = Math.min(PREVIEW_W / (img.width || 1), PREVIEW_H / (img.height || 1));
+              const baseScale = Math.min(SRC_W / (img.width || 1), SRC_H / (img.height || 1));
               img.set({
                 scaleX: baseScale * zoom, scaleY: baseScale * zoom,
                 originX: 'center', originY: 'center',
-                left: PREVIEW_W / 2, top: PREVIEW_H / 2,
+                left: SRC_W / 2, top: SRC_H / 2,
               });
               applyColorFilter(img, layerColors?.[layer.id]);
               canvas.add(img);
@@ -225,11 +224,11 @@ function SketchCanvas({
           try {
             const img = await fabric.FabricImage.fromURL(side.imageUrl, { crossOrigin: 'anonymous' });
             if (disposed) { canvas.dispose(); return; }
-            const baseScale = Math.min(PREVIEW_W / (img.width || 1), PREVIEW_H / (img.height || 1));
+            const baseScale = Math.min(SRC_W / (img.width || 1), SRC_H / (img.height || 1));
             img.set({
               scaleX: baseScale * zoom, scaleY: baseScale * zoom,
               originX: 'center', originY: 'center',
-              left: PREVIEW_W / 2, top: PREVIEW_H / 2,
+              left: SRC_W / 2, top: SRC_H / 2,
             });
             applyColorFilter(img);
             canvas.add(img);
@@ -240,22 +239,11 @@ function SketchCanvas({
         if (stateValue) {
           const sideData = typeof stateValue === 'string' ? JSON.parse(stateValue) : stateValue;
           if (sideData?.objects?.length) {
-            const tempCanvas = new fabric.StaticCanvas(undefined, { width: SRC_W, height: SRC_H });
-            await tempCanvas.loadFromJSON({ version: sideData.version || '6.0.0', objects: sideData.objects });
-            if (disposed) { tempCanvas.dispose(); canvas.dispose(); return; }
-
-            const objs = tempCanvas.getObjects();
-            for (const obj of objs) {
-              tempCanvas.remove(obj);
-              obj.set({
-                left: (obj.left ?? 0) * SCALE_FACTOR,
-                top: (obj.top ?? 0) * SCALE_FACTOR,
-                scaleX: (obj.scaleX || 1) * SCALE_FACTOR,
-                scaleY: (obj.scaleY || 1) * SCALE_FACTOR,
-              });
-              canvas.add(obj);
+            const enlivened = await fabric.util.enlivenObjects(sideData.objects);
+            if (disposed) { canvas.dispose(); return; }
+            for (const obj of enlivened) {
+              canvas.add(obj as fabric.FabricObject);
             }
-            tempCanvas.dispose();
           }
         }
 
@@ -274,5 +262,9 @@ function SketchCanvas({
     };
   }, [sideId, side, stateValue, productColorHex, layerColors]);
 
-  return <canvas ref={canvasRef} className="rounded" />;
+  return (
+    <div className="rounded overflow-hidden" style={{ width: SRC_W * DISPLAY_SCALE, height: SRC_H * DISPLAY_SCALE }}>
+      <canvas ref={canvasRef} className="origin-top-left" style={{ transform: `scale(${DISPLAY_SCALE})` }} />
+    </div>
+  );
 }

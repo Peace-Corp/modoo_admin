@@ -94,6 +94,9 @@ export default function CoBuyRequestsTab() {
                     <p className="text-xs text-gray-500 truncate">
                       {(req as any).product?.title} · {(req as any).guest_name ? `${(req as any).guest_name} (비회원)` : ((req as any).profiles?.email || (req as any).profiles?.name || 'Unknown')}
                     </p>
+                    {req.description && (
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">참고: {req.description}</p>
+                    )}
                     <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(req.created_at)}</p>
                   </div>
                 </div>

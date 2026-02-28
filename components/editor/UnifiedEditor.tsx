@@ -191,20 +191,18 @@ export default function UnifiedEditor({
     loadPartnerMallAddData();
   }, [partnerMallAdd, canvasMap, editorData.product]);
 
-  // Apply saved layer colors from CoBuy request when entering editor
+  // Apply saved colors and freeform objects from CoBuy request when entering editor
+  const cobuyObjectsLoaded = useRef(false);
   useEffect(() => {
     if (!cobuyRequestId) return;
 
-    const applyCobuyColors = async () => {
+    const applyCobuyData = async () => {
       try {
         const res = await fetch(`/api/admin/cobuy/requests?id=${cobuyRequestId}`);
         if (!res.ok) return;
         const requests = await res.json();
         const req = requests?.[0];
         if (!req) return;
-
-        const colorSelections = req.freeform_color_selections as Record<string, any> | null;
-        if (!colorSelections) return;
 
         // Wait for canvases to be ready
         const sides = editorData.product?.configuration || [];
@@ -218,29 +216,56 @@ export default function UnifiedEditor({
 
         const store = useCanvasStore.getState();
 
-        // Apply product-level color
-        if (colorSelections._productColor?.hex) {
-          store.setProductColor(colorSelections._productColor.hex);
+        // Apply colors
+        const colorSelections = req.freeform_color_selections as Record<string, any> | null;
+        if (colorSelections) {
+          if (colorSelections._productColor?.hex) {
+            store.setProductColor(colorSelections._productColor.hex);
+          }
+          for (const sideId of Object.keys(colorSelections)) {
+            if (sideId === '_productColor') continue;
+            const sideColors = colorSelections[sideId];
+            if (!sideColors || typeof sideColors !== 'object') continue;
+            for (const [layerId, hex] of Object.entries(sideColors)) {
+              if (typeof hex === 'string') {
+                store.setLayerColor(sideId, layerId, hex);
+              }
+            }
+          }
         }
 
-        // Apply per-layer colors
-        for (const sideId of Object.keys(colorSelections)) {
-          if (sideId === '_productColor') continue;
-          const sideColors = colorSelections[sideId];
-          if (!sideColors || typeof sideColors !== 'object') continue;
-          for (const [layerId, hex] of Object.entries(sideColors)) {
-            if (typeof hex === 'string') {
-              store.setLayerColor(sideId, layerId, hex);
+        // Load freeform objects onto canvas (only when no existing admin design)
+        if (!designId && !cobuyObjectsLoaded.current) {
+          cobuyObjectsLoaded.current = true;
+          const canvasState = req.freeform_canvas_state as Record<string, any> | null;
+          if (canvasState) {
+            for (const side of sides) {
+              const canvas = canvasMap[side.id];
+              if (!canvas) continue;
+              const raw = canvasState[side.id];
+              if (!raw) continue;
+              try {
+                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                const objects = parsed.objects || [];
+                if (objects.length === 0) continue;
+                const enlivened = await fabric.util.enlivenObjects(objects);
+                for (const obj of enlivened) {
+                  canvas.add(obj as fabric.FabricObject);
+                }
+                canvas.renderAll();
+              } catch (err) {
+                console.error(`Failed to load freeform objects for side ${side.id}:`, err);
+              }
             }
           }
         }
       } catch (err) {
-        console.error('Failed to apply CoBuy colors:', err);
+        console.error('Failed to apply CoBuy data:', err);
       }
     };
 
-    applyCobuyColors();
-  }, [cobuyRequestId, canvasMap, editorData.product]);
+    applyCobuyData();
+  }, [cobuyRequestId, designId, canvasMap, editorData.product]);
 
   // Sync editing state with canvas store
   useEffect(() => {
