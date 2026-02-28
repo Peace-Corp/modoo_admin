@@ -57,6 +57,7 @@ interface UnifiedEditorProps {
   returnUrl?: string;
   cobuyRequestId?: string;
   partnerMallAdd?: boolean;
+  presetType?: string;
 }
 
 export default function UnifiedEditor({
@@ -69,6 +70,7 @@ export default function UnifiedEditor({
   returnUrl,
   cobuyRequestId,
   partnerMallAdd,
+  presetType,
 }: UnifiedEditorProps) {
   const router = useRouter();
   const modeConfig = useEditorMode({ mode, returnUrl });
@@ -319,6 +321,7 @@ export default function UnifiedEditor({
     templateDescription,
     templateSortOrder,
     templateIsActive,
+    presetType,
   });
 
   // Save to partner mall (override for partnerMallAdd mode)
@@ -776,6 +779,7 @@ export default function UnifiedEditor({
 
               {mode === 'template' && (
                 <TemplateModePanel
+                  product={product}
                   templates={editorData.templates}
                   selectedTemplate={editorData.selectedTemplate}
                   onSelectTemplate={handleSelectTemplate}

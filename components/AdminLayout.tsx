@@ -61,6 +61,7 @@ const navItems: NavItem[] = [
     children: [
       { href: '/cobuy/requests', label: '요청 관리' },
       { href: '/cobuy/sessions', label: '세션 관리' },
+      { href: '/cobuy/presets', label: '프리셋 관리' },
     ],
   },
   { type: 'link', href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin'] },

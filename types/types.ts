@@ -546,6 +546,7 @@ export interface DesignTemplate {
   layer_colors: Record<string, string> | null;
   sort_order: number | null;
   is_active: boolean | null;
+  type: string; // 'template' | 'cobuy_preset'
   created_at: string;
   updated_at: string;
 }
