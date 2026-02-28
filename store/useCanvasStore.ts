@@ -205,22 +205,33 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const next = { ...existing };
       layers.forEach((layer) => {
         if (!next[layer.id]) {
-          next[layer.id] = layer.colorOptions?.[0]?.hex || '#FFFFFF';
+          // Check if this layerId already has a color on any other side
+          let existingColor: string | null = null;
+          for (const otherSideId of Object.keys(state.layerColors)) {
+            if (otherSideId !== sideId && state.layerColors[otherSideId]?.[layer.id]) {
+              existingColor = state.layerColors[otherSideId][layer.id];
+              break;
+            }
+          }
+          next[layer.id] = existingColor || layer.colorOptions?.[0]?.hex || '#FFFFFF';
         }
       });
       return { layerColors: { ...state.layerColors, [sideId]: next } };
     }),
 
   setLayerColor: (sideId, layerId, color) =>
-    set((state) => ({
-      layerColors: {
-        ...state.layerColors,
-        [sideId]: {
-          ...(state.layerColors[sideId] || {}),
-          [layerId]: color,
-        },
-      },
-    })),
+    set((state) => {
+      const next = { ...state.layerColors };
+      // Apply color to all sides that have this layerId
+      for (const sid of Object.keys(next)) {
+        if (next[sid]?.[layerId] !== undefined) {
+          next[sid] = { ...next[sid], [layerId]: color };
+        }
+      }
+      // Always apply to the specified side
+      next[sideId] = { ...(next[sideId] || {}), [layerId]: color };
+      return { layerColors: next };
+    }),
 
   resetZoom: (sideId) =>
     set((state) => {

@@ -1,22 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Product } from '@/types/types';
-import { Edit, Eye, EyeOff, Plus, Package, Edit2, Trash2, Layers, Star, Search, X } from 'lucide-react';
-import PrintAreaEditor from './PrintAreaEditor';
+import { Eye, EyeOff, Plus, Package, Edit2, Trash2, Star, Search, X } from 'lucide-react';
 import ProductEditor from './ProductEditor';
 import { getCategoryName, CATEGORIES } from '@/lib/categories';
 
-type EditorMode = 'print-area' | 'full-edit' | 'template' | null;
-
 export default function ProductsTab() {
-  const router = useRouter();
   const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [editorMode, setEditorMode] = useState<EditorMode>(null);
-  const [activeTab, setActiveTab] = useState<'full-edit' | 'print-area' | 'template'>('full-edit');
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +83,6 @@ export default function ProductsTab() {
       ), { revalidate: false });
     }
     setSelectedProduct(null);
-    setEditorMode(null);
     setIsCreatingNew(false);
   };
 
@@ -120,9 +112,7 @@ export default function ProductsTab() {
 
   const handleCancel = () => {
     setSelectedProduct(null);
-    setEditorMode(null);
     setIsCreatingNew(false);
-    setActiveTab('full-edit');
   };
 
   if (loading) {
@@ -133,99 +123,8 @@ export default function ProductsTab() {
     );
   }
 
-  // Show Editor with Tabs (for editing existing product)
-  if (editorMode && selectedProduct && !isCreatingNew) {
-    return (
-      <div className="space-y-4">
-        {/* Tab Navigation */}
-        <div className="bg-white border border-gray-200 rounded-md shadow-sm">
-          <div className="flex items-center gap-1 p-1">
-            <button
-              onClick={() => setActiveTab('full-edit')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'full-edit'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Edit2 className="w-4 h-4 inline mr-1.5" />
-              편집
-            </button>
-            <button
-              onClick={() => setActiveTab('print-area')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'print-area'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Edit className="w-4 h-4 inline mr-1.5" />
-              인쇄 영역
-            </button>
-            <button
-              onClick={() => setActiveTab('template')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded transition-colors ${
-                activeTab === 'template'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <Layers className="w-4 h-4 inline mr-1.5" />
-              템플릿
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === 'full-edit' && (
-          <ProductEditor
-            product={selectedProduct}
-            onSave={handleProductSave}
-            onCancel={handleCancel}
-          />
-        )}
-
-        {activeTab === 'print-area' && (
-          <PrintAreaEditor
-            product={selectedProduct}
-            onSave={handleProductSave}
-            onCancel={handleCancel}
-          />
-        )}
-
-        {activeTab === 'template' && (
-          <div className="bg-white border border-gray-200 rounded-md shadow-sm p-6">
-            <div className="text-center space-y-4">
-              <Layers className="w-16 h-16 text-gray-400 mx-auto" />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">템플릿 편집기로 이동</h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  템플릿 편집은 전용 에디터에서 진행됩니다.
-                </p>
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => router.push(`/editor/${selectedProduct.id}?mode=template`)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm font-medium"
-                  >
-                    템플릿 편집기 열기
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm font-medium"
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Show Product Editor (for creating new product)
-  if (isCreatingNew) {
+  // Show Product Editor (for editing existing or creating new product)
+  if (selectedProduct || isCreatingNew) {
     return (
       <ProductEditor
         product={selectedProduct}
@@ -384,8 +283,6 @@ export default function ProductsTab() {
                       <button
                         onClick={() => {
                           setSelectedProduct(product);
-                          setEditorMode('full-edit');
-                          setActiveTab('full-edit');
                         }}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
                       >
@@ -460,8 +357,6 @@ export default function ProductsTab() {
                 <button
                   onClick={() => {
                     setSelectedProduct(product);
-                    setEditorMode('full-edit');
-                    setActiveTab('full-edit');
                   }}
                   className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors"
                 >
