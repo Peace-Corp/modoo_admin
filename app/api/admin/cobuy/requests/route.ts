@@ -38,6 +38,9 @@ export async function GET(request: Request) {
       query = query.eq('id', id);
     } else if (status && status !== 'all') {
       query = query.eq('status', status);
+    } else {
+      // Exclude drafts from the default listing
+      query = query.neq('status', 'draft');
     }
 
     const { data, error } = await query;
