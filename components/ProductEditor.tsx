@@ -4,8 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
-import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, Image as ImageIcon, Check, Loader2, Layers } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
+import PrintAreaEditor from './PrintAreaEditor';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -64,6 +66,7 @@ const getSidePreviewUrl = (side: ProductSide) => {
 };
 
 export default function ProductEditor({ product, onSave, onCancel }: ProductEditorProps) {
+  const router = useRouter();
   const isNewProduct = !product;
 
   // Basic product fields
@@ -147,7 +150,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [savingPreset, setSavingPreset] = useState(false);
 
   // Tab state
-  type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall';
+  type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall' | 'print-area' | 'template';
   const [activeTab, setActiveTab] = useState<EditorTab>('basic');
 
   const tabs: { id: EditorTab; label: string }[] = [
@@ -155,6 +158,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     { id: 'sides', label: '면 & 인쇄 영역' },
     { id: 'size-color', label: '사이즈 & 색상' },
     { id: 'partner-mall', label: '파트너몰 설정' },
+    ...(!isNewProduct ? [
+      { id: 'print-area' as const, label: '인쇄 영역' },
+      { id: 'template' as const, label: '템플릿' },
+    ] : []),
   ];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2439,6 +2446,34 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'print-area' && product && (
+        <PrintAreaEditor
+          product={product}
+          onSave={onSave}
+          onCancel={onCancel}
+        />
+      )}
+
+      {activeTab === 'template' && product && (
+        <div className="bg-white border border-gray-200 rounded-md shadow-sm p-6">
+          <div className="text-center space-y-4">
+            <Layers className="w-16 h-16 text-gray-400 mx-auto" />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">템플릿 편집기로 이동</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                템플릿 편집은 전용 에디터에서 진행됩니다.
+              </p>
+              <button
+                onClick={() => router.push(`/editor/${product.id}?mode=template`)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm font-medium"
+              >
+                템플릿 편집기 열기
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
