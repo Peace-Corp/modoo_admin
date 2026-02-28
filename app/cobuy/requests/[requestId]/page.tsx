@@ -47,6 +47,7 @@ interface ProductLayerInfo {
   name: string;
   imageUrl: string;
   zIndex: number;
+  colorOptions?: { hex: string; colorCode: string }[];
 }
 
 interface ProductSideInfo {
@@ -67,10 +68,12 @@ function FreeformSketchPreview({
   canvasState,
   productSides,
   productColorHex,
+  colorSelections,
 }: {
   canvasState: Record<string, any>;
   productSides?: ProductSideInfo[];
   productColorHex?: string;
+  colorSelections?: Record<string, any>;
 }) {
   const sideIds = productSides?.map(s => s.id) ?? Object.keys(canvasState);
   if (sideIds.length === 0) return <p className="text-xs text-gray-400">스케치 데이터 없음</p>;
@@ -79,6 +82,7 @@ function FreeformSketchPreview({
     <div className="flex gap-3 flex-wrap">
       {sideIds.map(sideId => {
         const side = productSides?.find(s => s.id === sideId);
+        const layerColors = colorSelections?.[sideId] as Record<string, string> | undefined;
         return (
           <SketchSideCanvas
             key={sideId}
@@ -86,6 +90,7 @@ function FreeformSketchPreview({
             side={side}
             stateValue={canvasState[sideId]}
             productColorHex={productColorHex}
+            layerColors={layerColors}
           />
         );
       })}
@@ -98,11 +103,13 @@ function SketchSideCanvas({
   side,
   stateValue,
   productColorHex,
+  layerColors,
 }: {
   sideId: string;
   side?: ProductSideInfo;
   stateValue?: any;
   productColorHex?: string;
+  layerColors?: Record<string, string>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<any>(null);
@@ -126,9 +133,10 @@ function SketchSideCanvas({
         const hasLayers = side?.layers && side.layers.length > 0;
         const zoom = side?.zoomScale || 1.0;
 
-        const applyColorFilter = (img: any) => {
-          if (productColorHex && productColorHex !== '#FFFFFF') {
-            img.filters = [new fabric.filters.BlendColor({ color: productColorHex, mode: 'multiply', alpha: 1 })];
+        const applyColorFilter = (img: any, colorHex?: string) => {
+          const color = colorHex || productColorHex;
+          if (color && color !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
             img.applyFilters();
           }
         };
@@ -151,7 +159,7 @@ function SketchSideCanvas({
                 left: PREVIEW_W / 2,
                 top: PREVIEW_H / 2,
               });
-              applyColorFilter(img);
+              applyColorFilter(img, layerColors?.[layer.id]);
               canvas.add(img);
             } catch (e) {
               console.error('Failed to load layer', layer.id, e);
@@ -214,7 +222,7 @@ function SketchSideCanvas({
       if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
       fabricRef.current = null;
     };
-  }, [sideId, side, stateValue, productColorHex]);
+  }, [sideId, side, stateValue, productColorHex, layerColors]);
 
   return (
     <div className="flex flex-col items-center">
@@ -344,21 +352,65 @@ export default function CoBuyRequestDetailPage() {
             <p className="text-sm text-gray-600 mb-3">{request.description}</p>
           )}
 
-          {/* Selected Product Color */}
-          {(request.freeform_color_selections as any)?._productColor && (
-            <div className="flex items-center gap-2 mb-3">
-              <p className="text-xs font-medium text-gray-500">선택 색상</p>
-              <div
-                className="w-5 h-5 rounded-full border border-gray-300"
-                style={{ backgroundColor: (request.freeform_color_selections as any)._productColor.hex }}
-              />
-              <span className="text-xs text-gray-700">
-                {(request.freeform_color_selections as any)._productColor.name}
-                {(request.freeform_color_selections as any)._productColor.colorCode &&
-                  ` (${(request.freeform_color_selections as any)._productColor.colorCode})`}
-              </span>
-            </div>
-          )}
+          {/* Selected Colors */}
+          {(() => {
+            const colorSelections = request.freeform_color_selections as Record<string, any> | null;
+            const productConfig = (request as any).product?.configuration as ProductSideInfo[] | undefined;
+            const productColor = colorSelections?._productColor;
+
+            // Collect layer color info from product config + selections
+            const layerColorInfo: { layerName: string; hex: string; colorCode?: string }[] = [];
+            if (productConfig && colorSelections) {
+              const seen = new Set<string>();
+              productConfig.forEach((side: any) => {
+                side.layers?.forEach((layer: any) => {
+                  if (seen.has(layer.id)) return;
+                  seen.add(layer.id);
+                  // Find selected hex for this layer from any side
+                  let selectedHex: string | undefined;
+                  for (const sideId of Object.keys(colorSelections)) {
+                    if (sideId === '_productColor') continue;
+                    const sideColors = colorSelections[sideId];
+                    if (sideColors?.[layer.id]) { selectedHex = sideColors[layer.id]; break; }
+                  }
+                  if (!selectedHex) return;
+                  const matched = layer.colorOptions?.find((co: any) => co.hex === selectedHex);
+                  layerColorInfo.push({
+                    layerName: layer.name,
+                    hex: selectedHex,
+                    colorCode: matched?.colorCode,
+                  });
+                });
+              });
+            }
+
+            const hasColors = productColor || layerColorInfo.length > 0;
+            if (!hasColors) return null;
+
+            return (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-gray-500 mb-1.5">선택 색상</p>
+                <div className="flex flex-wrap gap-2">
+                  {productColor && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: productColor.hex }} />
+                      <span className="text-xs text-gray-700">
+                        {productColor.name}{productColor.colorCode && ` (${productColor.colorCode})`}
+                      </span>
+                    </div>
+                  )}
+                  {layerColorInfo.map((info, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: info.hex }} />
+                      <span className="text-xs text-gray-700">
+                        {info.layerName}{info.colorCode && ` (${info.colorCode})`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Freeform Sketch */}
           <div className="mb-3">
@@ -367,6 +419,7 @@ export default function CoBuyRequestDetailPage() {
               canvasState={request.freeform_canvas_state || {}}
               productSides={(request as any).product?.configuration}
               productColorHex={(request.freeform_color_selections as any)?._productColor?.hex}
+              colorSelections={request.freeform_color_selections as Record<string, any> | undefined}
             />
           </div>
 
