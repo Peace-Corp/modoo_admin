@@ -436,12 +436,12 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
       }
     });
 
-    const realDimensions = currentSide.realLifeDimensions;
     const printArea = currentSide.printArea;
 
     let pixelToMmRatio = 1;
-    if (realDimensions && realDimensions.printAreaWidthMm > 0 && printArea.width > 0) {
-      pixelToMmRatio = realDimensions.printAreaWidthMm / printArea.width;
+    const productWidthMm = currentSide.realLifeDimensions?.productWidthMm || 0;
+    if (productWidthMm > 0 && printArea.width > 0) {
+      pixelToMmRatio = productWidthMm / printArea.width;
     }
 
     // Track seen objectIds to prevent duplicates

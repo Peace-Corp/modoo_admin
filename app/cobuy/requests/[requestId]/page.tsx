@@ -47,6 +47,7 @@ interface ProductLayerInfo {
   name: string;
   imageUrl: string;
   zIndex: number;
+  colorOptions?: { hex: string; colorCode: string }[];
 }
 
 interface ProductSideInfo {
@@ -67,10 +68,12 @@ function FreeformSketchPreview({
   canvasState,
   productSides,
   productColorHex,
+  colorSelections,
 }: {
   canvasState: Record<string, any>;
   productSides?: ProductSideInfo[];
   productColorHex?: string;
+  colorSelections?: Record<string, any>;
 }) {
   const sideIds = productSides?.map(s => s.id) ?? Object.keys(canvasState);
   if (sideIds.length === 0) return <p className="text-xs text-gray-400">스케치 데이터 없음</p>;
@@ -79,6 +82,7 @@ function FreeformSketchPreview({
     <div className="flex gap-3 flex-wrap">
       {sideIds.map(sideId => {
         const side = productSides?.find(s => s.id === sideId);
+        const layerColors = colorSelections?.[sideId] as Record<string, string> | undefined;
         return (
           <SketchSideCanvas
             key={sideId}
@@ -86,6 +90,7 @@ function FreeformSketchPreview({
             side={side}
             stateValue={canvasState[sideId]}
             productColorHex={productColorHex}
+            layerColors={layerColors}
           />
         );
       })}
@@ -98,11 +103,13 @@ function SketchSideCanvas({
   side,
   stateValue,
   productColorHex,
+  layerColors,
 }: {
   sideId: string;
   side?: ProductSideInfo;
   stateValue?: any;
   productColorHex?: string;
+  layerColors?: Record<string, string>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<any>(null);
@@ -126,9 +133,10 @@ function SketchSideCanvas({
         const hasLayers = side?.layers && side.layers.length > 0;
         const zoom = side?.zoomScale || 1.0;
 
-        const applyColorFilter = (img: any) => {
-          if (productColorHex && productColorHex !== '#FFFFFF') {
-            img.filters = [new fabric.filters.BlendColor({ color: productColorHex, mode: 'multiply', alpha: 1 })];
+        const applyColorFilter = (img: any, colorHex?: string) => {
+          const color = colorHex || productColorHex;
+          if (color && color !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
             img.applyFilters();
           }
         };
@@ -151,7 +159,7 @@ function SketchSideCanvas({
                 left: PREVIEW_W / 2,
                 top: PREVIEW_H / 2,
               });
-              applyColorFilter(img);
+              applyColorFilter(img, layerColors?.[layer.id]);
               canvas.add(img);
             } catch (e) {
               console.error('Failed to load layer', layer.id, e);
@@ -214,11 +222,205 @@ function SketchSideCanvas({
       if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
       fabricRef.current = null;
     };
-  }, [sideId, side, stateValue, productColorHex]);
+  }, [sideId, side, stateValue, productColorHex, layerColors]);
 
   return (
     <div className="flex flex-col items-center">
       <canvas ref={canvasRef} className="rounded-lg" />
+      <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Admin Design Preview (all sides)
+// ============================================================================
+
+// Must match UnifiedEditor / EditorCanvas canvas size
+const EDITOR_W = 400;
+const EDITOR_H = 500;
+const ADMIN_DISPLAY_SCALE = 0.55; // CSS scale-down for preview
+
+interface AdminDesignData {
+  canvas_state: Record<string, any>;
+  color_selections: Record<string, any> | null;
+}
+
+function AdminDesignPreview({
+  designId,
+  productSides,
+}: {
+  designId: string;
+  productSides?: ProductSideInfo[];
+}) {
+  const [design, setDesign] = useState<AdminDesignData | null>(null);
+
+  useEffect(() => {
+    const fetchDesign = async () => {
+      try {
+        const res = await fetch(`/api/admin/designs/${designId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        setDesign(json.data);
+      } catch { /* ignore */ }
+    };
+    fetchDesign();
+  }, [designId]);
+
+  if (!design) {
+    return (
+      <div className="flex justify-center py-6">
+        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-400" />
+      </div>
+    );
+  }
+
+  const sideIds = productSides?.map(s => s.id) ?? Object.keys(design.canvas_state || {});
+  if (sideIds.length === 0) return <p className="text-xs text-gray-400">디자인 데이터 없음</p>;
+
+  const productColor = (design.color_selections as any)?.productColor;
+
+  return (
+    <div className="flex gap-3 flex-wrap">
+      {sideIds.map(sideId => {
+        const raw = design.canvas_state?.[sideId];
+        const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
+        const sideLayerColors = parsed?.layerColors as Record<string, string> | undefined;
+        return (
+          <AdminDesignSideCanvas
+            key={sideId}
+            sideId={sideId}
+            side={productSides?.find(s => s.id === sideId)}
+            canvasState={parsed}
+            productColorHex={productColor}
+            layerColors={sideLayerColors}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AdminDesignSideCanvas({
+  sideId,
+  side,
+  canvasState,
+  productColorHex,
+  layerColors,
+}: {
+  sideId: string;
+  side?: ProductSideInfo;
+  canvasState?: any;
+  productColorHex?: string;
+  layerColors?: Record<string, string>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fabricRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    let disposed = false;
+
+    const init = async () => {
+      const fabric = await import('fabric');
+      if (disposed) return;
+
+      const canvas = new fabric.StaticCanvas(canvasRef.current!, {
+        width: EDITOR_W,
+        height: EDITOR_H,
+        backgroundColor: '#EBEBEB',
+      });
+      fabricRef.current = canvas;
+
+      try {
+        const hasLayers = side?.layers && side.layers.length > 0;
+        const zoom = side?.zoomScale || 1.0;
+
+        const applyColorFilter = (img: any, colorHex?: string) => {
+          const color = colorHex || productColorHex;
+          if (color && color !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
+            img.applyFilters();
+          }
+        };
+
+        if (hasLayers) {
+          const sorted = [...side!.layers!].sort((a, b) => a.zIndex - b.zIndex);
+          for (const layer of sorted) {
+            if (disposed) return;
+            try {
+              const img = await fabric.FabricImage.fromURL(layer.imageUrl, { crossOrigin: 'anonymous' });
+              if (disposed) { canvas.dispose(); return; }
+              const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
+              img.set({
+                scaleX: baseScale * zoom, scaleY: baseScale * zoom,
+                originX: 'center', originY: 'center',
+                left: EDITOR_W / 2, top: EDITOR_H / 2,
+              });
+              applyColorFilter(img, layerColors?.[layer.id]);
+              canvas.add(img);
+            } catch (e) { console.error('Failed to load layer', layer.id, e); }
+          }
+        } else if (side?.imageUrl) {
+          try {
+            const img = await fabric.FabricImage.fromURL(side.imageUrl, { crossOrigin: 'anonymous' });
+            if (disposed) { canvas.dispose(); return; }
+            const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
+            img.set({
+              scaleX: baseScale * zoom, scaleY: baseScale * zoom,
+              originX: 'center', originY: 'center',
+              left: EDITOR_W / 2, top: EDITOR_H / 2,
+            });
+            applyColorFilter(img);
+            canvas.add(img);
+          } catch (e) { console.error('Failed to load mockup for', sideId, e); }
+        }
+
+        // Load design objects — they were saved at EDITOR_W x EDITOR_H coordinates
+        if (canvasState?.objects?.length) {
+          const designObjects = canvasState.objects.filter(
+            (obj: any) => obj?.data?.id !== 'background-product-image'
+          );
+          if (designObjects.length > 0) {
+            const tempCanvas = new fabric.StaticCanvas(undefined, { width: EDITOR_W, height: EDITOR_H });
+            await tempCanvas.loadFromJSON({ version: canvasState.version || '6.0.0', objects: designObjects });
+            if (disposed) { tempCanvas.dispose(); canvas.dispose(); return; }
+            const objs = tempCanvas.getObjects();
+            for (const obj of objs) {
+              tempCanvas.remove(obj);
+              canvas.add(obj);
+            }
+            tempCanvas.dispose();
+          }
+        }
+
+        canvas.renderAll();
+      } catch (e) {
+        console.error('Error rendering admin design for side', sideId, e);
+      }
+    };
+
+    init();
+
+    return () => {
+      disposed = true;
+      if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
+      fabricRef.current = null;
+    };
+  }, [sideId, side, canvasState, productColorHex, layerColors]);
+
+  const displayW = Math.round(EDITOR_W * ADMIN_DISPLAY_SCALE);
+  const displayH = Math.round(EDITOR_H * ADMIN_DISPLAY_SCALE);
+
+  return (
+    <div className="flex flex-col items-center">
+      <div style={{ width: displayW, height: displayH, overflow: 'hidden' }}>
+        <canvas
+          ref={canvasRef}
+          className="rounded-lg"
+          style={{ transform: `scale(${ADMIN_DISPLAY_SCALE})`, transformOrigin: 'top left' }}
+        />
+      </div>
       <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
     </div>
   );
@@ -344,21 +546,65 @@ export default function CoBuyRequestDetailPage() {
             <p className="text-sm text-gray-600 mb-3">{request.description}</p>
           )}
 
-          {/* Selected Product Color */}
-          {(request.freeform_color_selections as any)?._productColor && (
-            <div className="flex items-center gap-2 mb-3">
-              <p className="text-xs font-medium text-gray-500">선택 색상</p>
-              <div
-                className="w-5 h-5 rounded-full border border-gray-300"
-                style={{ backgroundColor: (request.freeform_color_selections as any)._productColor.hex }}
-              />
-              <span className="text-xs text-gray-700">
-                {(request.freeform_color_selections as any)._productColor.name}
-                {(request.freeform_color_selections as any)._productColor.colorCode &&
-                  ` (${(request.freeform_color_selections as any)._productColor.colorCode})`}
-              </span>
-            </div>
-          )}
+          {/* Selected Colors */}
+          {(() => {
+            const colorSelections = request.freeform_color_selections as Record<string, any> | null;
+            const productConfig = (request as any).product?.configuration as ProductSideInfo[] | undefined;
+            const productColor = colorSelections?._productColor;
+
+            // Collect layer color info from product config + selections
+            const layerColorInfo: { layerName: string; hex: string; colorCode?: string }[] = [];
+            if (productConfig && colorSelections) {
+              const seen = new Set<string>();
+              productConfig.forEach((side: any) => {
+                side.layers?.forEach((layer: any) => {
+                  if (seen.has(layer.id)) return;
+                  seen.add(layer.id);
+                  // Find selected hex for this layer from any side
+                  let selectedHex: string | undefined;
+                  for (const sideId of Object.keys(colorSelections)) {
+                    if (sideId === '_productColor') continue;
+                    const sideColors = colorSelections[sideId];
+                    if (sideColors?.[layer.id]) { selectedHex = sideColors[layer.id]; break; }
+                  }
+                  if (!selectedHex) return;
+                  const matched = layer.colorOptions?.find((co: any) => co.hex === selectedHex);
+                  layerColorInfo.push({
+                    layerName: layer.name,
+                    hex: selectedHex,
+                    colorCode: matched?.colorCode,
+                  });
+                });
+              });
+            }
+
+            const hasColors = productColor || layerColorInfo.length > 0;
+            if (!hasColors) return null;
+
+            return (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-gray-500 mb-1.5">선택 색상</p>
+                <div className="flex flex-wrap gap-2">
+                  {productColor && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: productColor.hex }} />
+                      <span className="text-xs text-gray-700">
+                        {productColor.name}{productColor.colorCode && ` (${productColor.colorCode})`}
+                      </span>
+                    </div>
+                  )}
+                  {layerColorInfo.map((info, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: info.hex }} />
+                      <span className="text-xs text-gray-700">
+                        {info.layerName}{info.colorCode && ` (${info.colorCode})`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Freeform Sketch */}
           <div className="mb-3">
@@ -367,16 +613,18 @@ export default function CoBuyRequestDetailPage() {
               canvasState={request.freeform_canvas_state || {}}
               productSides={(request as any).product?.configuration}
               productColorHex={(request.freeform_color_selections as any)?._productColor?.hex}
+              colorSelections={request.freeform_color_selections as Record<string, any> | undefined}
             />
           </div>
 
           {/* Admin Design Preview */}
-          {request.admin_design_preview_url && (
+          {request.admin_design_id && (
             <div className="mb-3">
-              <p className="text-xs font-medium text-gray-500 mb-1">관리자 디자인</p>
-              <div className="w-48 h-48 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden">
-                <img src={request.admin_design_preview_url} alt="Admin design" className="w-full h-full object-contain" />
-              </div>
+              <p className="text-xs font-medium text-gray-500 mb-1.5">관리자 디자인</p>
+              <AdminDesignPreview
+                designId={request.admin_design_id}
+                productSides={(request as any).product?.configuration}
+              />
             </div>
           )}
 

@@ -26,6 +26,11 @@ interface CanvasStore {
   zoomLevels: Record<string, number>;
   objectPrintMethods: Record<string, PrintMethod>;
 
+  // Undo/redo history (per-side)
+  canvasHistory: Record<string, string[]>;
+  historyIndex: Record<string, number>;
+  isUndoRedoing: boolean;
+
   registerCanvas: (sideId: string, canvas: fabric.Canvas) => void;
   unregisterCanvas: (sideId: string) => void;
   setActiveSide: (sideId: string) => void;
@@ -34,6 +39,11 @@ interface CanvasStore {
   setProductColor: (color: string) => void;
   markImageLoaded: (sideId: string) => void;
   incrementCanvasVersion: () => void;
+  saveHistory: (sideId: string) => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
   initializeLayerColors: (sideId: string, layers: ProductLayer[]) => void;
   setLayerColor: (sideId: string, layerId: string, color: string) => void;
   resetZoom: (sideId: string) => void;
@@ -157,6 +167,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   canvasVersion: 0,
   zoomLevels: {},
   objectPrintMethods: {},
+  canvasHistory: {},
+  historyIndex: {},
+  isUndoRedoing: false,
 
   registerCanvas: (sideId, canvas) =>
     set((state) => {
@@ -176,12 +189,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const layerColors = { ...state.layerColors };
       delete layerColors[sideId];
 
+      const canvasHistory = { ...state.canvasHistory };
+      delete canvasHistory[sideId];
+      const historyIndex = { ...state.historyIndex };
+      delete historyIndex[sideId];
+
       const activeSideId =
         state.activeSideId === sideId
           ? Object.keys(canvasMap)[0] || null
           : state.activeSideId;
 
-      return { canvasMap, zoomLevels, layerColors, activeSideId };
+      return { canvasMap, zoomLevels, layerColors, canvasHistory, historyIndex, activeSideId };
     }),
 
   setActiveSide: (sideId) => set({ activeSideId: sideId }),
@@ -198,6 +216,125 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   markImageLoaded: () => set((state) => ({ canvasVersion: state.canvasVersion + 1 })),
 
   incrementCanvasVersion: () => set((state) => ({ canvasVersion: state.canvasVersion + 1 })),
+
+  saveHistory: (sideId: string) => {
+    const state = get();
+    if (state.isUndoRedoing) return;
+    const canvas = state.canvasMap[sideId];
+    if (!canvas) return;
+
+    const userObjects = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+    const snapshot = JSON.stringify(userObjects.map(obj => {
+      const json = obj.toObject(['data']);
+      if (obj.type === 'image') json.src = (obj as fabric.FabricImage).getSrc();
+      return json;
+    }));
+
+    set((prev) => {
+      const history = prev.canvasHistory[sideId] || [];
+      const idx = prev.historyIndex[sideId] ?? -1;
+      const trimmed = history.slice(0, idx + 1);
+      const next = [...trimmed, snapshot];
+      // Limit history to 50 entries
+      if (next.length > 50) next.shift();
+      return {
+        canvasHistory: { ...prev.canvasHistory, [sideId]: next },
+        historyIndex: { ...prev.historyIndex, [sideId]: next.length - 1 },
+      };
+    });
+  },
+
+  canUndo: () => {
+    const { activeSideId, historyIndex } = get();
+    if (!activeSideId) return false;
+    return (historyIndex[activeSideId] ?? -1) > 0;
+  },
+
+  canRedo: () => {
+    const { activeSideId, canvasHistory, historyIndex } = get();
+    if (!activeSideId) return false;
+    const history = canvasHistory[activeSideId] || [];
+    const idx = historyIndex[activeSideId] ?? -1;
+    return idx < history.length - 1;
+  },
+
+  undo: async () => {
+    const { activeSideId, canvasMap, canvasHistory, historyIndex } = get();
+    if (!activeSideId) return;
+    const canvas = canvasMap[activeSideId];
+    if (!canvas) return;
+    const idx = historyIndex[activeSideId] ?? -1;
+    if (idx <= 0) return;
+
+    const prevIdx = idx - 1;
+    set({ isUndoRedoing: true });
+
+    // Remove current user objects
+    const toRemove = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+    toRemove.forEach(obj => canvas.remove(obj));
+
+    // Restore objects from history
+    const saved = JSON.parse(canvasHistory[activeSideId][prevIdx]);
+    if (saved.length > 0) {
+      const objects = await fabric.util.enlivenObjects(saved);
+      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+    }
+    canvas.discardActiveObject();
+    canvas.renderAll();
+
+    set((prev) => ({
+      isUndoRedoing: false,
+      historyIndex: { ...prev.historyIndex, [activeSideId]: prevIdx },
+      canvasVersion: prev.canvasVersion + 1,
+    }));
+  },
+
+  redo: async () => {
+    const { activeSideId, canvasMap, canvasHistory, historyIndex } = get();
+    if (!activeSideId) return;
+    const canvas = canvasMap[activeSideId];
+    if (!canvas) return;
+    const history = canvasHistory[activeSideId] || [];
+    const idx = historyIndex[activeSideId] ?? -1;
+    if (idx >= history.length - 1) return;
+
+    const nextIdx = idx + 1;
+    set({ isUndoRedoing: true });
+
+    // Remove current user objects
+    const toRemove = canvas.getObjects().filter(obj => {
+      if (obj.excludeFromExport) return false;
+      // @ts-expect-error - custom data property
+      if (obj.data?.id === 'background-product-image') return false;
+      return true;
+    });
+    toRemove.forEach(obj => canvas.remove(obj));
+
+    // Restore objects from history
+    const saved = JSON.parse(history[nextIdx]);
+    if (saved.length > 0) {
+      const objects = await fabric.util.enlivenObjects(saved);
+      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+    }
+    canvas.discardActiveObject();
+    canvas.renderAll();
+
+    set((prev) => ({
+      isUndoRedoing: false,
+      historyIndex: { ...prev.historyIndex, [activeSideId]: nextIdx },
+      canvasVersion: prev.canvasVersion + 1,
+    }));
+  },
 
   initializeLayerColors: (sideId, layers) =>
     set((state) => {

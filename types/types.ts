@@ -83,11 +83,8 @@ export interface ProductSide {
   };
   layers?: ProductLayer[];
   realLifeDimensions?: {
-    printAreaWidthMm: number;
-    printAreaHeightMm: number;
     productWidthMm: number;
   };
-  zoomScale?: number;
   /** @deprecated Use partner_mall_presets table instead */
   defaultLogoPlacement?: DefaultLogoPlacement;
 }

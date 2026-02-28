@@ -22,7 +22,7 @@ interface ProductSideInfo {
   name: string;
   imageUrl?: string;
   zoomScale?: number;
-  layers?: { id: string; name: string; imageUrl: string; zIndex: number }[];
+  layers?: { id: string; name: string; imageUrl: string; zIndex: number; colorOptions?: { hex: string; colorCode: string }[] }[];
 }
 
 interface FreeformSketchPanelProps {
@@ -103,6 +103,7 @@ export default function FreeformSketchPanel({ cobuyRequestId, onClose }: Freefor
                   side={productSides.find(s => s.id === sideId)}
                   stateValue={canvasState[sideId]}
                   productColorHex={productColorHex}
+                  layerColors={colorSelections?.[sideId] as Record<string, string> | undefined}
                 />
               </div>
             ))}
@@ -118,6 +119,37 @@ export default function FreeformSketchPanel({ cobuyRequestId, onClose }: Freefor
             <span className="text-[10px] text-neutral-300">{productColorName || productColorHex}</span>
           </div>
         )}
+        {/* Layer color info */}
+        {(() => {
+          const infos: { name: string; hex: string; code?: string }[] = [];
+          const seen = new Set<string>();
+          productSides.forEach(side => {
+            side.layers?.forEach(layer => {
+              if (seen.has(layer.id)) return;
+              seen.add(layer.id);
+              let hex: string | undefined;
+              for (const sid of sideIds) {
+                if (sid === '_productColor') continue;
+                hex = (colorSelections?.[sid] as any)?.[layer.id];
+                if (hex) break;
+              }
+              if (!hex) return;
+              const matched = layer.colorOptions?.find(co => co.hex === hex);
+              infos.push({ name: layer.name, hex, code: matched?.colorCode });
+            });
+          });
+          if (infos.length === 0) return null;
+          return (
+            <div className="flex flex-wrap gap-1.5 mt-1.5 px-1">
+              {infos.map((info, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full border border-neutral-500" style={{ backgroundColor: info.hex }} />
+                  <span className="text-[10px] text-neutral-400">{info.name}{info.code && ` (${info.code})`}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Request title */}
@@ -134,11 +166,13 @@ function SketchCanvas({
   side,
   stateValue,
   productColorHex,
+  layerColors,
 }: {
   sideId: string;
   side?: ProductSideInfo;
   stateValue?: any;
   productColorHex?: string;
+  layerColors?: Record<string, string>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<any>(null);
@@ -162,9 +196,10 @@ function SketchCanvas({
         const hasLayers = side?.layers && side.layers.length > 0;
         const zoom = side?.zoomScale || 1.0;
 
-        const applyColorFilter = (img: any) => {
-          if (productColorHex && productColorHex !== '#FFFFFF') {
-            img.filters = [new fabric.filters.BlendColor({ color: productColorHex, mode: 'multiply', alpha: 1 })];
+        const applyColorFilter = (img: any, colorHex?: string) => {
+          const color = colorHex || productColorHex;
+          if (color && color !== '#FFFFFF') {
+            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
             img.applyFilters();
           }
         };
@@ -182,7 +217,7 @@ function SketchCanvas({
                 originX: 'center', originY: 'center',
                 left: PREVIEW_W / 2, top: PREVIEW_H / 2,
               });
-              applyColorFilter(img);
+              applyColorFilter(img, layerColors?.[layer.id]);
               canvas.add(img);
             } catch (e) { console.error('Failed to load layer', layer.id, e); }
           }
@@ -237,7 +272,7 @@ function SketchCanvas({
       if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
       fabricRef.current = null;
     };
-  }, [sideId, side, stateValue, productColorHex]);
+  }, [sideId, side, stateValue, productColorHex, layerColors]);
 
   return <canvas ref={canvasRef} className="rounded" />;
 }
