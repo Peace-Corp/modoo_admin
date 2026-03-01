@@ -37,6 +37,13 @@ const formatDate = (dateString?: string | null) => {
   });
 };
 
+const formatDateShort = (dateString?: string | null) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('ko-KR', {
+    month: 'short', day: 'numeric',
+  });
+};
+
 export default function CoBuyRequestsTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -76,33 +83,48 @@ export default function CoBuyRequestsTab() {
         <div className="text-center py-12 text-gray-400 text-sm">요청이 없습니다.</div>
       ) : (
         <div className="space-y-2">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            <div className="w-12 shrink-0" />
+            <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2">
+              <span>단체명</span>
+              <span>요청자</span>
+              <span>전화번호</span>
+              <span>이메일</span>
+              <span>수량</span>
+              <span>희망 수령일</span>
+              <span>요청일</span>
+              <span className="text-center">상태</span>
+            </div>
+          </div>
           {requests.map(req => (
             <Link
               key={req.id}
               href={`/cobuy/requests/${req.id}`}
               className="block w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  {req.freeform_preview_url && (
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
-                      <img src={req.freeform_preview_url} alt="" className="w-full h-full object-cover" />
-                    </div>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
+                  {req.freeform_preview_url ? (
+                    <img src={req.freeform_preview_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full" />
                   )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {(req as any).product?.title} · {(req as any).guest_name ? `${(req as any).guest_name} (비회원)` : ((req as any).profiles?.email || (req as any).profiles?.name || 'Unknown')}
-                    </p>
-                    {req.description && (
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">참고: {req.description}</p>
-                    )}
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(req.created_at)}</p>
+                </div>
+                <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2 items-center">
+                  <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
+                  <p className="text-xs text-gray-600 truncate">{req.guest_name || (req as any).profiles?.name || '-'}</p>
+                  <p className="text-xs text-gray-500 truncate">{req.guest_phone || (req as any).profiles?.phone || '-'}</p>
+                  <p className="text-xs text-gray-500 truncate">{req.guest_email || (req as any).profiles?.email || '-'}</p>
+                  <p className="text-xs text-gray-600">{(req.quantity_expectations as any)?.estimatedQuantity ? `${(req.quantity_expectations as any).estimatedQuantity}벌` : '-'}</p>
+                  <p className="text-[10px] text-gray-400">{formatDateShort((req.schedule_preferences as any)?.receiveByDate)}</p>
+                  <p className="text-[10px] text-gray-400">{formatDate(req.created_at)}</p>
+                  <div className="text-center">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
+                      {statusLabels[req.status]}
+                    </span>
                   </div>
                 </div>
-                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
-                  {statusLabels[req.status]}
-                </span>
               </div>
             </Link>
           ))}
