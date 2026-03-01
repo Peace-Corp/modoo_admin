@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { X, Upload, Loader2, Building2 } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { X, Upload, Loader2, Building2, CheckCircle, AlertCircle } from 'lucide-react';
 import { PartnerMall } from '@/types/types';
 
 interface PartnerMallInfoEditorProps {
@@ -16,6 +16,12 @@ export default function PartnerMallInfoEditor({
   onSave,
 }: PartnerMallInfoEditorProps) {
   const [name, setName] = useState(partnerMall.name);
+  const [slug, setSlug] = useState(partnerMall.slug || '');
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>(
+    partnerMall.slug ? 'available' : 'idle'
+  );
+  const [slugMessage, setSlugMessage] = useState('');
+  const slugCheckTimeout = useRef<NodeJS.Timeout | null>(null);
   const [logoUrl, setLogoUrl] = useState(partnerMall.logo_url);
   const [originalLogoUrl, setOriginalLogoUrl] = useState(partnerMall.original_logo_url);
   const [isUploading, setIsUploading] = useState(false);
@@ -23,6 +29,46 @@ export default function PartnerMallInfoEditor({
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const checkSlugAvailability = useCallback(async (value: string) => {
+    if (!value) {
+      setSlugStatus('idle');
+      setSlugMessage('');
+      return;
+    }
+    const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+    if (!slugRegex.test(value)) {
+      setSlugStatus('invalid');
+      setSlugMessage('영문 소문자, 숫자, 하이픈(-)만 가능');
+      return;
+    }
+    if (value.length < 2) {
+      setSlugStatus('invalid');
+      setSlugMessage('2자 이상 입력해주세요');
+      return;
+    }
+    setSlugStatus('checking');
+    try {
+      const res = await fetch(`/api/admin/partner-malls/check-slug?slug=${encodeURIComponent(value)}&exclude_id=${partnerMall.id}`);
+      const result = await res.json();
+      setSlugStatus(result.available ? 'available' : 'taken');
+      setSlugMessage(result.message || '');
+    } catch {
+      setSlugStatus('invalid');
+      setSlugMessage('확인 실패');
+    }
+  }, [partnerMall.id]);
+
+  const handleSlugChange = (value: string) => {
+    const formatted = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setSlug(formatted);
+    setSlugStatus('idle');
+    setSlugMessage('');
+    if (slugCheckTimeout.current) clearTimeout(slugCheckTimeout.current);
+    if (formatted) {
+      slugCheckTimeout.current = setTimeout(() => checkSlugAvailability(formatted), 400);
+    }
+  };
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,6 +174,11 @@ export default function PartnerMallInfoEditor({
       return;
     }
 
+    if (slug && slugStatus !== 'available') {
+      setError('슬러그를 확인해주세요.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
 
@@ -138,6 +189,7 @@ export default function PartnerMallInfoEditor({
         body: JSON.stringify({
           id: partnerMall.id,
           name: name.trim(),
+          slug: slug || null,
           logo_url: logoUrl,
           original_logo_url: originalLogoUrl,
         }),
@@ -236,6 +288,43 @@ export default function PartnerMallInfoEditor({
               className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 outline-none"
             />
           </div>
+
+          {/* Slug */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              슬러그 (URL 주소)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                placeholder="예: samsung, lg-electronics"
+                className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg text-base focus:outline-none focus:ring-2 focus:border-transparent ${
+                  slugStatus === 'available' ? 'border-green-400 focus:ring-green-500' :
+                  slugStatus === 'taken' || slugStatus === 'invalid' ? 'border-red-400 focus:ring-red-500' :
+                  'border-gray-300 focus:ring-blue-500'
+                }`}
+              />
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                {slugStatus === 'checking' && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                {slugStatus === 'available' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                {(slugStatus === 'taken' || slugStatus === 'invalid') && <AlertCircle className="w-4 h-4 text-red-500" />}
+              </div>
+            </div>
+            {slugMessage && (
+              <p className={`mt-1 text-xs ${
+                slugStatus === 'available' ? 'text-green-600' :
+                slugStatus === 'taken' || slugStatus === 'invalid' ? 'text-red-600' :
+                'text-gray-500'
+              }`}>
+                {slugMessage}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">
+              modoouniform.com/mall/<span className="font-medium">{slug || 'slug'}</span>
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
@@ -248,7 +337,7 @@ export default function PartnerMallInfoEditor({
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || isUploading}
+            disabled={isSaving || isUploading || (!!slug && slugStatus !== 'available')}
             className="flex-1 py-2.5 sm:py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {isSaving ? (

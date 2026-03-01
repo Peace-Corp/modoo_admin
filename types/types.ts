@@ -636,6 +636,7 @@ export interface LogoPlacement {
 export interface PartnerMall {
   id: string;
   name: string;
+  slug: string | null;
   logo_url: string;
   original_logo_url: string | null;
   is_active: boolean;
