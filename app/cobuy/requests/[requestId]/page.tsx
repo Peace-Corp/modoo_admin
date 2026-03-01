@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Pencil, Send, Copy, Check } from 'lucide-react';
+import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Send, Copy, Check } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/types';
 import '@/lib/curvedText';
 
@@ -231,200 +231,6 @@ function SketchSideCanvas({
 }
 
 // ============================================================================
-// Admin Design Preview (all sides)
-// ============================================================================
-
-// Must match UnifiedEditor / EditorCanvas canvas size
-const EDITOR_W = 400;
-const EDITOR_H = 500;
-const ADMIN_DISPLAY_SCALE = 0.55; // CSS scale-down for preview
-
-interface AdminDesignData {
-  canvas_state: Record<string, any>;
-  color_selections: Record<string, any> | null;
-}
-
-function AdminDesignPreview({
-  designId,
-  productSides,
-}: {
-  designId: string;
-  productSides?: ProductSideInfo[];
-}) {
-  const [design, setDesign] = useState<AdminDesignData | null>(null);
-
-  useEffect(() => {
-    const fetchDesign = async () => {
-      try {
-        const res = await fetch(`/api/admin/designs/${designId}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        setDesign(json.data);
-      } catch { /* ignore */ }
-    };
-    fetchDesign();
-  }, [designId]);
-
-  if (!design) {
-    return (
-      <div className="flex justify-center py-6">
-        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-400" />
-      </div>
-    );
-  }
-
-  const sideIds = productSides?.map(s => s.id) ?? Object.keys(design.canvas_state || {});
-  if (sideIds.length === 0) return <p className="text-xs text-gray-400">디자인 데이터 없음</p>;
-
-  const productColor = (design.color_selections as any)?.productColor;
-
-  return (
-    <div className="flex gap-3 flex-wrap">
-      {sideIds.map(sideId => {
-        const raw = design.canvas_state?.[sideId];
-        const parsed = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
-        const sideLayerColors = parsed?.layerColors as Record<string, string> | undefined;
-        return (
-          <AdminDesignSideCanvas
-            key={sideId}
-            sideId={sideId}
-            side={productSides?.find(s => s.id === sideId)}
-            canvasState={parsed}
-            productColorHex={productColor}
-            layerColors={sideLayerColors}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function AdminDesignSideCanvas({
-  sideId,
-  side,
-  canvasState,
-  productColorHex,
-  layerColors,
-}: {
-  sideId: string;
-  side?: ProductSideInfo;
-  canvasState?: any;
-  productColorHex?: string;
-  layerColors?: Record<string, string>;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    let disposed = false;
-
-    const init = async () => {
-      const fabric = await import('fabric');
-      if (disposed) return;
-
-      const canvas = new fabric.StaticCanvas(canvasRef.current!, {
-        width: EDITOR_W,
-        height: EDITOR_H,
-        backgroundColor: '#EBEBEB',
-      });
-      fabricRef.current = canvas;
-
-      try {
-        const hasLayers = side?.layers && side.layers.length > 0;
-        const zoom = side?.zoomScale || 1.0;
-
-        const applyColorFilter = (img: any, colorHex?: string) => {
-          const color = colorHex || productColorHex;
-          if (color && color !== '#FFFFFF') {
-            img.filters = [new fabric.filters.BlendColor({ color, mode: 'multiply', alpha: 1 })];
-            img.applyFilters();
-          }
-        };
-
-        if (hasLayers) {
-          const sorted = [...side!.layers!].sort((a, b) => a.zIndex - b.zIndex);
-          for (const layer of sorted) {
-            if (disposed) return;
-            try {
-              const img = await fabric.FabricImage.fromURL(layer.imageUrl, { crossOrigin: 'anonymous' });
-              if (disposed) { canvas.dispose(); return; }
-              const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
-              img.set({
-                scaleX: baseScale * zoom, scaleY: baseScale * zoom,
-                originX: 'center', originY: 'center',
-                left: EDITOR_W / 2, top: EDITOR_H / 2,
-              });
-              applyColorFilter(img, layerColors?.[layer.id]);
-              canvas.add(img);
-            } catch (e) { console.error('Failed to load layer', layer.id, e); }
-          }
-        } else if (side?.imageUrl) {
-          try {
-            const img = await fabric.FabricImage.fromURL(side.imageUrl, { crossOrigin: 'anonymous' });
-            if (disposed) { canvas.dispose(); return; }
-            const baseScale = Math.min(EDITOR_W / (img.width || 1), EDITOR_H / (img.height || 1));
-            img.set({
-              scaleX: baseScale * zoom, scaleY: baseScale * zoom,
-              originX: 'center', originY: 'center',
-              left: EDITOR_W / 2, top: EDITOR_H / 2,
-            });
-            applyColorFilter(img);
-            canvas.add(img);
-          } catch (e) { console.error('Failed to load mockup for', sideId, e); }
-        }
-
-        // Load design objects — they were saved at EDITOR_W x EDITOR_H coordinates
-        if (canvasState?.objects?.length) {
-          const designObjects = canvasState.objects.filter(
-            (obj: any) => obj?.data?.id !== 'background-product-image'
-          );
-          if (designObjects.length > 0) {
-            const tempCanvas = new fabric.StaticCanvas(undefined, { width: EDITOR_W, height: EDITOR_H });
-            await tempCanvas.loadFromJSON({ version: canvasState.version || '6.0.0', objects: designObjects });
-            if (disposed) { tempCanvas.dispose(); canvas.dispose(); return; }
-            const objs = tempCanvas.getObjects();
-            for (const obj of objs) {
-              tempCanvas.remove(obj);
-              canvas.add(obj);
-            }
-            tempCanvas.dispose();
-          }
-        }
-
-        canvas.renderAll();
-      } catch (e) {
-        console.error('Error rendering admin design for side', sideId, e);
-      }
-    };
-
-    init();
-
-    return () => {
-      disposed = true;
-      if (fabricRef.current) { try { fabricRef.current.dispose(); } catch {} }
-      fabricRef.current = null;
-    };
-  }, [sideId, side, canvasState, productColorHex, layerColors]);
-
-  const displayW = Math.round(EDITOR_W * ADMIN_DISPLAY_SCALE);
-  const displayH = Math.round(EDITOR_H * ADMIN_DISPLAY_SCALE);
-
-  return (
-    <div className="flex flex-col items-center">
-      <div style={{ width: displayW, height: displayH, overflow: 'hidden' }}>
-        <canvas
-          ref={canvasRef}
-          className="rounded-lg"
-          style={{ transform: `scale(${ADMIN_DISPLAY_SCALE})`, transformOrigin: 'top left' }}
-        />
-      </div>
-      <p className="text-[10px] text-gray-400 mt-1">{side?.name || sideId}</p>
-    </div>
-  );
-}
-
-// ============================================================================
 // Request Detail Page
 // ============================================================================
 
@@ -441,6 +247,13 @@ export default function CoBuyRequestDetailPage() {
 
   const { data: comments, mutate: mutateComments } = useSWR<CoBuyRequestComment[]>(
     `/api/admin/cobuy/requests/${requestId}/comments`,
+    fetcher
+  );
+
+  // Fetch admin design canvas state when linked
+  const adminDesignId = request?.admin_design_id;
+  const { data: adminDesignData } = useSWR(
+    adminDesignId ? `/api/admin/designs/${adminDesignId}` : null,
     fetcher
   );
 
@@ -553,7 +366,6 @@ export default function CoBuyRequestDetailPage() {
             const productConfig = (request as any).product?.configuration as ProductSideInfo[] | undefined;
             const productColor = colorSelections?._productColor;
 
-            // Collect layer color info from product config + selections
             const layerColorInfo: { layerName: string; hex: string; colorCode?: string }[] = [];
             if (productConfig && colorSelections) {
               const seen = new Set<string>();
@@ -561,7 +373,6 @@ export default function CoBuyRequestDetailPage() {
                 side.layers?.forEach((layer: any) => {
                   if (seen.has(layer.id)) return;
                   seen.add(layer.id);
-                  // Find selected hex for this layer from any side
                   let selectedHex: string | undefined;
                   for (const sideId of Object.keys(colorSelections)) {
                     if (sideId === '_productColor') continue;
@@ -607,27 +418,16 @@ export default function CoBuyRequestDetailPage() {
             );
           })()}
 
-          {/* Freeform Sketch */}
+          {/* Design Preview */}
           <div className="mb-3">
-            <p className="text-xs font-medium text-gray-500 mb-1.5">사용자 스케치</p>
+            <p className="text-xs font-medium text-gray-500 mb-1.5">디자인 미리보기</p>
             <FreeformSketchPreview
-              canvasState={request.freeform_canvas_state || {}}
+              canvasState={adminDesignData?.data?.canvas_state || request.freeform_canvas_state || {}}
               productSides={(request as any).product?.configuration}
               productColorHex={(request.freeform_color_selections as any)?._productColor?.hex}
               colorSelections={request.freeform_color_selections as Record<string, any> | undefined}
             />
           </div>
-
-          {/* Admin Design Preview */}
-          {request.admin_design_id && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-gray-500 mb-1.5">관리자 디자인</p>
-              <AdminDesignPreview
-                designId={request.admin_design_id}
-                productSides={(request as any).product?.configuration}
-              />
-            </div>
-          )}
 
           {/* Guest Contact Info */}
           {(request as any).guest_name && (
@@ -651,48 +451,50 @@ export default function CoBuyRequestDetailPage() {
           )}
 
           {/* Request Details */}
-          <div className="grid grid-cols-2 gap-3 text-xs mt-3 pt-3 border-t border-gray-100">
-            <div>
-              <p className="text-gray-500">제품</p>
-              <p className="font-medium">{(request as any).product?.title || '-'}</p>
+          {request.confirmed_price && (
+            <div className="text-xs mt-3 pt-3 border-t border-gray-100">
+              <p className="text-gray-500">확정 가격</p>
+              <p className="font-medium">₩{Number(request.confirmed_price).toLocaleString()}</p>
             </div>
-            <div>
-              <p className="text-gray-500">공개 여부</p>
-              <p className="font-medium">{request.is_public ? '공개' : '비공개'}</p>
-            </div>
-            {request.confirmed_price && (
-              <div>
-                <p className="text-gray-500">확정 가격</p>
-                <p className="font-medium">₩{Number(request.confirmed_price).toLocaleString()}</p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Actions */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-sm font-medium text-gray-900 mb-3">작업</p>
           <div className="flex flex-wrap gap-2">
-            {request.status === 'pending' && (
-              <button
-                onClick={() => updateRequest({ status: 'in_progress' })}
-                disabled={isUpdating}
-                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-              >
-                <Pencil className="w-3.5 h-3.5" /> 작업 시작
-              </button>
-            )}
-
-            {(['in_progress', 'feedback', 'design_shared', 'confirmed'] as CoBuyRequestStatus[]).includes(request.status) && (
-              <>
+            {(['pending', 'in_progress', 'feedback', 'design_shared', 'confirmed'] as CoBuyRequestStatus[]).includes(request.status) && (
+              request.status === 'pending' ? (
+                <button
+                  onClick={async () => {
+                    setIsUpdating(true);
+                    try {
+                      const res = await fetch('/api/admin/cobuy/requests', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: requestId, status: 'in_progress' }),
+                      });
+                      if (!res.ok) throw new Error('Update failed');
+                      window.location.href = `/editor/${request.product_id}?mode=design&cobuyRequestId=${request.id}`;
+                    } catch (error) {
+                      console.error('Failed to update:', error);
+                      alert('업데이트에 실패했습니다.');
+                      setIsUpdating(false);
+                    }
+                  }}
+                  disabled={isUpdating}
+                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> 에디터 열기
+                </button>
+              ) : (
                 <a
                   href={`/editor/${request.product_id}?mode=design&cobuyRequestId=${request.id}${request.admin_design_id ? `&designId=${request.admin_design_id}` : ''}`}
                   className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> 에디터 열기
                 </a>
-
-              </>
+              )
             )}
 
             {request.admin_design_id && request.status === 'in_progress' && (
