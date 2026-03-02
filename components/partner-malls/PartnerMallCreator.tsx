@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { X, Loader2, Check } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Loader2, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { Product, LogoPlacement, ProductSide, PartnerMallPreset } from '@/types/types';
 import LogoCapture from './LogoCapture';
 import ProductMultiSelect from './ProductMultiSelect';
@@ -43,6 +43,10 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [products, setProducts] = useState<Product[]>([]);
   const [placements, setPlacements] = useState<ProductPlacement[]>([]);
   const [partnerMallName, setPartnerMallName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [slugMessage, setSlugMessage] = useState('');
+  const slugCheckTimeout = useRef<NodeJS.Timeout | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
@@ -52,6 +56,55 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
   const [productColorSelections, setProductColorSelections] = useState<
     Record<string, SelectedColor | null>
   >({});
+
+  // Slug validation with debounce
+  const checkSlugAvailability = useCallback(async (value: string) => {
+    if (!value) {
+      setSlugStatus('idle');
+      setSlugMessage('');
+      return;
+    }
+
+    const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+    if (!slugRegex.test(value)) {
+      setSlugStatus('invalid');
+      setSlugMessage('영문 소문자, 숫자, 하이픈(-)만 가능하며 하이픈으로 시작/끝 불가');
+      return;
+    }
+    if (value.length < 2) {
+      setSlugStatus('invalid');
+      setSlugMessage('2자 이상 입력해주세요');
+      return;
+    }
+
+    setSlugStatus('checking');
+    try {
+      const res = await fetch(`/api/admin/partner-malls/check-slug?slug=${encodeURIComponent(value)}`);
+      const result = await res.json();
+      if (result.available) {
+        setSlugStatus('available');
+        setSlugMessage('사용 가능');
+      } else {
+        setSlugStatus('taken');
+        setSlugMessage(result.message || '이미 사용 중');
+      }
+    } catch {
+      setSlugStatus('invalid');
+      setSlugMessage('확인 실패');
+    }
+  }, []);
+
+  const handleSlugChange = (value: string) => {
+    const formatted = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setSlug(formatted);
+    setSlugStatus('idle');
+    setSlugMessage('');
+
+    if (slugCheckTimeout.current) clearTimeout(slugCheckTimeout.current);
+    if (formatted) {
+      slugCheckTimeout.current = setTimeout(() => checkSlugAvailability(formatted), 400);
+    }
+  };
 
   // Fetch products when IDs are selected
   useEffect(() => {
@@ -146,6 +199,11 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
       return;
     }
 
+    if (slug && slugStatus !== 'available') {
+      setError('슬러그를 확인해주세요.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
 
@@ -156,6 +214,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: partnerMallName.trim(),
+          slug: slug || null,
           logo_url: logoUrl,
           original_logo_url: originalLogoUrl,
           is_active: true,
@@ -411,6 +470,43 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                   />
                 </div>
 
+                {/* Slug input */}
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    슬러그 (URL 주소)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={slug}
+                      onChange={(e) => handleSlugChange(e.target.value)}
+                      placeholder="예: samsung, lg-electronics"
+                      className={`w-full px-2 sm:px-4 py-2 border rounded-lg text-xs sm:text-base focus:outline-none focus:ring-2 focus:border-transparent ${
+                        slugStatus === 'available' ? 'border-green-400 focus:ring-green-500' :
+                        slugStatus === 'taken' || slugStatus === 'invalid' ? 'border-red-400 focus:ring-red-500' :
+                        'border-gray-300 focus:ring-blue-500'
+                      }`}
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      {slugStatus === 'checking' && <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-gray-400" />}
+                      {slugStatus === 'available' && <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />}
+                      {(slugStatus === 'taken' || slugStatus === 'invalid') && <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />}
+                    </div>
+                  </div>
+                  {slugMessage && (
+                    <p className={`mt-1 text-[10px] sm:text-xs ${
+                      slugStatus === 'available' ? 'text-green-600' :
+                      slugStatus === 'taken' || slugStatus === 'invalid' ? 'text-red-600' :
+                      'text-gray-500'
+                    }`}>
+                      {slugMessage}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] sm:text-xs text-gray-400">
+                    modoouniform.com/mall/<span className="font-medium">{slug || 'slug'}</span> 으로 접속 가능합니다
+                  </p>
+                </div>
+
                 {/* Summary */}
                 <div className="p-2 sm:p-4 bg-blue-50 rounded-lg">
                   <p className="text-xs sm:text-sm text-blue-800">
@@ -430,7 +526,7 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={isSaving || !partnerMallName.trim()}
+                  disabled={isSaving || !partnerMallName.trim() || (!!slug && slugStatus !== 'available')}
                   className="flex-1 py-2 sm:py-3 px-3 sm:px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-base"
                 >
                   {isSaving ? (

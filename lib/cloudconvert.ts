@@ -22,8 +22,7 @@ export async function convertToPNG(file: File): Promise<ConversionResult> {
     const formData = new FormData();
     formData.append('file', file);
 
-    // Call modoo_app's API route (admin doesn't have its own convert-image endpoint)
-    const response = await fetch('https://modoouniform.com/api/convert-image', {
+    const response = await fetch('/api/convert-image', {
       method: 'POST',
       body: formData,
     });

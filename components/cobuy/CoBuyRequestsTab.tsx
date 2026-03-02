@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
+import { Mail, Check } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestStatus } from '@/types/types';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
+  draft: '작성중',
   pending: '대기중',
   in_progress: '작업중',
   design_shared: '디자인 공유됨',
@@ -16,6 +18,7 @@ const statusLabels: Record<CoBuyRequestStatus, string> = {
 };
 
 const statusColors: Record<CoBuyRequestStatus, string> = {
+  draft: 'bg-gray-100 text-gray-600',
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
   design_shared: 'bg-purple-100 text-purple-800',
@@ -37,8 +40,17 @@ const formatDate = (dateString?: string | null) => {
   });
 };
 
+const formatDateShort = (dateString?: string | null) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('ko-KR', {
+    month: 'short', day: 'numeric',
+  });
+};
+
 export default function CoBuyRequestsTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sendingPricing, setSendingPricing] = useState<string | null>(null);
+  const [sentPricing, setSentPricing] = useState<Set<string>>(new Set());
 
   const { data: requests, error } = useSWR<CoBuyRequest[]>(
     `/api/admin/cobuy/requests?status=${statusFilter}`,
@@ -47,12 +59,34 @@ export default function CoBuyRequestsTab() {
 
   const isLoading = !requests && !error;
 
+  const handleSendPricing = async (e: React.MouseEvent, requestId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSendingPricing(requestId);
+    try {
+      const res = await fetch('/api/admin/cobuy/requests/send-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed');
+      }
+      setSentPricing(prev => new Set(prev).add(requestId));
+    } catch (err: any) {
+      alert(`리마인드 발송 실패: ${err.message}`);
+    } finally {
+      setSendingPricing(null);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-lg font-bold text-gray-900 mb-4">공동구매 요청 관리</h2>
       {/* Status Filter */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {['all', 'pending', 'in_progress', 'design_shared', 'feedback', 'confirmed', 'session_created', 'rejected'].map(status => (
+        {['all', 'draft', 'pending', 'in_progress', 'design_shared', 'feedback', 'confirmed', 'session_created', 'rejected'].map(status => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
@@ -76,36 +110,84 @@ export default function CoBuyRequestsTab() {
         <div className="text-center py-12 text-gray-400 text-sm">요청이 없습니다.</div>
       ) : (
         <div className="space-y-2">
-          {requests.map(req => (
-            <Link
-              key={req.id}
-              href={`/cobuy/requests/${req.id}`}
-              className="block w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  {req.freeform_preview_url && (
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            <div className="w-12 shrink-0" />
+            <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2">
+              <span>단체명</span>
+              <span>요청자</span>
+              <span>전화번호</span>
+              <span>이메일</span>
+              <span>수량</span>
+              <span>희망 수령일</span>
+              <span>요청일</span>
+              <span className="text-center">상태</span>
+            </div>
+            <div className="w-16 shrink-0" />
+          </div>
+          {requests.map(req => {
+            const hasEmail = !!(req.guest_email || (req as any).profiles?.email);
+            const canSendRemind = req.status === 'draft' && hasEmail;
+            const isSending = sendingPricing === req.id;
+            const isSent = sentPricing.has(req.id);
+
+            return (
+              <Link
+                key={req.id}
+                href={`/cobuy/requests/${req.id}`}
+                className="block w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
+                    {req.freeform_preview_url ? (
                       <img src={req.freeform_preview_url} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {(req as any).product?.title} · {(req as any).guest_name ? `${(req as any).guest_name} (비회원)` : ((req as any).profiles?.email || (req as any).profiles?.name || 'Unknown')}
-                    </p>
-                    {req.description && (
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">참고: {req.description}</p>
+                    ) : (
+                      <div className="w-full h-full" />
                     )}
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(req.created_at)}</p>
+                  </div>
+                  <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2 items-center">
+                    <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
+                    <p className="text-xs text-gray-600 truncate">{req.guest_name || (req as any).profiles?.name || '-'}</p>
+                    <p className="text-xs text-gray-500 truncate">{req.guest_phone || (req as any).profiles?.phone || '-'}</p>
+                    <p className="text-xs text-gray-500 truncate">{req.guest_email || (req as any).profiles?.email || '-'}</p>
+                    <p className="text-xs text-gray-600">{(req.quantity_expectations as any)?.estimatedQuantity ? `${(req.quantity_expectations as any).estimatedQuantity}벌` : '-'}</p>
+                    <p className="text-[10px] text-gray-400">{formatDateShort((req.schedule_preferences as any)?.receiveByDate)}</p>
+                    <p className="text-[10px] text-gray-400">{formatDate(req.created_at)}</p>
+                    <div className="text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
+                        {statusLabels[req.status]}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-16 shrink-0 flex justify-center">
+                    {canSendRemind && (
+                      <button
+                        onClick={(e) => handleSendPricing(e, req.id)}
+                        disabled={isSending || isSent}
+                        title={isSent ? '리마인드 발송됨' : '리마인드 메일 발송'}
+                        className={`p-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
+                          isSent
+                            ? 'bg-green-50 text-green-600 cursor-default'
+                            : isSending
+                              ? 'bg-gray-100 text-gray-400 cursor-wait'
+                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                      >
+                        {isSent ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : isSending ? (
+                          <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                        ) : (
+                          <Mail className="w-3.5 h-3.5" />
+                        )}
+                        <span className="text-[10px]">{isSent ? '발송됨' : '리마인드'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-                <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
-                  {statusLabels[req.status]}
-                </span>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

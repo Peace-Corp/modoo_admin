@@ -87,6 +87,7 @@ export async function POST(request: Request) {
     const logoUrl = payload?.logo_url;
     const originalLogoUrl = payload?.original_logo_url ?? null;
     const isActive = payload?.is_active ?? true;
+    const slug = payload?.slug ?? null;
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ error: '파트너몰 이름이 필요합니다.' }, { status: 400 });
@@ -100,11 +101,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '활성 상태 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
+    if (slug !== null && typeof slug !== 'string') {
+      return NextResponse.json({ error: '슬러그 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+
     const adminClient = createAdminClient();
+
+    // Check slug uniqueness if provided
+    if (slug) {
+      const { data: existing } = await adminClient
+        .from('partner_malls')
+        .select('id')
+        .eq('slug', slug);
+
+      if (existing && existing.length > 0) {
+        return NextResponse.json({ error: '이미 사용 중인 슬러그입니다.' }, { status: 409 });
+      }
+    }
+
     const { data, error } = await adminClient
       .from('partner_malls')
       .insert({
         name,
+        slug: slug || null,
         logo_url: logoUrl,
         original_logo_url: originalLogoUrl,
         is_active: isActive,
@@ -163,11 +182,31 @@ export async function PATCH(request: Request) {
       updateData.is_active = payload.is_active;
     }
 
+    if (payload?.slug !== undefined) {
+      if (payload.slug !== null && typeof payload.slug !== 'string') {
+        return NextResponse.json({ error: '슬러그 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      updateData.slug = payload.slug ?? null;
+    }
+
     if (Object.keys(updateData).length === 1) {
       return NextResponse.json({ error: '업데이트할 항목이 없습니다.' }, { status: 400 });
     }
 
     const adminClient = createAdminClient();
+
+    // Check slug uniqueness if being updated
+    if (typeof updateData.slug === 'string' && updateData.slug) {
+      const { data: existing } = await adminClient
+        .from('partner_malls')
+        .select('id')
+        .eq('slug', updateData.slug)
+        .neq('id', partnerId);
+
+      if (existing && existing.length > 0) {
+        return NextResponse.json({ error: '이미 사용 중인 슬러그입니다.' }, { status: 409 });
+      }
+    }
     const { data, error } = await adminClient
       .from('partner_malls')
       .update(updateData)

@@ -231,8 +231,8 @@ export default function PartnerMallDetail({
 
   // Copy share link
   const copyShareLink = async () => {
-    if (!partnerMall.share_token) return;
-    const url = `${APP_BASE_URL}/mall/${partnerMall.share_token}`;
+    if (!partnerMall.slug && !partnerMall.share_token) return;
+    const url = `${APP_BASE_URL}/mall/${partnerMall.slug || partnerMall.share_token}`;
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
@@ -309,6 +309,16 @@ export default function PartnerMallDetail({
                   <p className="text-sm sm:text-lg font-semibold text-gray-800">{partnerMall.name}</p>
                 </div>
 
+                {/* Slug */}
+                {partnerMall.slug && (
+                  <div>
+                    <label className="block text-[10px] sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
+                      슬러그
+                    </label>
+                    <p className="text-xs sm:text-sm text-gray-700 font-mono">{partnerMall.slug}</p>
+                  </div>
+                )}
+
                 {/* Status */}
                 <div>
                   <label className="block text-[10px] sm:text-sm font-medium text-gray-500 mb-0.5 sm:mb-1">
@@ -342,11 +352,11 @@ export default function PartnerMallDetail({
                 <Link2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 inline mr-0.5 sm:mr-1" />
                 공유 링크
               </label>
-              {partnerMall.share_token ? (
+              {(partnerMall.slug || partnerMall.share_token) ? (
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <input
                     readOnly
-                    value={`${APP_BASE_URL}/mall/${partnerMall.share_token}`}
+                    value={`${APP_BASE_URL}/mall/${partnerMall.slug || partnerMall.share_token}`}
                     className="flex-1 text-[10px] sm:text-xs px-2 sm:px-2.5 py-1.5 sm:py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 truncate"
                   />
                   <button
