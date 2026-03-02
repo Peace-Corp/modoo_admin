@@ -8,6 +8,7 @@ import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/t
 import '@/lib/curvedText';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
+  draft: '작성중',
   pending: '대기중',
   in_progress: '작업중',
   design_shared: '디자인 공유됨',
@@ -18,6 +19,7 @@ const statusLabels: Record<CoBuyRequestStatus, string> = {
 };
 
 const statusColors: Record<CoBuyRequestStatus, string> = {
+  draft: 'bg-gray-100 text-gray-600',
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
   design_shared: 'bg-purple-100 text-purple-800',

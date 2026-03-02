@@ -465,6 +465,7 @@ export interface CoBuyParticipant {
 // ============================================================================
 
 export type CoBuyRequestStatus =
+  | 'draft'             // User filled basic info, may still be designing
   | 'pending'           // User submitted, waiting for admin
   | 'in_progress'       // Admin is working on the design
   | 'design_shared'     // Admin shared the design link to user
