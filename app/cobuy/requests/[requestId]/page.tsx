@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Send, Copy, Check } from 'lucide-react';
+import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Send, Copy, Check, Download, FileText } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/types';
 import '@/lib/curvedText';
 
@@ -359,6 +359,41 @@ export default function CoBuyRequestDetailPage() {
             <div className="mb-3">
               <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">참고사항</p>
               <p className="text-sm text-gray-600">{request.description}</p>
+            </div>
+          )}
+
+          {/* Uploaded Reference Files */}
+          {request.uploaded_image_paths && request.uploaded_image_paths.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">첨부 파일</p>
+              <div className="space-y-1.5">
+                {request.uploaded_image_paths.map((filePath: string, i: number) => {
+                  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-designs/${filePath}`;
+                  const fileName = filePath.split('/').pop() || filePath;
+                  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+                  return (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                      {isImage ? (
+                        <img src={url} alt={fileName} className="w-10 h-10 rounded object-cover shrink-0 border border-gray-200" />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                        </div>
+                      )}
+                      <span className="text-xs text-gray-600 truncate flex-1">{fileName}</span>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-indigo-600 hover:border-indigo-300 transition shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
