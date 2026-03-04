@@ -81,16 +81,19 @@ export default function CoBuyRequestsTab() {
     }
   };
 
+  const hasAnyPreview = requests?.some(r => r.freeform_preview_url);
+
   return (
     <div>
-      <h2 className="text-lg font-bold text-gray-900 mb-4">공동구매 요청 관리</h2>
+      <h2 className="text-lg font-bold text-gray-900 mb-3">공동구매 요청 관리</h2>
+
       {/* Status Filter */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {['all', 'draft', 'pending', 'in_progress', 'design_shared', 'feedback', 'confirmed', 'session_created', 'rejected'].map(status => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
               statusFilter === status ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -109,19 +112,19 @@ export default function CoBuyRequestsTab() {
       ) : !requests?.length ? (
         <div className="text-center py-12 text-gray-400 text-sm">요청이 없습니다.</div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-2 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
-            <div className="w-12 shrink-0" />
-            <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            {hasAnyPreview && <div className="w-10 shrink-0" />}
+            <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.6fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr] gap-2">
               <span>단체명</span>
+              <span className="text-center">상태</span>
               <span>요청자</span>
               <span>전화번호</span>
               <span>이메일</span>
               <span>수량</span>
               <span>희망 수령일</span>
               <span>요청일</span>
-              <span className="text-center">상태</span>
             </div>
             <div className="w-16 shrink-0" />
           </div>
@@ -135,29 +138,31 @@ export default function CoBuyRequestsTab() {
               <Link
                 key={req.id}
                 href={`/cobuy/requests/${req.id}`}
-                className="block w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition"
+                className="block w-full text-left px-3 py-2 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
-                    {req.freeform_preview_url ? (
-                      <img src={req.freeform_preview_url} alt="" className="w-full h-full object-cover" />
+                <div className="flex items-center gap-2">
+                  {hasAnyPreview && (
+                    req.freeform_preview_url ? (
+                      <div className="w-10 h-10 rounded-md bg-gray-50 overflow-hidden shrink-0 border border-gray-100">
+                        <img src={req.freeform_preview_url} alt="" className="w-full h-full object-cover" />
+                      </div>
                     ) : (
-                      <div className="w-full h-full" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr_0.6fr] gap-2 items-center">
+                      <div className="w-10 shrink-0" />
+                    )
+                  )}
+                  <div className="flex-1 min-w-0 grid grid-cols-[1.2fr_0.6fr_0.8fr_1fr_1.2fr_0.5fr_0.7fr_0.7fr] gap-2 items-center">
                     <p className="text-sm font-medium text-gray-900 truncate">{req.title}</p>
+                    <div className="text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
+                        {statusLabels[req.status]}
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-600 truncate">{req.guest_name || (req as any).profiles?.name || '-'}</p>
                     <p className="text-xs text-gray-500 truncate">{req.guest_phone || (req as any).profiles?.phone || '-'}</p>
                     <p className="text-xs text-gray-500 truncate">{req.guest_email || (req as any).profiles?.email || '-'}</p>
                     <p className="text-xs text-gray-600">{(req.quantity_expectations as any)?.estimatedQuantity ? `${(req.quantity_expectations as any).estimatedQuantity}벌` : '-'}</p>
                     <p className="text-[10px] text-gray-400">{formatDateShort((req.schedule_preferences as any)?.receiveByDate)}</p>
                     <p className="text-[10px] text-gray-400">{formatDate(req.created_at)}</p>
-                    <div className="text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[req.status]}`}>
-                        {statusLabels[req.status]}
-                      </span>
-                    </div>
                   </div>
                   <div className="w-16 shrink-0 flex justify-center">
                     {canSendRemind && (

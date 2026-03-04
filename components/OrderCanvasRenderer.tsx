@@ -212,10 +212,6 @@ const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
 
     if (hasLayers) {
       // Multi-layer mode: Initialize layer colors and load all layers
-      // Disable canvas-level clipping for multi-layer mode
-      // Individual objects will be clipped via object:added event handler
-      canvas.clipPath = undefined;
-
       // Sort layers by zIndex
       const sortedLayers = [...side.layers!].sort((a, b) => a.zIndex - b.zIndex);
 
@@ -542,8 +538,6 @@ const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
 
         // Store reference to the product image
         productImageRef.current = img;
-
-        canvas.clipPath = undefined;
 
         canvas.add(img);
         canvas.sendObjectToBack(img); // ensure it stays behind design elements
