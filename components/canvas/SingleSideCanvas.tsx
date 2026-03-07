@@ -186,10 +186,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
       // Multi-layer mode: Initialize layer colors and load all layers
       initializeLayerColors(side.id, side.layers!);
 
-      // Disable canvas-level clipping for multi-layer mode
-      // Individual objects will be clipped via object:added event handler
-      canvas.clipPath = undefined;
-
       // Sort layers by zIndex
       const sortedLayers = [...side.layers!].sort((a, b) => a.zIndex - b.zIndex);
 
@@ -614,8 +610,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         // Store reference to the product image
         productImageRef.current = img;
 
-        canvas.clipPath = undefined;
-
         canvas.add(img);
         canvas.sendObjectToBack(img); // ensure it stays behind design elements
 
@@ -780,9 +774,6 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         setScaleBoxVisible(true);
     };
 
-    // 5. Enforce Clipping on Added Objects
-    // Whenever an object is added (Text, Shape, Logo), we apply the clipPath to IT.
-    // Skip clipping entirely for multi-layer mode
     canvas.on('object:added', (e) => {
         const obj = e.target;
         if (!obj) return;

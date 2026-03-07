@@ -372,8 +372,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
     canvas.getObjects().forEach((obj) => {
       const objData = obj.get('data') as { id?: string } | undefined;
-      // remove all objects except for background image, center guide line, visual guide box
-      if (objData?.id !== 'background-product-image' && objData?.id !== 'center-line' && objData?.id !== 'visual-guide-box') {
+      // remove all objects except for background image and center guide line
+      if (objData?.id !== 'background-product-image' && objData?.id !== 'center-line') {
         canvas.remove(obj)
       }
     })
@@ -403,7 +403,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
         const objData = obj.get('data') as { id?: string } | undefined;
         return objData?.id === 'background-product-image' ||
                objData?.id === 'center-line' ||
-               objData?.id === 'visual-guide-box' ||
                obj.get('excludeFromExport') === true;
       });
 
@@ -438,7 +437,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
         const objData = obj.get('data') as { id?: string } | undefined;
         return objData?.id === 'background-product-image' ||
                objData?.id === 'center-line' ||
-               objData?.id === 'visual-guide-box' ||
                obj.get('excludeFromExport') === true;
       });
 

@@ -85,7 +85,6 @@ export default function ComprehensiveDesignPreview({
       const objData = obj as { data?: { id?: string } };
       if (
         objData.data?.id === 'background-product-image' ||
-        objData.data?.id === 'visual-guide-box' ||
         objData.data?.id === 'center-line'
       ) {
         return;
