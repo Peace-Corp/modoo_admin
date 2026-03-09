@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Send, Copy, Check, Download, FileText } from 'lucide-react';
-import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus } from '@/types/types';
+import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus, CoBuyRequestAdminStatus } from '@/types/types';
 import '@/lib/curvedText';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
@@ -27,6 +27,24 @@ const statusColors: Record<CoBuyRequestStatus, string> = {
   confirmed: 'bg-green-100 text-green-800',
   session_created: 'bg-emerald-100 text-emerald-800',
   rejected: 'bg-red-100 text-red-800',
+};
+
+const adminStatusLabels: Record<CoBuyRequestAdminStatus, string> = {
+  not_reviewed: '미확인',
+  reviewing: '확인중',
+  quote_sent: '견적발송',
+  contract_done: '계약완료',
+  on_hold: '보류',
+  cancelled: '취소',
+};
+
+const adminStatusColors: Record<CoBuyRequestAdminStatus, string> = {
+  not_reviewed: 'bg-gray-100 text-gray-500',
+  reviewing: 'bg-blue-100 text-blue-700',
+  quote_sent: 'bg-amber-100 text-amber-700',
+  contract_done: 'bg-green-100 text-green-700',
+  on_hold: 'bg-red-100 text-red-600',
+  cancelled: 'bg-red-50 text-red-500',
 };
 
 const fetcher = (url: string) => fetch(url).then(r => {
@@ -261,6 +279,8 @@ export default function CoBuyRequestDetailPage() {
 
   const [commentText, setCommentText] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [adminMemo, setAdminMemo] = useState('');
+  const [savingMemo, setSavingMemo] = useState(false);
 
   const [showShareLink, setShowShareLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -270,8 +290,12 @@ export default function CoBuyRequestDetailPage() {
   const [confirmEndDate, setConfirmEndDate] = useState('');
   const [confirmReceiveByDate, setConfirmReceiveByDate] = useState('');
 
+  useEffect(() => {
+    if (request) setAdminMemo(request.admin_notes || '');
+  }, [request]);
+
   const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modoouniform.com';
-  const shareUrl = request ? `${APP_BASE_URL}/cobuy/request/${request.share_token}/editor` : '';
+  const shareUrl = request ? `${APP_BASE_URL}/cobuy/request/${request.share_token}` : '';
 
   const copyShareLink = async () => {
     try {
@@ -350,9 +374,32 @@ export default function CoBuyRequestDetailPage() {
                 } · {formatDate(request.created_at)}
               </p>
             </div>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[request.status]}`}>
-              {statusLabels[request.status]}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${adminStatusColors[request.admin_status || 'not_reviewed']}`}>
+                {adminStatusLabels[request.admin_status || 'not_reviewed']}
+              </span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[request.status]}`}>
+                {statusLabels[request.status]}
+              </span>
+            </div>
+          </div>
+
+          {/* Quantity & Schedule */}
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            {(request.quantity_expectations as any)?.estimatedQuantity && (
+              <div>
+                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">수량</p>
+                <p className="text-sm font-medium text-gray-900">{(request.quantity_expectations as any).estimatedQuantity}벌</p>
+              </div>
+            )}
+            {(request.schedule_preferences as any)?.receiveByDate && (
+              <div>
+                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">희망 수령일</p>
+                <p className="text-sm text-gray-600">
+                  {new Date((request.schedule_preferences as any).receiveByDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })}
+                </p>
+              </div>
+            )}
           </div>
 
           {request.description && (
@@ -494,6 +541,53 @@ export default function CoBuyRequestDetailPage() {
               <p className="font-medium">₩{Number(request.confirmed_price).toLocaleString()}</p>
             </div>
           )}
+        </div>
+
+        {/* Admin Internal */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-sm font-medium text-gray-900 mb-3">관리자 내부 관리</p>
+          <div className="mb-3">
+            <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider block mb-1">관리자 상태</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {(['not_reviewed', 'reviewing', 'quote_sent', 'contract_done', 'on_hold', 'cancelled'] as CoBuyRequestAdminStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => updateRequest({ admin_status: s })}
+                  disabled={isUpdating}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                    request.admin_status === s
+                      ? adminStatusColors[s] + ' ring-2 ring-offset-1 ring-blue-400'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  } disabled:opacity-50`}
+                >
+                  {adminStatusLabels[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-gray-400 uppercase tracking-wider block mb-1">관리자 메모</label>
+            <div className="flex gap-2">
+              <textarea
+                value={adminMemo}
+                onChange={e => setAdminMemo(e.target.value)}
+                placeholder="내부 메모를 입력하세요..."
+                rows={2}
+                className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 resize-none"
+              />
+              <button
+                onClick={async () => {
+                  setSavingMemo(true);
+                  await updateRequest({ admin_notes: adminMemo.trim() || null });
+                  setSavingMemo(false);
+                }}
+                disabled={savingMemo}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 self-end"
+              >
+                {savingMemo ? '저장중...' : '저장'}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Actions */}

@@ -64,7 +64,7 @@ export async function PATCH(request: Request) {
     if (authResult.error) return authResult.error;
 
     const body = await request.json();
-    const { id, status, admin_design_id, admin_design_preview_url, confirmed_price } = body;
+    const { id, status, admin_design_id, admin_design_preview_url, confirmed_price, admin_status, admin_notes, preview_images } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Request ID is required' }, { status: 400 });
@@ -77,6 +77,39 @@ export async function PATCH(request: Request) {
     if (admin_design_id !== undefined) updateData.admin_design_id = admin_design_id;
     if (admin_design_preview_url !== undefined) updateData.admin_design_preview_url = admin_design_preview_url;
     if (confirmed_price !== undefined) updateData.confirmed_price = confirmed_price;
+    if (admin_status !== undefined) updateData.admin_status = admin_status;
+    if (admin_notes !== undefined) updateData.admin_notes = admin_notes;
+
+    // Upload per-side preview images to storage
+    if (preview_images && typeof preview_images === 'object') {
+      const previewUrls: Record<string, { url: string; name: string }> = {};
+      for (const [sideId, info] of Object.entries(preview_images as Record<string, { base64: string; name: string }>)) {
+        const { base64, name } = info;
+        if (!base64?.startsWith('data:')) continue;
+        try {
+          const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (!match) continue;
+          const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+          const buffer = Buffer.from(match[2], 'base64');
+          const filePath = `cobuy-previews/${id}-${sideId}.${ext}`;
+          const { error: uploadErr } = await admin.storage
+            .from('user-designs')
+            .upload(filePath, buffer, { contentType: `image/${match[1]}`, upsert: true });
+          if (!uploadErr) {
+            const { data: publicUrl } = admin.storage.from('user-designs').getPublicUrl(filePath);
+            previewUrls[sideId] = { url: publicUrl.publicUrl, name };
+          }
+        } catch (err) {
+          console.error(`Failed to upload preview for side ${sideId}:`, err);
+        }
+      }
+      if (Object.keys(previewUrls).length > 0) {
+        updateData.admin_design_preview_urls = previewUrls;
+        // Set the first side as the main preview URL for backward compat
+        const firstUrl = Object.values(previewUrls)[0]?.url;
+        if (firstUrl) updateData.admin_design_preview_url = firstUrl;
+      }
+    }
 
     // On rejection, clean up uploaded images from storage
     if (status === 'rejected') {
