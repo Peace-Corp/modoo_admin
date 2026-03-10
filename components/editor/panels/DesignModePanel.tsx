@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Palette, ArrowRight } from 'lucide-react';
+import { Palette, ArrowRight, Send, Check } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Product, ProductSide, ProductColor, ManufacturerColor } from '@/types/types';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import TextStylePanel from '@/components/canvas/TextStylePanel';
@@ -19,6 +20,9 @@ interface DesignModePanelProps {
   selectedTextObject: fabric.FabricObject | null;
   onSave: () => void;
   isSaving: boolean;
+  cobuyRequestId?: string;
+  designSaved?: boolean;
+  cobuyQuantity?: number | null;
 }
 
 export default function DesignModePanel({
@@ -29,7 +33,11 @@ export default function DesignModePanel({
   selectedTextObject,
   onSave,
   isSaving,
+  cobuyRequestId,
+  designSaved,
+  cobuyQuantity,
 }: DesignModePanelProps) {
+  const router = useRouter();
   const {
     activeSideId,
     productColor,
@@ -38,6 +46,10 @@ export default function DesignModePanel({
   } = useCanvasStore();
 
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [priceInput, setPriceInput] = useState('');
+  const [isSendingDesign, setIsSendingDesign] = useState(false);
+  const [designSent, setDesignSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const sides: ProductSide[] = product.configuration || [];
   const currentSide = sides.find((s) => s.id === activeSideId) || sides[0];
@@ -53,6 +65,31 @@ export default function DesignModePanel({
     setProductColor(color.hex);
     incrementCanvasVersion();
     setIsColorPickerOpen(false);
+  };
+
+  const handleSendDesign = async () => {
+    const price = Number(priceInput.replace(/,/g, ''));
+    if (!price || price <= 0 || !cobuyRequestId) return;
+
+    setIsSendingDesign(true);
+    setSendError(null);
+    try {
+      const res = await fetch('/api/admin/cobuy/requests/send-design', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: cobuyRequestId, pricePerItem: price }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || '발송 실패');
+      }
+      setDesignSent(true);
+      setTimeout(() => router.back(), 1500);
+    } catch (err: any) {
+      setSendError(err.message);
+    } finally {
+      setIsSendingDesign(false);
+    }
   };
 
   return (
@@ -127,31 +164,99 @@ export default function DesignModePanel({
         />
       </div>
 
-      {/* Print Options & Pricing */}
-      <div className="p-2.5 border-b">
-        <ObjectPreviewPanel sides={sides} compact />
-        <PricingInfo basePrice={product.base_price} sides={sides} compact />
-      </div>
+      {/* Print Options & Pricing (hide for CoBuy) */}
+      {!cobuyRequestId && (
+        <div className="p-2.5 border-b">
+          <ObjectPreviewPanel sides={sides} compact />
+          <PricingInfo basePrice={product.base_price} sides={sides} compact />
+        </div>
+      )}
 
-      {/* Save button */}
-      <div className="p-2.5 mt-auto">
-        <button
-          onClick={onSave}
-          disabled={isSaving || !designTitle.trim()}
-          className="w-full py-2 bg-blue-600 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSaving ? (
-            <>
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              저장 중...
-            </>
-          ) : (
-            <>
-              <ArrowRight className="w-3.5 h-3.5" />
-              다음 단계로
-            </>
+      {/* CoBuy: Quantity + Price + Send */}
+      {cobuyRequestId && (
+        <div className={`p-2.5 border-b ${designSaved ? 'bg-green-50' : ''}`}>
+          {designSaved && (
+            <p className="text-[11px] font-semibold text-green-700 mb-2">디자인 저장 완료</p>
           )}
-        </button>
+          {cobuyQuantity && (
+            <div className="mb-2">
+              <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">수량</h3>
+              <p className="text-sm font-medium text-gray-900">{cobuyQuantity}벌</p>
+            </div>
+          )}
+          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">벌당 단가</h3>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value.replace(/[^0-9,]/g, ''))}
+              placeholder="단가 입력 (원)"
+              className="flex-1 px-2 py-1.5 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleSendDesign}
+              disabled={isSendingDesign || !priceInput || !designSaved}
+              title={!designSaved ? '디자인을 먼저 저장해주세요' : ''}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium flex items-center gap-1 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSendingDesign ? (
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="w-3 h-3" />
+              )}
+              발송
+            </button>
+          </div>
+          {priceInput && cobuyQuantity && (
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              합계: <span className="font-medium text-gray-800">{(Number(priceInput.replace(/,/g, '')) * cobuyQuantity).toLocaleString('ko-KR')}원</span>
+            </p>
+          )}
+          {!designSaved && (
+            <p className="text-[10px] text-gray-400 mt-1">디자인 저장 후 발송 가능합니다</p>
+          )}
+          {sendError && <p className="text-[10px] text-red-500 mt-1">{sendError}</p>}
+        </div>
+      )}
+
+      {/* Design sent confirmation */}
+      {designSent && (
+        <div className="p-2.5 border-b bg-green-50">
+          <div className="flex items-center gap-1.5 text-green-700">
+            <Check className="w-4 h-4" />
+            <p className="text-xs font-medium">견적 이메일이 발송되었습니다.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Save / Back button */}
+      <div className="p-2.5 mt-auto">
+        {cobuyRequestId && designSaved ? (
+          <button
+            onClick={() => router.back()}
+            className="w-full py-2 bg-gray-600 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-gray-700 transition-colors"
+          >
+            목록으로 돌아가기
+          </button>
+        ) : (
+          <button
+            onClick={onSave}
+            disabled={isSaving || !designTitle.trim()}
+            className="w-full py-2 bg-blue-600 text-white rounded text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                저장 중...
+              </>
+            ) : (
+              <>
+                <ArrowRight className="w-3.5 h-3.5" />
+                다음 단계로
+              </>
+            )}
+          </button>
+        )}
       </div>
     </>
   );

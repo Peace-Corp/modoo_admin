@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '썸네일 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
-    if (descriptionImage !== null && typeof descriptionImage !== 'string') {
+    if (descriptionImage !== null && !Array.isArray(descriptionImage)) {
       return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
@@ -263,7 +263,7 @@ export async function PATCH(request: Request) {
     }
 
     if (payload?.description_image !== undefined) {
-      if (payload.description_image !== null && typeof payload.description_image !== 'string') {
+      if (payload.description_image !== null && !Array.isArray(payload.description_image)) {
         return NextResponse.json({ error: '상세 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.description_image = payload.description_image ?? null;

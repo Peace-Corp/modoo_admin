@@ -5,7 +5,7 @@ import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufactu
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
-import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers } from 'lucide-react';
+import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers, GripVertical } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
 import PrintAreaEditor from './PrintAreaEditor';
 
@@ -72,7 +72,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [category, setCategory] = useState(product?.category || '');
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
   const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
-  const [descriptionImage, setDescriptionImage] = useState(product?.description_image ?? '');
+  const [descriptionImages, setDescriptionImages] = useState<string[]>(product?.description_image ?? []);
   const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
   const [productCode, setProductCode] = useState(product?.product_code ?? '');
   const [discountRates, setDiscountRates] = useState<Array<{ min_quantity: number; discount_rate: number }>>(
@@ -867,7 +867,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   const persistProductImageField = async (
     field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image',
-    value: string | null
+    value: string | string[] | null
   ) => {
     if (!product?.id) return;
     try {
@@ -934,8 +934,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         setThumbnailImageLink(publicUrl);
         await persistProductImageField('thumbnail_image_link', publicUrl);
       } else if (target.field === 'description_image') {
-        setDescriptionImage(publicUrl);
-        await persistProductImageField('description_image', publicUrl);
+        const updated = [...descriptionImages, publicUrl];
+        setDescriptionImages(updated);
+        await persistProductImageField('description_image', updated);
       } else {
         setSizingChartImage(publicUrl);
         await persistProductImageField('sizing_chart_image', publicUrl);
@@ -965,11 +966,25 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     if (field === 'thumbnail_image_link') {
       setThumbnailImageLink('');
     } else if (field === 'description_image') {
-      setDescriptionImage('');
+      setDescriptionImages([]);
     } else {
       setSizingChartImage('');
     }
-    void persistProductImageField(field, null);
+    void persistProductImageField(field, field === 'description_image' ? [] : null);
+  };
+
+  const removeDescriptionImage = (index: number) => {
+    const updated = descriptionImages.filter((_, i) => i !== index);
+    setDescriptionImages(updated);
+    void persistProductImageField('description_image', updated.length > 0 ? updated : null);
+  };
+
+  const reorderDescriptionImages = (fromIndex: number, toIndex: number) => {
+    const updated = [...descriptionImages];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setDescriptionImages(updated);
+    void persistProductImageField('description_image', updated);
   };
 
   // Handle file input change
@@ -1072,7 +1087,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
         thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
-        description_image: descriptionImage.trim() ? descriptionImage.trim() : null,
+        description_image: descriptionImages.length > 0 ? descriptionImages : null,
         sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
         product_code: productCode.trim() ? productCode.trim() : null,
         discount_rates: discountRates.length > 0 ? discountRates : null,
@@ -1383,51 +1398,57 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">상세 이미지 (description_image)</label>
-                <div className="flex items-start gap-3">
-                  {descriptionImage ? (
-                    <img
-                      src={descriptionImage}
-                      alt="상세 이미지"
-                      className="w-20 h-20 object-cover rounded border border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <input
-                      type="text"
-                      value={descriptionImage}
-                      onChange={(e) => setDescriptionImage(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      placeholder="https://..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => triggerProductFileInput('description_image')}
-                        disabled={uploading}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                {descriptionImages.length > 0 && (
+                  <div className="space-y-1">
+                    {descriptionImages.map((url, idx) => (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(idx)); e.dataTransfer.effectAllowed = 'move'; }}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number(e.dataTransfer.getData('text/plain'));
+                          if (!isNaN(from) && from !== idx) reorderDescriptionImages(from, idx);
+                        }}
+                        className="flex items-center gap-2 p-1.5 bg-gray-50 rounded border border-gray-200 group"
                       >
-                        <Upload className="w-4 h-4" />
-                        업로드
-                      </button>
-                      {!!descriptionImage && (
+                        <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0" />
+                        <img src={url} alt={`상세 ${idx + 1}`} className="w-14 h-14 object-cover rounded border border-gray-200" />
+                        <span className="text-xs text-gray-500 truncate flex-1 min-w-0">{url.split('/').pop()}</span>
                         <button
-                          onClick={() => clearProductImage('description_image')}
-                          disabled={uploading}
-                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                          onClick={() => removeDescriptionImage(idx)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          지우기
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                    </div>
-                    {!product?.id && (
-                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
-                    )}
+                      </div>
+                    ))}
                   </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => triggerProductFileInput('description_image')}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4" />
+                    이미지 추가
+                  </button>
+                  {descriptionImages.length > 0 && (
+                    <button
+                      onClick={() => clearProductImage('description_image')}
+                      disabled={uploading}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      전체 삭제
+                    </button>
+                  )}
                 </div>
+                {!product?.id && (
+                  <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                )}
               </div>
 
               <div className="space-y-2">

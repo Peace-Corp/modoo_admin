@@ -90,6 +90,8 @@ export default function UnifiedEditor({
 
   // Design mode state
   const [designTitle, setDesignTitle] = useState('');
+  const [cobuyDesignSaved, setCobuyDesignSaved] = useState(false);
+  const [cobuyQuantity, setCobuyQuantity] = useState<number | null>(null);
 
   // Template mode state
   const [templateTitle, setTemplateTitle] = useState('');
@@ -201,6 +203,10 @@ export default function UnifiedEditor({
         const req = requests?.[0];
         if (!req) return;
         cobuyDataLoaded.current = true;
+
+        // Store quantity
+        const qty = (req.quantity_expectations as any)?.estimatedQuantity;
+        if (qty) setCobuyQuantity(qty);
 
         // Apply colors to store
         const colorSelections = req.freeform_color_selections as Record<string, any> | null;
@@ -407,9 +413,21 @@ export default function UnifiedEditor({
         // Auto-link design to cobuy request if opened from one
         if (cobuyRequestId && result.id) {
           try {
-            // Fetch saved design to get preview URL
-            const designRes = await fetch(`/api/admin/designs/${result.id}`);
-            const designJson = designRes.ok ? await designRes.json() : null;
+            const sides = editorData.product?.configuration || [];
+            // Generate preview images for all sides
+            const previewImages: Record<string, { base64: string; name: string }> = {};
+            for (const side of sides) {
+              const canvas = canvasMap[side.id];
+              if (!canvas) continue;
+              try {
+                canvas.discardActiveObject();
+                canvas.renderAll();
+                const base64 = canvas.toDataURL({ format: 'png', quality: 0.8, multiplier: 0.5 });
+                previewImages[side.id] = { base64, name: side.name };
+              } catch (err) {
+                console.error(`Error generating preview for side ${side.id}:`, err);
+              }
+            }
 
             await fetch('/api/admin/cobuy/requests', {
               method: 'PATCH',
@@ -417,16 +435,19 @@ export default function UnifiedEditor({
               body: JSON.stringify({
                 id: cobuyRequestId,
                 admin_design_id: result.id,
-                admin_design_preview_url: designJson?.data?.preview_url || null,
+                preview_images: previewImages,
               }),
             });
+            setCobuyDesignSaved(true);
           } catch (err) {
             console.error('Failed to link design to cobuy request:', err);
           }
         }
 
-        // Navigate back after design save
-        router.back();
+        // Only navigate back if not CoBuy (CoBuy shows pricing send UI)
+        if (!cobuyRequestId) {
+          router.back();
+        }
       } else if (mode === 'template') {
         // Refresh templates list
         await editorData.refetchTemplates();
@@ -745,6 +766,9 @@ export default function UnifiedEditor({
                   selectedTextObject={selectedTextObject}
                   onSave={handleSave}
                   isSaving={isSaving}
+                  cobuyRequestId={cobuyRequestId}
+                  designSaved={cobuyDesignSaved}
+                  cobuyQuantity={cobuyQuantity}
                 />
               )}
 

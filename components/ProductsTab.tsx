@@ -21,7 +21,8 @@ export default function ProductsTab() {
     const matchesSearch = searchQuery === '' ||
       product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.manufacturers?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+      (product.manufacturers?.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (product.product_code?.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     return matchesSearch && matchesCategory;
   }).sort((a, b) => Number(b.is_active) - Number(a.is_active));
@@ -174,7 +175,7 @@ export default function ProductsTab() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
             type="text"
-            placeholder="제품명, ID, 제조사 검색..."
+            placeholder="제품명, ID, 제조사, 제품코드 검색..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"

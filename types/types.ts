@@ -6,7 +6,7 @@ export interface Product {
   size_options: SizeOption[] | null;
   category: string | null;
   thumbnail_image_link?: string | null;
-  description_image?: string | null;
+  description_image?: string[] | null;
   sizing_chart_image?: string | null;
   product_code?: string | null;
   discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
@@ -474,6 +474,14 @@ export type CoBuyRequestStatus =
   | 'session_created'   // CoBuy session has been created
   | 'rejected';         // Admin rejected the request
 
+export type CoBuyRequestAdminStatus =
+  | 'not_reviewed'      // 미확인
+  | 'reviewing'         // 확인중
+  | 'quote_sent'        // 견적발송
+  | 'contract_done'     // 계약완료
+  | 'on_hold'           // 보류
+  | 'cancelled';        // 취소
+
 export interface CoBuyRequestSchedulePreferences {
   preferredStartDate?: string;
   preferredEndDate?: string;
@@ -508,6 +516,8 @@ export interface CoBuyRequest {
   is_public: boolean;
   uploaded_image_paths: string[];
   promo_image_url: string | null;
+  admin_status: CoBuyRequestAdminStatus;
+  admin_notes: string | null;
   guest_name: string | null;
   guest_email: string | null;
   guest_phone: string | null;
