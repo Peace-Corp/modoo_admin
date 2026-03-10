@@ -6,7 +6,7 @@ export interface Product {
   size_options: SizeOption[] | null;
   category: string | null;
   thumbnail_image_link?: string | null;
-  description_image?: string | null;
+  description_image?: string[] | null;
   sizing_chart_image?: string | null;
   product_code?: string | null;
   discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
