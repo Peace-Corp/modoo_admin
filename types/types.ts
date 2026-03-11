@@ -103,6 +103,26 @@ export interface ProductLayer {
 // Print method types - includes transfer methods and bulk methods
 export type PrintMethod = 'dtf' | 'dtg' | 'screen_printing' | 'embroidery' | 'applique';
 
+export interface PrintMethodRecord {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductPrintMethod {
+  id: string;
+  product_id: string;
+  print_method_id: string;
+  created_at: string;
+  print_methods?: PrintMethodRecord;
+}
+
 // Size categories for printing
 export type PrintSize = '10x10' | 'A4' | 'A3';
 

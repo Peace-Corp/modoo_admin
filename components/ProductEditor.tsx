@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset } from '@/types/types';
+import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset, PrintMethodRecord, ProductPrintMethod } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
 import { CATEGORIES } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
@@ -146,6 +146,11 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [showNewPresetInput, setShowNewPresetInput] = useState(false);
   const [savingPreset, setSavingPreset] = useState(false);
 
+  // Print methods
+  const [allPrintMethods, setAllPrintMethods] = useState<PrintMethodRecord[]>([]);
+  const [productPrintMethods, setProductPrintMethods] = useState<ProductPrintMethod[]>([]);
+  const [togglingPrintMethodId, setTogglingPrintMethodId] = useState<string | null>(null);
+
   // Tab state
   type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall' | 'print-area' | 'template';
   const [activeTab, setActiveTab] = useState<EditorTab>('basic');
@@ -217,6 +222,63 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       void fetchPresets(product.id);
     }
   }, [product?.id, activeTab]);
+
+  // Fetch all print methods + product's linked print methods
+  useEffect(() => {
+    const fetchPrintMethods = async () => {
+      try {
+        const res = await fetch('/api/admin/print-methods');
+        if (res.ok) {
+          const payload = await res.json();
+          setAllPrintMethods(payload?.data || []);
+        }
+      } catch {}
+    };
+    void fetchPrintMethods();
+  }, []);
+
+  useEffect(() => {
+    if (!product?.id) return;
+    const fetchProductPrintMethods = async () => {
+      try {
+        const res = await fetch(`/api/admin/product-print-methods?productId=${product.id}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setProductPrintMethods(payload?.data || []);
+        }
+      } catch {}
+    };
+    void fetchProductPrintMethods();
+  }, [product?.id]);
+
+  const handleTogglePrintMethod = async (printMethod: PrintMethodRecord) => {
+    if (!product?.id || togglingPrintMethodId) return;
+    setTogglingPrintMethodId(printMethod.id);
+    try {
+      const existing = productPrintMethods.find((pm) => pm.print_method_id === printMethod.id);
+      if (existing) {
+        // Unlink
+        const res = await fetch(`/api/admin/product-print-methods?id=${existing.id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setProductPrintMethods((prev) => prev.filter((pm) => pm.id !== existing.id));
+        }
+      } else {
+        // Link
+        const res = await fetch('/api/admin/product-print-methods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: product.id, print_method_id: printMethod.id }),
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload?.data) {
+            setProductPrintMethods((prev) => [...prev, payload.data]);
+          }
+        }
+      }
+    } catch {}
+    setTogglingPrintMethodId(null);
+  };
 
   const handleCreatePreset = async () => {
     if (!product?.id || !newPresetName.trim()) return;
@@ -1342,6 +1404,50 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           </div>
+
+          {/* Print Methods */}
+          {product?.id && (
+          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+            <h3 className="font-semibold text-gray-900 mb-3">인쇄 방식</h3>
+            {allPrintMethods.length === 0 ? (
+              <p className="text-sm text-gray-500">등록된 인쇄 방식이 없습니다.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {allPrintMethods
+                  .filter((pm) => pm.is_active)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((pm) => {
+                    const isLinked = productPrintMethods.some((ppm) => ppm.print_method_id === pm.id);
+                    const isToggling = togglingPrintMethodId === pm.id;
+                    return (
+                      <button
+                        key={pm.id}
+                        onClick={() => handleTogglePrintMethod(pm)}
+                        disabled={isToggling}
+                        className={`flex items-center gap-2 p-2 rounded-md border text-left transition-colors ${
+                          isLinked
+                            ? 'border-blue-300 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        } ${isToggling ? 'opacity-50' : ''}`}
+                      >
+                        {pm.image_url ? (
+                          <img src={pm.image_url} alt={pm.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] text-gray-400">img</span>
+                          </div>
+                        )}
+                        <div className="min-w-0 flex items-center gap-1">
+                          <span className="text-xs font-medium truncate">{pm.name}</span>
+                          {isLinked && <Check className="w-3 h-3 text-blue-500 flex-shrink-0" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+          )}
 
           {/* Product Images */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
