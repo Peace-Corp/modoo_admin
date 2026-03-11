@@ -7,7 +7,6 @@ import { CATEGORIES } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers, GripVertical } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
-import PrintAreaEditor from './PrintAreaEditor';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -163,13 +162,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   const tabs: { id: EditorTab; label: string }[] = [
     { id: 'basic', label: '기본 정보' },
-    { id: 'sides', label: '면 & 인쇄 영역' },
+    { id: 'sides', label: '면 설정' },
     { id: 'size-color', label: '사이즈 & 색상' },
-    { id: 'partner-mall', label: '파트너몰 설정' },
     ...(!isNewProduct ? [
-      { id: 'print-area' as const, label: '인쇄 영역' },
+      // { id: 'print-area' as const, label: '인쇄 영역' },
       { id: 'template' as const, label: '템플릿' },
     ] : []),
+    { id: 'partner-mall', label: '파트너몰 설정' },
   ];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1408,7 +1407,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           {/* Print Methods */}
           {product?.id && (
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-3">인쇄 방식</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">가능한 인쇄 방식</h3>
             {allPrintMethods.length === 0 ? (
               <p className="text-sm text-gray-500">등록된 인쇄 방식이 없습니다.</p>
             ) : (
@@ -2518,13 +2517,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         </div>
       )}
 
-      {activeTab === 'print-area' && product && (
+      {/* {activeTab === 'print-area' && product && (
         <PrintAreaEditor
           product={product}
           onSave={onSave}
           onCancel={onCancel}
         />
-      )}
+      )} */}
 
       {activeTab === 'template' && product && (
         <div className="bg-white border border-gray-200 rounded-md shadow-sm p-6">
