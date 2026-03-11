@@ -526,9 +526,17 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Add new side
   const handleAddSide = () => {
+    const sideOptionsList = [
+      { id: 'front', name: '앞면' },
+      { id: 'back', name: '뒷면' },
+      { id: 'left', name: '왼쪽' },
+      { id: 'right', name: '오른쪽' },
+    ];
+    const usedIds = new Set(sides.map(s => s.id));
+    const nextSide = sideOptionsList.find(s => !usedIds.has(s.id)) || sideOptionsList[0];
     const newSide: ProductSide = {
-      id: `side-${Date.now()}`,
-      name: `면 ${sides.length + 1}`,
+      id: nextSide.id,
+      name: nextSide.name,
       imageUrl: '',
       printArea: buildPrintArea(),
       layers: [],
@@ -2107,24 +2115,26 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                 {openSections.has('settings') && (
                 <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">면 이름</label>
-                    <input
-                      type="text"
-                      value={currentSide.name}
-                      onChange={(e) => updateSideField(currentSideIndex, 'name', e.target.value)}
-                      className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      placeholder="면 이름"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">면 ID</label>
-                    <input
-                      type="text"
+                    <label className="block text-xs font-medium text-gray-700 mb-1">면 종류</label>
+                    <select
                       value={currentSide.id}
-                      onChange={(e) => updateSideField(currentSideIndex, 'id', e.target.value)}
+                      onChange={(e) => {
+                        const sideOptions: Record<string, string> = { front: '앞면', back: '뒷면', left: '왼쪽', right: '오른쪽' };
+                        const id = e.target.value;
+                        const newSides = [...sides];
+                        newSides[currentSideIndex] = { ...newSides[currentSideIndex], id, name: sideOptions[id] || id };
+                        setSides(newSides);
+                      }}
                       className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      placeholder="예: front"
-                    />
+                    >
+                      {!['front', 'back', 'left', 'right'].includes(currentSide.id) && (
+                        <option value={currentSide.id}>{currentSide.name || '면을 선택하세요'}</option>
+                      )}
+                      <option value="front">앞면</option>
+                      <option value="back">뒷면</option>
+                      <option value="left">왼쪽</option>
+                      <option value="right">오른쪽</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">렌더링 모드</label>
