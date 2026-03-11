@@ -125,7 +125,7 @@ export default function Dashboard() {
         label: '문의(대기)',
         value: payload.counts.inquiries_pending,
         hint: '답변이 필요한 문의',
-        href: '/content',
+        href: '/content/inquiries',
         icon: MessageSquare,
       },
       {
@@ -269,10 +269,10 @@ export default function Dashboard() {
                       <span className="text-gray-400">→</span>
                     </Link>
                     <Link
-                      href="/content"
+                      href="/content/inquiries"
                       className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
-                      콘텐츠 관리
+                      문의 관리
                       <span className="text-gray-400">→</span>
                     </Link>
                     <Link
