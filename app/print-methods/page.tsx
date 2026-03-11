@@ -249,9 +249,16 @@ export default function PrintMethodsPage() {
                     <ImageIcon className="w-6 h-6" />
                   </div>
                 )}
-                <div>
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="text"
+                    value={form.image_url}
+                    onChange={(e) => setForm((prev) => ({ ...prev, image_url: e.target.value }))}
+                    placeholder="이미지 URL (https://...)"
+                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md"
+                  />
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 cursor-pointer transition-colors">
-                    {uploading ? '업로드 중...' : '이미지 선택'}
+                    {uploading ? '업로드 중...' : '파일 업로드'}
                     <input
                       type="file"
                       accept="image/*"
