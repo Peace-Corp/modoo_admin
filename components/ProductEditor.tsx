@@ -1433,7 +1433,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                   >
                     <Upload className="w-4 h-4" />
-                    이미지 추가
+                    업로드
                   </button>
                   {descriptionImages.length > 0 && (
                     <button
@@ -1446,6 +1446,33 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     </button>
                   )}
                 </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const input = e.currentTarget.elements.namedItem('descImgUrl') as HTMLInputElement;
+                    const url = input.value.trim();
+                    if (!url) return;
+                    const updated = [...descriptionImages, url];
+                    setDescriptionImages(updated);
+                    void persistProductImageField('description_image', updated);
+                    input.value = '';
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    name="descImgUrl"
+                    type="text"
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    placeholder="이미지 링크 입력 (https://...)"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    추가
+                  </button>
+                </form>
                 {!product?.id && (
                   <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
                 )}
