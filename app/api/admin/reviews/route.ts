@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
+function storagePathFromReviewImageUrl(url: string): string | null {
+  try {
+    const pathname = new URL(url).pathname;
+    const prefix = pathname.includes('/storage/v1/object/public/review-images/')
+      ? '/storage/v1/object/public/review-images/'
+      : pathname.includes('/storage/v1/object/sign/review-images/')
+        ? '/storage/v1/object/sign/review-images/'
+        : null;
+    return prefix ? decodeURIComponent(pathname.split(prefix)[1] || '') : null;
+  } catch {
+    return null;
+  }
+}
+
 const requireAdmin = async () => {
   const supabase = await createClient();
   const {
@@ -225,6 +239,25 @@ export async function DELETE(request: Request) {
     }
 
     const adminClient = createAdminClient();
+
+    // Fetch review to get image URLs before deletion
+    const { data: review } = await adminClient
+      .from('reviews')
+      .select('review_image_urls')
+      .eq('id', reviewId)
+      .single();
+
+    // Delete images from storage
+    if (review?.review_image_urls?.length) {
+      const paths = review.review_image_urls
+        .map(storagePathFromReviewImageUrl)
+        .filter((p): p is string => !!p);
+
+      if (paths.length > 0) {
+        await adminClient.storage.from('review-images').remove(paths);
+      }
+    }
+
     const { error } = await adminClient.from('reviews').delete().eq('id', reviewId);
 
     if (error) {
