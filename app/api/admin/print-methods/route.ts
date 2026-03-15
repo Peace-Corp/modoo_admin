@@ -76,6 +76,7 @@ export async function POST(request: Request) {
         image_url: payload.image_url || null,
         sort_order: payload.sort_order ?? 0,
         is_active: payload.is_active ?? true,
+        pricing: payload.pricing ?? null,
       })
       .select()
       .single();
@@ -110,6 +111,7 @@ export async function PATCH(request: Request) {
     if (payload.image_url !== undefined) updateData.image_url = payload.image_url;
     if (payload.sort_order !== undefined) updateData.sort_order = payload.sort_order;
     if (payload.is_active !== undefined) updateData.is_active = payload.is_active;
+    if (payload.pricing !== undefined) updateData.pricing = payload.pricing;
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
