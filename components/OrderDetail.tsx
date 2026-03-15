@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off } from 'lucide-react';
+import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw } from 'lucide-react';
+import RefundModal from '@/components/orders/RefundModal';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -62,6 +63,8 @@ export default function OrderDetail({
   const [cobuyParticipants, setCobuyParticipants] = useState<CoBuyParticipantSummary[]>([]);
   const [loadingCobuyParticipants, setLoadingCobuyParticipants] = useState(false);
   const [cobuyParticipantsError, setCobuyParticipantsError] = useState<string | null>(null);
+
+  const [showRefundModal, setShowRefundModal] = useState(false);
 
   // Share link state
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -794,6 +797,21 @@ export default function OrderDetail({
                   <p className="text-sm text-gray-500">주문 일시</p>
                   <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
                 </div>
+                {order.refund_reason && (
+                  <div>
+                    <p className="text-sm text-gray-500">환불 사유</p>
+                    <p className="font-medium text-red-600">{order.refund_reason}</p>
+                  </div>
+                )}
+                {order.payment_status === 'completed' && (
+                  <button
+                    onClick={() => setShowRefundModal(true)}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors mt-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    환불 처리
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -860,6 +878,18 @@ export default function OrderDetail({
 
         </div>
       </div>
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <RefundModal
+          order={order}
+          onClose={() => setShowRefundModal(false)}
+          onSuccess={() => {
+            setShowRefundModal(false);
+            onUpdate();
+          }}
+        />
+      )}
     </div>
   );
 }

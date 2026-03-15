@@ -215,6 +215,9 @@ export interface Order {
   factory_payment_date: string | null;
   factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
 
+  // Refund reason (set when order is refunded)
+  refund_reason: string | null;
+
   // Shareable link token (generated on demand)
   share_token: string | null;
 
