@@ -407,6 +407,10 @@ export default function UnifiedEditor({
 
     if (result.success) {
       if (mode === 'order') {
+        // Update local canvas states with saved data (includes productColor)
+        if (result.canvasState) {
+          setCanvasStates(result.canvasState as Record<string, CanvasState | string | null>);
+        }
         editSnapshotRef.current = {};
         setIsEditing(false);
       } else if (mode === 'design') {

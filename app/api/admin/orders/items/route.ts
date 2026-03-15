@@ -112,6 +112,7 @@ export async function PATCH(request: Request) {
     const payload = await request.json().catch(() => null);
     const orderItemId = payload?.orderItemId;
     const canvasState = payload?.canvasState;
+    const thumbnailUrl = payload?.thumbnailUrl;
 
     if (!orderItemId || typeof orderItemId !== 'string') {
       return NextResponse.json({ error: '주문 상품 ID가 필요합니다.' }, { status: 400 });
@@ -121,13 +122,18 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'canvas_state가 필요합니다.' }, { status: 400 });
     }
 
+    const updateData: Record<string, unknown> = {
+      canvas_state: canvasState,
+      updated_at: new Date().toISOString(),
+    };
+    if (typeof thumbnailUrl === 'string') {
+      updateData.thumbnail_url = thumbnailUrl;
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('order_items')
-      .update({
-        canvas_state: canvasState,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', orderItemId)
       .select()
       .single();

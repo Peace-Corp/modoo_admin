@@ -22,8 +22,16 @@ interface UseEditorSaveParams {
   presetType?: string;
 }
 
+export interface SaveResult {
+  success: boolean;
+  id?: string;
+  error?: string;
+  /** Returned from order save so the caller can update local canvas states */
+  canvasState?: Record<string, unknown>;
+}
+
 interface EditorSaveResult {
-  handleSave: () => Promise<{ success: boolean; id?: string; error?: string }>;
+  handleSave: () => Promise<SaveResult>;
 }
 
 export function useEditorSave({
@@ -41,7 +49,7 @@ export function useEditorSave({
 }: UseEditorSaveParams): EditorSaveResult {
   const { canvasMap, productColor, layerColors } = useCanvasStore();
 
-  const handleSave = useCallback(async (): Promise<{ success: boolean; id?: string; error?: string }> => {
+  const handleSave = useCallback(async (): Promise<SaveResult> => {
     if (!product) return { success: false, error: '제품 정보가 없습니다.' };
 
     const sides = product.configuration || [];
@@ -62,7 +70,7 @@ export function useEditorSave({
     }
   }, [mode, product, canvasMap, productColor, layerColors, orderItem, savedDesign, selectedTemplate, designTitle, templateTitle, templateDescription, templateSortOrder, templateIsActive, presetType]);
 
-  async function saveDesignMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {
+  async function saveDesignMode(sides: Product['configuration']): Promise<SaveResult> {
     // Serialize canvas state from all sides
     const canvasState: Record<string, string> = {};
     for (const side of sides) {
@@ -115,7 +123,7 @@ export function useEditorSave({
     }
   }
 
-  async function saveOrderMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {
+  async function saveOrderMode(sides: Product['configuration']): Promise<SaveResult> {
     if (!orderItem) return { success: false, error: '주문 항목 정보가 없습니다.' };
 
     const updatedCanvasState: Record<string, unknown> = { ...orderItem.canvas_state };
@@ -137,7 +145,25 @@ export function useEditorSave({
       updatedCanvasState[side.id] = {
         ...existingState,
         objects: serializedObjects,
+        productColor,
       };
+    }
+
+    // Generate preview thumbnail from first side
+    let thumbnailUrl: string | undefined;
+    const firstCanvas = canvasMap[sides[0]?.id];
+    if (firstCanvas) {
+      try {
+        firstCanvas.discardActiveObject();
+        firstCanvas.renderAll();
+        thumbnailUrl = firstCanvas.toDataURL({
+          format: 'png',
+          quality: 0.8,
+          multiplier: 0.5,
+        });
+      } catch (err) {
+        console.error('Error generating order preview:', err);
+      }
     }
 
     const response = await fetch('/api/admin/orders/items', {
@@ -146,6 +172,7 @@ export function useEditorSave({
       body: JSON.stringify({
         orderItemId: orderItem.id,
         canvasState: updatedCanvasState,
+        thumbnailUrl,
       }),
     });
 
@@ -154,10 +181,10 @@ export function useEditorSave({
       throw new Error(payload?.error || '저장에 실패했습니다.');
     }
 
-    return { success: true, id: orderItem.id };
+    return { success: true, id: orderItem.id, canvasState: updatedCanvasState };
   }
 
-  async function saveTemplateMode(sides: Product['configuration']): Promise<{ success: boolean; id?: string; error?: string }> {
+  async function saveTemplateMode(sides: Product['configuration']): Promise<SaveResult> {
     // Serialize canvas state
     const canvasState: Record<string, unknown> = {};
     for (const side of sides) {

@@ -4,10 +4,11 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock, Plus, Factory as FactoryIcon } from 'lucide-react';
+import { Package, Calendar, Clock, Plus, Factory as FactoryIcon, RotateCcw } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
+import RefundModal from '@/components/orders/RefundModal';
 
 // Extended order type with item count from API
 type OrderWithItemCount = Order & {
@@ -28,6 +29,7 @@ export default function OrdersTab() {
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [allocationOrder, setAllocationOrder] = useState<OrderWithItemCount | null>(null);
+  const [refundOrder, setRefundOrder] = useState<OrderWithItemCount | null>(null);
 
   const isFactoryUser = user?.role === 'factory';
 
@@ -427,13 +429,24 @@ export default function OrdersTab() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setAllocationOrder(order)}
-                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
-                        >
-                          <FactoryIcon className="w-3 h-3" />
-                          공장배정
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setAllocationOrder(order)}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                          >
+                            <FactoryIcon className="w-3 h-3" />
+                            공장배정
+                          </button>
+                          {order.payment_status === 'completed' && (
+                            <button
+                              onClick={() => setRefundOrder(order)}
+                              className="flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              환불
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </>
                   )}
@@ -507,13 +520,24 @@ export default function OrdersTab() {
                       <span className={getFactoryLabel(order.assigned_manufacturer_id) === '미배정' ? 'text-red-500' : ''}>{getFactoryLabel(order.assigned_manufacturer_id)}</span>
                       <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}</span>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setAllocationOrder(order); }}
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors shrink-0"
-                    >
-                      <FactoryIcon className="w-3 h-3" />
-                      공장배정
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setAllocationOrder(order); }}
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                      >
+                        <FactoryIcon className="w-3 h-3" />
+                        공장배정
+                      </button>
+                      {order.payment_status === 'completed' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRefundOrder(order); }}
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          환불
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -559,6 +583,18 @@ export default function OrdersTab() {
           onClose={() => setAllocationOrder(null)}
           onSuccess={() => {
             setAllocationOrder(null);
+            mutateOrders();
+          }}
+        />
+      )}
+
+      {/* Refund Modal */}
+      {refundOrder && (
+        <RefundModal
+          order={refundOrder}
+          onClose={() => setRefundOrder(null)}
+          onSuccess={() => {
+            setRefundOrder(null);
             mutateOrders();
           }}
         />

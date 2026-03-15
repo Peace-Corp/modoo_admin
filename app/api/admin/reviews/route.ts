@@ -251,7 +251,7 @@ export async function DELETE(request: Request) {
     if (review?.review_image_urls?.length) {
       const paths = review.review_image_urls
         .map(storagePathFromReviewImageUrl)
-        .filter((p): p is string => !!p);
+        .filter((p: string | null): p is string => !!p);
 
       if (paths.length > 0) {
         await adminClient.storage.from('review-images').remove(paths);

@@ -167,23 +167,25 @@ export function useEditorData({
           setCanvasStates(item.canvas_state || {});
           setCustomFonts(coerceCustomFonts(item.custom_fonts));
 
-          // Extract product color from canvas state or item options
+          // Extract product color: canvas state takes priority, then item options
+          let extractedColor = '#FFFFFF';
           const states = Object.values(item.canvas_state || {});
           for (const stateRaw of states) {
             const state = parseCanvasState(stateRaw);
             if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
-              setProductColor(state.productColor);
+              extractedColor = state.productColor;
               break;
             }
           }
-          if (productColor === '#FFFFFF') {
+          if (extractedColor === '#FFFFFF') {
             const variants = item.item_options?.variants;
             if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
-              setProductColor(variants[0].color_hex);
+              extractedColor = variants[0].color_hex;
             } else if (item.item_options?.color_hex) {
-              setProductColor(item.item_options.color_hex);
+              extractedColor = item.item_options.color_hex;
             }
           }
+          setProductColor(extractedColor);
         } else if (mode === 'template') {
           const t = await fetchTemplates(prod.id);
           if (cancelled) return;

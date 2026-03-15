@@ -7,6 +7,23 @@ import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { Plus, Trash2, Edit2, GripVertical, ImageIcon } from 'lucide-react';
 import type { PrintMethodRecord } from '@/types/types';
 
+interface PricingFormState {
+  // Transfer pricing (flat per size)
+  price_10x10: string;
+  price_A4: string;
+  price_A3: string;
+  // Bulk pricing (base + additional)
+  bulk_basePrice_10x10: string;
+  bulk_baseQuantity_10x10: string;
+  bulk_additionalPrice_10x10: string;
+  bulk_basePrice_A4: string;
+  bulk_baseQuantity_A4: string;
+  bulk_additionalPrice_A4: string;
+  bulk_basePrice_A3: string;
+  bulk_baseQuantity_A3: string;
+  bulk_additionalPrice_A3: string;
+}
+
 interface FormState {
   id: string | null;
   key: string;
@@ -15,7 +32,23 @@ interface FormState {
   image_url: string;
   sort_order: number;
   is_active: boolean;
+  pricing: PricingFormState;
 }
+
+const emptyPricing: PricingFormState = {
+  price_10x10: '',
+  price_A4: '',
+  price_A3: '',
+  bulk_basePrice_10x10: '',
+  bulk_baseQuantity_10x10: '100',
+  bulk_additionalPrice_10x10: '',
+  bulk_basePrice_A4: '',
+  bulk_baseQuantity_A4: '100',
+  bulk_additionalPrice_A4: '',
+  bulk_basePrice_A3: '',
+  bulk_baseQuantity_A3: '100',
+  bulk_additionalPrice_A3: '',
+};
 
 const emptyForm: FormState = {
   id: null,
@@ -25,7 +58,91 @@ const emptyForm: FormState = {
   image_url: '',
   sort_order: 0,
   is_active: true,
+  pricing: emptyPricing,
 };
+
+const isTransferMethod = (key: string) => key === 'dtf' || key === 'dtg';
+
+function parsePricingToForm(pricing: PrintMethodRecord['pricing'], key: string): PricingFormState {
+  if (!pricing) return emptyPricing;
+
+  if (isTransferMethod(key)) {
+    return {
+      ...emptyPricing,
+      price_10x10: String(pricing['10x10'] ?? ''),
+      price_A4: String(pricing['A4'] ?? ''),
+      price_A3: String(pricing['A3'] ?? ''),
+    };
+  }
+
+  const s10 = pricing['10x10'] as { basePrice?: number; baseQuantity?: number; additionalPricePerPiece?: number } | undefined;
+  const sA4 = pricing['A4'] as { basePrice?: number; baseQuantity?: number; additionalPricePerPiece?: number } | undefined;
+  const sA3 = pricing['A3'] as { basePrice?: number; baseQuantity?: number; additionalPricePerPiece?: number } | undefined;
+
+  return {
+    ...emptyPricing,
+    bulk_basePrice_10x10: String(s10?.basePrice ?? ''),
+    bulk_baseQuantity_10x10: String(s10?.baseQuantity ?? '100'),
+    bulk_additionalPrice_10x10: String(s10?.additionalPricePerPiece ?? ''),
+    bulk_basePrice_A4: String(sA4?.basePrice ?? ''),
+    bulk_baseQuantity_A4: String(sA4?.baseQuantity ?? '100'),
+    bulk_additionalPrice_A4: String(sA4?.additionalPricePerPiece ?? ''),
+    bulk_basePrice_A3: String(sA3?.basePrice ?? ''),
+    bulk_baseQuantity_A3: String(sA3?.baseQuantity ?? '100'),
+    bulk_additionalPrice_A3: String(sA3?.additionalPricePerPiece ?? ''),
+  };
+}
+
+function buildPricingFromForm(form: FormState): Record<string, unknown> | null {
+  if (isTransferMethod(form.key)) {
+    const p10 = parseInt(form.pricing.price_10x10);
+    const pA4 = parseInt(form.pricing.price_A4);
+    const pA3 = parseInt(form.pricing.price_A3);
+    if (isNaN(p10) && isNaN(pA4) && isNaN(pA3)) return null;
+    return {
+      '10x10': p10 || 0,
+      A4: pA4 || 0,
+      A3: pA3 || 0,
+    };
+  }
+
+  const bp10 = parseInt(form.pricing.bulk_basePrice_10x10);
+  const bpA4 = parseInt(form.pricing.bulk_basePrice_A4);
+  const bpA3 = parseInt(form.pricing.bulk_basePrice_A3);
+  if (isNaN(bp10) && isNaN(bpA4) && isNaN(bpA3)) return null;
+
+  return {
+    '10x10': {
+      basePrice: bp10 || 0,
+      baseQuantity: parseInt(form.pricing.bulk_baseQuantity_10x10) || 100,
+      additionalPricePerPiece: parseInt(form.pricing.bulk_additionalPrice_10x10) || 0,
+    },
+    A4: {
+      basePrice: bpA4 || 0,
+      baseQuantity: parseInt(form.pricing.bulk_baseQuantity_A4) || 100,
+      additionalPricePerPiece: parseInt(form.pricing.bulk_additionalPrice_A4) || 0,
+    },
+    A3: {
+      basePrice: bpA3 || 0,
+      baseQuantity: parseInt(form.pricing.bulk_baseQuantity_A3) || 100,
+      additionalPricePerPiece: parseInt(form.pricing.bulk_additionalPrice_A3) || 0,
+    },
+  };
+}
+
+function formatPrice(n: number) {
+  return n.toLocaleString('ko-KR') + '원';
+}
+
+function getPricingSummary(item: PrintMethodRecord): string {
+  if (!item.pricing) return '';
+  if (isTransferMethod(item.key)) {
+    const p = item.pricing as Record<string, number>;
+    return `10x10: ${formatPrice(p['10x10'] || 0)} / A4: ${formatPrice(p['A4'] || 0)} / A3: ${formatPrice(p['A3'] || 0)}`;
+  }
+  const p = item.pricing as Record<string, { basePrice: number }>;
+  return `10x10: ${formatPrice(p['10x10']?.basePrice || 0)}~ / A4: ${formatPrice(p['A4']?.basePrice || 0)}~ / A3: ${formatPrice(p['A3']?.basePrice || 0)}~`;
+}
 
 export default function PrintMethodsPage() {
   const { data: printMethods, error: swrError, mutate } = useSWR<PrintMethodRecord[]>('/api/admin/print-methods');
@@ -54,6 +171,7 @@ export default function PrintMethodsPage() {
       image_url: item.image_url ?? '',
       sort_order: item.sort_order,
       is_active: item.is_active,
+      pricing: parsePricingToForm(item.pricing, item.key),
     });
     setFormOpen(true);
     setFormError(null);
@@ -83,6 +201,10 @@ export default function PrintMethodsPage() {
     }
   };
 
+  const updatePricing = (field: keyof PricingFormState, value: string) => {
+    setForm((prev) => ({ ...prev, pricing: { ...prev.pricing, [field]: value } }));
+  };
+
   const handleSave = async () => {
     if (!form.key.trim() || !form.name.trim()) {
       setFormError('key와 name은 필수입니다.');
@@ -93,9 +215,10 @@ export default function PrintMethodsPage() {
     setFormError(null);
     try {
       const method = isEditing ? 'PATCH' : 'POST';
+      const pricing = buildPricingFromForm(form);
       const body = isEditing
-        ? { id: form.id, name: form.name, description: form.description || null, image_url: form.image_url || null, sort_order: form.sort_order, is_active: form.is_active }
-        : { key: form.key, name: form.name, description: form.description || null, image_url: form.image_url || null, sort_order: form.sort_order, is_active: form.is_active };
+        ? { id: form.id, name: form.name, description: form.description || null, image_url: form.image_url || null, sort_order: form.sort_order, is_active: form.is_active, pricing }
+        : { key: form.key, name: form.name, description: form.description || null, image_url: form.image_url || null, sort_order: form.sort_order, is_active: form.is_active, pricing };
 
       const res = await fetch('/api/admin/print-methods', {
         method,
@@ -150,6 +273,8 @@ export default function PrintMethodsPage() {
       alert(err instanceof Error ? err.message : '상태 변경에 실패했습니다.');
     }
   };
+
+  const showTransferPricing = isTransferMethod(form.key);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -270,6 +395,71 @@ export default function PrintMethodsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Pricing Section */}
+            <div className="sm:col-span-2 border-t pt-3 mt-1">
+              <p className="text-xs font-semibold text-gray-700 mb-2">
+                가격 설정 {form.key && <span className="font-normal text-gray-400">({showTransferPricing ? '전사 - 사이즈별 단가' : '벌크 - 기본가 + 추가단가'})</span>}
+              </p>
+
+              {showTransferPricing ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {(['10x10', 'A4', 'A3'] as const).map((size) => (
+                    <div key={size}>
+                      <label className="block text-[10px] text-gray-500 mb-0.5">{size}</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={form.pricing[`price_${size}` as keyof PricingFormState]}
+                          onChange={(e) => updatePricing(`price_${size}` as keyof PricingFormState, e.target.value)}
+                          placeholder="0"
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md pr-8"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(['10x10', 'A4', 'A3'] as const).map((size) => (
+                    <div key={size} className="grid grid-cols-[60px_1fr_1fr_1fr] gap-2 items-end">
+                      <span className="text-[10px] font-medium text-gray-500 pb-1.5">{size}</span>
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">기본가(원)</label>
+                        <input
+                          type="number"
+                          value={form.pricing[`bulk_basePrice_${size}` as keyof PricingFormState]}
+                          onChange={(e) => updatePricing(`bulk_basePrice_${size}` as keyof PricingFormState, e.target.value)}
+                          placeholder="60000"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">기본수량</label>
+                        <input
+                          type="number"
+                          value={form.pricing[`bulk_baseQuantity_${size}` as keyof PricingFormState]}
+                          onChange={(e) => updatePricing(`bulk_baseQuantity_${size}` as keyof PricingFormState, e.target.value)}
+                          placeholder="100"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">추가단가(원)</label>
+                        <input
+                          type="number"
+                          value={form.pricing[`bulk_additionalPrice_${size}` as keyof PricingFormState]}
+                          onChange={(e) => updatePricing(`bulk_additionalPrice_${size}` as keyof PricingFormState, e.target.value)}
+                          placeholder="600"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
@@ -330,6 +520,9 @@ export default function PrintMethodsPage() {
                 </div>
                 {item.description && (
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{item.description}</p>
+                )}
+                {item.pricing && (
+                  <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{getPricingSummary(item)}</p>
                 )}
               </div>
 
