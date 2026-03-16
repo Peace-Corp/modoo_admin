@@ -138,9 +138,9 @@ export default function DesignsTab() {
                       alt={design.title || '디자인 미리보기'}
                       className="w-full h-full object-contain rounded"
                     />
-                  ) : design.product?.thumbnail_image_link ? (
+                  ) : design.product?.thumbnail_image_link?.[0] ? (
                     <img
-                      src={design.product.thumbnail_image_link}
+                      src={design.product.thumbnail_image_link[0]}
                       alt={design.product.title}
                       className="w-full h-full object-contain opacity-50 rounded"
                     />

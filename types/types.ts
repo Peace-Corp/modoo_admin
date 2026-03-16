@@ -5,7 +5,7 @@ export interface Product {
   configuration: ProductSide[];
   size_options: SizeOption[] | null;
   category: string | null;
-  thumbnail_image_link?: string | null;
+  thumbnail_image_link?: string[] | null;
   description_image?: string[] | null;
   sizing_chart_image?: string | null;
   product_code?: string | null;
@@ -551,7 +551,7 @@ export interface CoBuyRequest {
   product?: {
     id: string;
     title: string;
-    thumbnail_image_link?: string | null;
+    thumbnail_image_link?: string[] | null;
   };
   profiles?: {
     email: string | null;
@@ -610,7 +610,7 @@ export interface SavedDesign {
   product?: {
     id: string;
     title: string;
-    thumbnail_image_link: string | null;
+    thumbnail_image_link: string[] | null;
   } | null;
 }
 

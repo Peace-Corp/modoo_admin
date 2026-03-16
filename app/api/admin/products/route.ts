@@ -256,7 +256,7 @@ export async function PATCH(request: Request) {
     }
 
     if (payload?.thumbnail_image_link !== undefined) {
-      if (payload.thumbnail_image_link !== null && typeof payload.thumbnail_image_link !== 'string') {
+      if (payload.thumbnail_image_link !== null && !Array.isArray(payload.thumbnail_image_link)) {
         return NextResponse.json({ error: '썸네일 이미지 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.thumbnail_image_link = payload.thumbnail_image_link ?? null;

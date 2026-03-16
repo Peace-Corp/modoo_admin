@@ -664,9 +664,9 @@ export default function AddProductsModal({
                           alt={config.product.title}
                           className="w-full h-full object-contain"
                         />
-                      ) : config.product.thumbnail_image_link ? (
+                      ) : config.product.thumbnail_image_link?.[0] ? (
                         <img
-                          src={config.product.thumbnail_image_link}
+                          src={config.product.thumbnail_image_link[0]}
                           alt={config.product.title}
                           className="w-full h-full object-contain p-1"
                         />

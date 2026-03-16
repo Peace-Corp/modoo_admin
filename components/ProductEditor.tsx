@@ -70,7 +70,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [basePrice, setBasePrice] = useState(product?.base_price || 0);
   const [category, setCategory] = useState(product?.category || '');
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
-  const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
+  const [thumbnailImages, setThumbnailImages] = useState<string[]>(product?.thumbnail_image_link ?? []);
   const [descriptionImages, setDescriptionImages] = useState<string[]>(product?.description_image ?? []);
   const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
   const [productCode, setProductCode] = useState(product?.product_code ?? '');
@@ -1000,8 +1000,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           updateSideField(target.sideIndex, 'imageUrl', publicUrl);
         }
       } else if (target.field === 'thumbnail_image_link') {
-        setThumbnailImageLink(publicUrl);
-        await persistProductImageField('thumbnail_image_link', publicUrl);
+        const updated = [...thumbnailImages, publicUrl];
+        setThumbnailImages(updated);
+        await persistProductImageField('thumbnail_image_link', updated);
       } else if (target.field === 'description_image') {
         const updated = [...descriptionImages, publicUrl];
         setDescriptionImages(updated);
@@ -1033,13 +1034,19 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   const clearProductImage = (field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image') => {
     if (field === 'thumbnail_image_link') {
-      setThumbnailImageLink('');
+      setThumbnailImages([]);
     } else if (field === 'description_image') {
       setDescriptionImages([]);
     } else {
       setSizingChartImage('');
     }
-    void persistProductImageField(field, field === 'description_image' ? [] : null);
+    void persistProductImageField(field, field === 'description_image' || field === 'thumbnail_image_link' ? [] : null);
+  };
+
+  const removeThumbnailImage = (index: number) => {
+    const updated = thumbnailImages.filter((_, i) => i !== index);
+    setThumbnailImages(updated);
+    void persistProductImageField('thumbnail_image_link', updated.length > 0 ? updated : null);
   };
 
   const removeDescriptionImage = (index: number) => {
@@ -1155,7 +1162,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         is_active: isActive,
         configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
-        thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
+        thumbnail_image_link: thumbnailImages.length > 0 ? thumbnailImages : null,
         description_image: descriptionImages.length > 0 ? descriptionImages : null,
         sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
         product_code: productCode.trim() ? productCode.trim() : null,
@@ -1462,51 +1469,48 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">제품 썸네일 (thumbnail_image_link)</label>
-                <div className="flex items-start gap-3">
-                  {thumbnailImageLink ? (
-                    <img
-                      src={thumbnailImageLink}
-                      alt="제품 썸네일"
-                      className="w-20 h-20 object-cover rounded border border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <input
-                      type="text"
-                      value={thumbnailImageLink}
-                      onChange={(e) => setThumbnailImageLink(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      placeholder="https://..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => triggerProductFileInput('thumbnail_image_link')}
-                        disabled={uploading}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
-                      >
-                        <Upload className="w-4 h-4" />
-                        업로드
-                      </button>
-                      {!!thumbnailImageLink && (
+                {thumbnailImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {thumbnailImages.map((url, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={url}
+                          alt={`썸네일 ${idx + 1}`}
+                          className="w-20 h-20 object-cover rounded border border-gray-200"
+                        />
                         <button
-                          onClick={() => clearProductImage('thumbnail_image_link')}
-                          disabled={uploading}
-                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                          onClick={() => removeThumbnailImage(idx)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          지우기
+                          ×
                         </button>
-                      )}
-                    </div>
-                    {!product?.id && (
-                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
-                    )}
+                      </div>
+                    ))}
                   </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => triggerProductFileInput('thumbnail_image_link')}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4" />
+                    이미지 추가
+                  </button>
+                  {thumbnailImages.length > 0 && (
+                    <button
+                      onClick={() => clearProductImage('thumbnail_image_link')}
+                      disabled={uploading}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      전체 삭제
+                    </button>
+                  )}
                 </div>
+                {!product?.id && (
+                  <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                )}
               </div>
 
               <div className="space-y-2">
