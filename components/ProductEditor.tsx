@@ -1816,7 +1816,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           </div>
+          </div>
 
+          <div className="space-y-4">
           {/* Product Colors (Single Image Products) */}
           {!hasLayeredItem && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm space-y-4">
@@ -2121,43 +2123,6 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           )}
           </div>
 
-          {/* Right Panel - Print Methods */}
-          <div className="space-y-4">
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-3">인쇄 방법</h3>
-              <p className="text-xs text-gray-500 mb-3">이 제품에 사용 가능한 인쇄 방법을 선택하세요.</p>
-              {allPrintMethods.length === 0 ? (
-                <p className="text-sm text-gray-500">등록된 인쇄 방법이 없습니다.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {allPrintMethods.map((pm) => {
-                    const linked = productPrintMethods.some((ppm) => ppm.print_method_id === pm.id);
-                    const isToggling = togglingPrintMethodId === pm.id;
-                    return (
-                      <button
-                        key={pm.id}
-                        onClick={() => handleTogglePrintMethod(pm)}
-                        disabled={isToggling || !product?.id}
-                        className={`w-full flex items-center gap-2 p-2 border rounded-md text-left transition-all ${
-                          linked ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                        } ${isToggling ? 'opacity-50' : ''}`}
-                      >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          linked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                        }`}>
-                          {linked && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="text-sm text-gray-900">{pm.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {!product?.id && (
-                <p className="text-xs text-gray-500 mt-2">제품을 저장한 후 인쇄 방법을 설정할 수 있습니다.</p>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
