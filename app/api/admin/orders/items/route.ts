@@ -101,12 +101,12 @@ export async function PATCH(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, manufacturer_id')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    if (profileError || !profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+      return NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 });
     }
 
     const payload = await request.json().catch(() => null);
@@ -122,6 +122,29 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'canvas_state가 필요합니다.' }, { status: 400 });
     }
 
+    const adminClient = createAdminClient();
+
+    // Factory users: verify the order item belongs to an order assigned to their factory
+    if (profile.role === 'factory') {
+      if (!profile.manufacturer_id) {
+        return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
+      }
+      const { data: orderItem, error: itemError } = await adminClient
+        .from('order_items')
+        .select('order_id, orders!inner(assigned_manufacturer_id)')
+        .eq('id', orderItemId)
+        .single();
+
+      if (itemError || !orderItem) {
+        return NextResponse.json({ error: '주문 상품을 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      const order = orderItem.orders as unknown as { assigned_manufacturer_id: string | null };
+      if (order.assigned_manufacturer_id !== profile.manufacturer_id) {
+        return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       canvas_state: canvasState,
       updated_at: new Date().toISOString(),
@@ -130,7 +153,6 @@ export async function PATCH(request: Request) {
       updateData.thumbnail_url = thumbnailUrl;
     }
 
-    const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('order_items')
       .update(updateData)

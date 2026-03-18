@@ -9,7 +9,7 @@ type AdminRole = 'admin' | 'factory';
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
   admin: ['/dashboard', '/products', '/designs', '/content', '/orders', '/factories', '/cobuy', '/partner_malls', '/coupons', '/users', '/settings', '/editor', '/print-methods'],
-  factory: ['/orders', '/users'],
+  factory: ['/orders', '/users', '/editor'],
 };
 
 const defaultRouteByRole: Record<AdminRole, string> = {

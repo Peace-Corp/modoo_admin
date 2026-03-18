@@ -252,6 +252,17 @@ export default function UnifiedEditor({
     return () => setEditMode(false);
   }, [isEditing, setEditMode]);
 
+  // Reset color filter states when leaving the editor
+  useEffect(() => {
+    return () => {
+      useCanvasStore.setState({
+        productColor: '#FFFFFF',
+        layerColors: {},
+        objectPrintMethods: {},
+      });
+    };
+  }, []);
+
   // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
