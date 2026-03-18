@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock, Plus, Factory as FactoryIcon, RotateCcw } from 'lucide-react';
+import { Package, Calendar, Clock, Plus, Factory as FactoryIcon, RotateCcw, Search, X } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
@@ -24,7 +24,8 @@ export default function OrdersTab() {
   const resumeProductId = searchParams.get('resumeProductId');
   const resumeDesignId = searchParams.get('designId');
 
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -33,18 +34,15 @@ export default function OrdersTab() {
 
   const isFactoryUser = user?.role === 'factory';
 
-  // Build orders SWR key based on user role and filter
+  // Build orders SWR key — always fetch all, filter client-side
   const ordersKey = useMemo(() => {
     if (!user) return null;
     const params = new URLSearchParams();
     if (user.role === 'factory' && user.manufacturer_id) {
       params.set('factoryId', user.manufacturer_id);
     }
-    if (filterStatus !== 'all') {
-      params.set('status', filterStatus);
-    }
     return `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
-  }, [user, filterStatus]);
+  }, [user]);
 
   const { data: orders = [], isLoading: loading, mutate: mutateOrders } = useSWR<OrderWithItemCount[]>(ordersKey);
 
@@ -189,8 +187,39 @@ export default function OrdersTab() {
     return map;
   }, [factories]);
 
-  // Orders are now filtered server-side, no client-side filtering needed
-  const filteredOrders = orders;
+  const toggleStatus = useCallback((status: string) => {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
+
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+
+    // Status filter (multi-select)
+    if (selectedStatuses.size > 0) {
+      result = result.filter((o) =>
+        isFactoryUser
+          ? selectedStatuses.has(o.factory_status || 'pending')
+          : selectedStatuses.has(o.order_status)
+      );
+    }
+
+    // Text search (name, email, order ID)
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((o) =>
+        o.id.toLowerCase().includes(q) ||
+        o.customer_name?.toLowerCase().includes(q) ||
+        o.customer_email?.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [orders, selectedStatuses, searchQuery, isFactoryUser]);
 
   // Get order item count from the API response
   const getOrderItemCount = (order: OrderWithItemCount) => {
@@ -261,17 +290,30 @@ export default function OrdersTab() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm">
-        <div className="flex gap-2 flex-wrap">
+      {/* Search & Filters */}
+      <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm space-y-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="이름, 이메일, 주문 ID 검색..."
+            className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
           {(isFactoryUser ? [
-            { value: 'all', label: '전체' },
             { value: 'assigned', label: '배정완료' },
             { value: 'in_progress', label: '작업중' },
             { value: 'completed', label: '작업완료' },
             { value: 'shipped', label: '출고완료' },
           ] : [
-            { value: 'all', label: '전체' },
             { value: 'payment_completed', label: '결제완료' },
             { value: 'in_production', label: '제작중' },
             { value: 'shipping', label: '배송중' },
@@ -280,9 +322,9 @@ export default function OrdersTab() {
           ]).map((filter) => (
             <button
               key={filter.value}
-              onClick={() => setFilterStatus(filter.value)}
+              onClick={() => toggleStatus(filter.value)}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
-                filterStatus === filter.value
+                selectedStatuses.has(filter.value)
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -290,6 +332,14 @@ export default function OrdersTab() {
               {filter.label}
             </button>
           ))}
+          {selectedStatuses.size > 0 && (
+            <button
+              onClick={() => setSelectedStatuses(new Set())}
+              className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              초기화
+            </button>
+          )}
         </div>
       </div>
 

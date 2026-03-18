@@ -166,7 +166,7 @@ export default function ProductsTab() {
         p.id === savedProduct.id ? savedProduct : p
       ), { revalidate: false });
     }
-    setSelectedProduct(null);
+    setSelectedProduct(savedProduct);
     setIsCreatingNew(false);
   };
 

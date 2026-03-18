@@ -6,7 +6,7 @@ import { Product, ProductSide, ProductColor, ManufacturerColor } from '@/types/t
 import { useCanvasStore } from '@/store/useCanvasStore';
 import TextStylePanel from '@/components/canvas/TextStylePanel';
 import LayerColorSelector from '@/components/canvas/LayerColorSelector';
-import ObjectPreviewPanel from '@/components/canvas/ObjectPreviewPanel';
+
 import PricingInfo from '@/components/canvas/PricingInfo';
 import { isCurvedText } from '@/lib/curvedText';
 import * as fabric from 'fabric';
@@ -111,9 +111,8 @@ export default function OrderEditPanel({
         )}
       </div>
 
-      {/* Print Options & Pricing */}
+      {/* Pricing */}
       <div className="p-2.5 border-b">
-        <ObjectPreviewPanel sides={sides} compact />
         <PricingInfo basePrice={product.base_price} sides={sides} compact />
       </div>
 
