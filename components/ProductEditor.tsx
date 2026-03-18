@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset, PrintMethodRecord, ProductPrintMethod } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
-import { CATEGORIES } from '@/lib/categories';
+import type { CategoryConfig } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers, GripVertical } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
@@ -149,6 +149,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [allPrintMethods, setAllPrintMethods] = useState<PrintMethodRecord[]>([]);
   const [productPrintMethods, setProductPrintMethods] = useState<ProductPrintMethod[]>([]);
   const [togglingPrintMethodId, setTogglingPrintMethodId] = useState<string | null>(null);
+
+  // Categories
+  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
 
   // Tab state
   type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall' | 'print-area' | 'template';
@@ -338,9 +345,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     }
   };
 
-  // Fetch manufacturers when component mounts (for both layered and non-layered products)
+  // Fetch manufacturers and categories when component mounts
   useEffect(() => {
     void fetchManufacturers();
+    void fetchCategories();
   }, []);
 
   // Load manufacturer colors if product already has a linked manufacturer
@@ -364,6 +372,69 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       console.error('Error fetching manufacturers:', error);
     } finally {
       setManufacturersLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    setCategoriesLoading(true);
+    try {
+      const response = await fetch('/api/admin/categories');
+      if (!response.ok) throw new Error('카테고리 데이터를 불러오지 못했습니다.');
+      const payload = await response.json();
+      setCategories((payload?.data || []).map((c: { key: string; name: string; icon?: string }) => ({
+        key: c.key,
+        name: c.name,
+        icon: c.icon || '',
+      })));
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategory(true);
+    try {
+      const response = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '카테고리 생성에 실패했습니다.');
+      }
+      const payload = await response.json();
+      const created = payload?.data;
+      if (created) {
+        setCategories((prev) => [...prev, { key: created.key, name: created.name, icon: created.icon || '' }]);
+        setCategory(created.key);
+      }
+      setNewCategoryName('');
+      setShowNewCategoryInput(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '카테고리 생성에 실패했습니다.');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (key: string) => {
+    const cat = categories.find((c) => c.key === key);
+    if (!cat || !confirm(`"${cat.name}" 카테고리를 삭제하시겠습니까?`)) return;
+    try {
+      const response = await fetch(`/api/admin/categories?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '카테고리 삭제에 실패했습니다.');
+      }
+      setCategories((prev) => prev.filter((c) => c.key !== key));
+      if (category === key) setCategory('');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '카테고리 삭제에 실패했습니다.');
     }
   };
 
@@ -1296,18 +1367,60 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                >
-                  <option value="">-- 카테고리 선택 --</option>
-                  {CATEGORIES.filter((cat) => cat.key !== 'all').map((cat) => (
-                    <option key={cat.key} value={cat.key}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    disabled={categoriesLoading}
+                  >
+                    <option value="">-- 카테고리 선택 --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.key} value={cat.key}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {category && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteCategory(category)}
+                      className="px-2 py-2 border border-red-200 rounded-md hover:bg-red-50 text-red-500"
+                      title="카테고리 삭제"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
+                    className="px-2 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-600"
+                    title="카테고리 추가"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {showNewCategoryInput && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="새 카테고리 이름"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleAddCategory(); } }}
+                      disabled={addingCategory}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleAddCategory()}
+                      disabled={addingCategory || !newCategoryName.trim()}
+                      className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {addingCategory ? <Loader2 className="w-3 h-3 animate-spin" /> : '추가'}
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">제품 코드 (product_code)</label>

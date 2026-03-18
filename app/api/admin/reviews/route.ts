@@ -57,6 +57,7 @@ export async function GET(request: Request) {
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '10');
     const searchQuery = url.searchParams.get('search') || '';
+    const isBest = url.searchParams.get('is_best');
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -66,6 +67,10 @@ export async function GET(request: Request) {
     let countQuery = adminClient
       .from('reviews')
       .select('*', { count: 'exact', head: true });
+
+    if (isBest !== null) {
+      countQuery = countQuery.eq('is_best', isBest === 'true');
+    }
 
     if (searchQuery) {
       countQuery = countQuery.or(`title.ilike.%${searchQuery}%,author_name.ilike.%${searchQuery}%`);
@@ -81,10 +86,17 @@ export async function GET(request: Request) {
     let dataQuery = adminClient
       .from('reviews')
       .select(
-        'id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)'
-      )
-      .order('created_at', { ascending: false })
-      .range(from, to);
+        'id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, best_order, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)'
+      );
+
+    if (isBest !== null && isBest === 'true') {
+      dataQuery = dataQuery.order('best_order', { ascending: true });
+    }
+    dataQuery = dataQuery.order('created_at', { ascending: false }).range(from, to);
+
+    if (isBest !== null) {
+      dataQuery = dataQuery.eq('is_best', isBest === 'true');
+    }
 
     if (searchQuery) {
       dataQuery = dataQuery.or(`title.ilike.%${searchQuery}%,author_name.ilike.%${searchQuery}%`);
@@ -153,7 +165,7 @@ export async function POST(request: Request) {
         is_best: is_best ?? false,
         review_image_urls: review_image_urls ?? [],
       })
-      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
+      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, best_order, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
       .single();
 
     if (error) {
@@ -212,7 +224,7 @@ export async function PATCH(request: Request) {
       .from('reviews')
       .update(updateData)
       .eq('id', id)
-      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
+      .select('id, product_id, rating, title, content, author_name, is_verified_purchase, is_best, best_order, helpful_count, review_image_urls, created_at, updated_at, product:products(id, title)')
       .single();
 
     if (error) {

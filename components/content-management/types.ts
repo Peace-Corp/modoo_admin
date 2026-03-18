@@ -14,6 +14,7 @@ export type ReviewRecord = {
   author_name: string;
   is_verified_purchase: boolean | null;
   is_best: boolean | null;
+  best_order: number | null;
   helpful_count: number | null;
   review_image_urls: string[] | null;
   created_at: string;

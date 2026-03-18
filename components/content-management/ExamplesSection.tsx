@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { Edit2, Eye, EyeOff, GripVertical, Plus, Trash2 } from 'lucide-react';
 import type { ProductionExampleRecord, ProductSummary, ExampleFormState } from './types';
 import {
   EXAMPLE_IMAGE_BUCKET,
@@ -23,6 +23,7 @@ export default function ExamplesSection() {
   const [exampleFormError, setExampleFormError] = useState<string | null>(null);
   const [savingExample, setSavingExample] = useState(false);
   const [uploadingExampleImage, setUploadingExampleImage] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -225,6 +226,34 @@ export default function ExamplesSection() {
     }
   };
 
+  const handleDrop = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    const reordered = [...productionExamples];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+
+    // Optimistic update with new sort_order values
+    const updated = reordered.map((item, i) => ({ ...item, sort_order: i + 1 }));
+    mutate(updated, { revalidate: false });
+
+    try {
+      const res = await fetch('/api/admin/production-examples/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: reordered.map((e) => e.id) }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || '순서 변경에 실패했습니다.');
+      }
+    } catch (err) {
+      mutate(); // Revert on error
+      setError(err instanceof Error ? err.message : '순서 변경에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="space-y-4">
       {(swrError || error) && (
@@ -390,6 +419,7 @@ export default function ExamplesSection() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="w-10 px-2 py-2" />
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     이미지
                   </th>
@@ -400,9 +430,6 @@ export default function ExamplesSection() {
                     제품
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    정렬
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     상태
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -411,8 +438,31 @@ export default function ExamplesSection() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {productionExamples.map((example) => (
-                  <tr key={example.id} className="hover:bg-gray-50 transition-colors">
+                {productionExamples.map((example, idx) => (
+                  <tr
+                    key={example.id}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragIndex(idx);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragIndex !== null && dragIndex !== idx) {
+                        handleDrop(dragIndex, idx);
+                      }
+                      setDragIndex(null);
+                    }}
+                    onDragEnd={() => setDragIndex(null)}
+                    className={`hover:bg-gray-50 transition-colors ${dragIndex === idx ? 'opacity-50' : ''}`}
+                  >
+                    <td className="w-10 px-2 py-3 text-center">
+                      <GripVertical className="w-4 h-4 text-gray-400 cursor-grab inline-block" />
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <img
                         src={example.image_url}
@@ -430,9 +480,6 @@ export default function ExamplesSection() {
                       <span className="text-sm text-gray-900">
                         {example.product?.title || example.product_id}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">{example.sort_order}</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <button

@@ -5,12 +5,23 @@ import useSWR from 'swr';
 import { Product } from '@/types/types';
 import { Eye, EyeOff, Plus, Package, Edit2, Trash2, Star, Search, X, GripVertical, ChevronDown } from 'lucide-react';
 import ProductEditor from './ProductEditor';
-import { getCategoryName, CATEGORIES } from '@/lib/categories';
+import useSWRImmutable from 'swr/immutable';
 
 const ITEMS_PER_PAGE = 10;
 
+interface CategoryRecord {
+  key: string;
+  name: string;
+}
+
 export default function ProductsTab() {
   const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
+  const { data: categoriesData } = useSWRImmutable<CategoryRecord[]>(
+    '/api/admin/categories',
+    (url: string) => fetch(url).then((r) => r.json()).then((j) => j.data || [])
+  );
+  const categories = categoriesData || [];
+  const getCategoryName = (key: string) => categories.find((c) => c.key === key)?.name || key;
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
@@ -250,7 +261,8 @@ export default function ProductsTab() {
           onChange={(e) => { setCategoryFilter(e.target.value); setVisibleCount(ITEMS_PER_PAGE); }}
           className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white sm:w-36"
         >
-          {CATEGORIES.map((cat) => (
+          <option value="all">전체</option>
+          {categories.map((cat) => (
             <option key={cat.key} value={cat.key}>{cat.name}</option>
           ))}
         </select>
