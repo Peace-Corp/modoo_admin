@@ -221,6 +221,10 @@ export interface Order {
   // Refund reason (set when order is refunded)
   refund_reason: string | null;
 
+  // Customer note and attachments
+  customer_note: string | null;
+  attachment_urls: string[];
+
   // Shareable link token (generated on demand)
   share_token: string | null;
 

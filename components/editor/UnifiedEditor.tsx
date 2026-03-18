@@ -839,6 +839,7 @@ export default function UnifiedEditor({
                           product={product}
                           orderItem={editorData.orderItem}
                           productColors={editorData.productColors}
+                          orderId={orderId}
                         />
                       ) : (
                         <FactoryOrderInfoPanel
@@ -853,6 +854,7 @@ export default function UnifiedEditor({
                     product={product}
                     orderItem={editorData.orderItem}
                     productColors={editorData.productColors}
+                    orderId={orderId}
                   />
                 )
               )}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
-import { Package, Palette, Ruler, Download, Type, ImageIcon } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Package, Palette, Ruler, Download, Type, ImageIcon, MessageSquare, Paperclip } from 'lucide-react';
 import {
   Product,
   ProductSide,
@@ -50,15 +50,36 @@ interface OrderModePanelProps {
   product: Product;
   orderItem: OrderItem;
   productColors: ProductColor[];
+  orderId?: string;
 }
 
 export default function OrderModePanel({
   product,
   orderItem,
   productColors,
+  orderId,
 }: OrderModePanelProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const { canvasMap, canvasVersion } = useCanvasStore();
+
+  const [customerNote, setCustomerNote] = useState<string | null>(null);
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!orderId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/orders?orderId=${orderId}`);
+        if (!res.ok) return;
+        const { data } = await res.json();
+        const order = Array.isArray(data) ? data[0] : data;
+        if (order) {
+          setCustomerNote(order.customer_note || null);
+          setAttachmentUrls(order.attachment_urls || []);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [orderId]);
 
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
   const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
@@ -390,6 +411,47 @@ export default function OrderModePanel({
 
   return (
     <>
+      {/* Customer Note & Attachments */}
+      {(customerNote || attachmentUrls.length > 0) && (
+        <div className="p-3 border-b">
+          {customerNote && (
+            <div className="mb-2">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-gray-500" />
+                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">고객 요청사항</h3>
+              </div>
+              <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{customerNote}</p>
+            </div>
+          )}
+          {attachmentUrls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-gray-500" />
+                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">첨부파일 ({attachmentUrls.length})</h3>
+              </div>
+              <div className="space-y-1">
+                {attachmentUrls.map((url, index) => {
+                  const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
+                  return (
+                    <a
+                      key={index}
+                      href={url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-colors"
+                    >
+                      <Download className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{decodeURIComponent(filename)}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Size/Quantity Table */}
       {sizeOptions.length > 0 && (
         <div className="p-3 border-b">
