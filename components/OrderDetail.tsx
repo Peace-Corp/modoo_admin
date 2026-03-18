@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, ChevronDown, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, Paperclip } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, Paperclip, User, Receipt, Truck } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 
 type CoBuyParticipantSummary = Pick<
@@ -62,7 +62,7 @@ export default function OrderDetail({
   const [cobuyParticipantsError, setCobuyParticipantsError] = useState<string | null>(null);
 
   const [showRefundModal, setShowRefundModal] = useState(false);
-  const [factoryAccordionOpen, setFactoryAccordionOpen] = useState(true);
+  const [factoryAccordionOpen, setFactoryAccordionOpen] = useState(false);
 
   // Share link state
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -367,6 +367,64 @@ export default function OrderDetail({
     router.push(`/orders/${order.id}/items/${itemId}`);
   }, [router, order.id]);
 
+  const orderStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      payment_completed: '결제완료', in_production: '생산중', shipping: '배송중',
+      delivered: '배송완료', cancelled: '취소', partially_cancelled: '부분취소',
+    };
+    return map[status] || status;
+  };
+
+  const orderStatusColor = (status: string) => {
+    const map: Record<string, string> = {
+      payment_completed: 'bg-green-100 text-green-800',
+      in_production: 'bg-yellow-100 text-yellow-800',
+      shipping: 'bg-blue-100 text-blue-800',
+      delivered: 'bg-gray-100 text-gray-800',
+      cancelled: 'bg-red-100 text-red-800',
+      partially_cancelled: 'bg-orange-100 text-orange-800',
+    };
+    return map[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const paymentStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      pending: '대기', completed: '완료', failed: '실패', refunded: '환불',
+    };
+    return map[status] || status;
+  };
+
+  const paymentStatusColor = (status: string) => {
+    const map: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      completed: 'bg-green-100 text-green-800',
+      failed: 'bg-red-100 text-red-800',
+      refunded: 'bg-purple-100 text-purple-800',
+    };
+    return map[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const factoryStatusLabel = (status: string | null) => {
+    if (!status) return '대기중';
+    const map: Record<string, string> = {
+      pending: '대기중', assigned: '배정완료', in_progress: '작업중',
+      completed: '작업완료', shipped: '출고완료', cancelled: '취소',
+    };
+    return map[status] || '대기중';
+  };
+
+  const factoryStatusColor = (status: string | null) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    const map: Record<string, string> = {
+      assigned: 'bg-blue-100 text-blue-800',
+      in_progress: 'bg-yellow-100 text-yellow-800',
+      completed: 'bg-green-100 text-green-800',
+      shipped: 'bg-indigo-100 text-indigo-800',
+      cancelled: 'bg-red-100 text-red-800',
+    };
+    return map[status] || 'bg-gray-100 text-gray-800';
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -380,7 +438,7 @@ export default function OrderDetail({
           </button>
           <div>
             <h2 className="text-xl font-semibold text-gray-900">주문 상세</h2>
-            <p className="text-sm text-gray-500 mt-1">주문 ID: {order.id}</p>
+            <p className="text-sm text-gray-500 mt-0.5">주문 ID: {order.id}</p>
           </div>
         </div>
 
@@ -394,15 +452,9 @@ export default function OrderDetail({
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors"
                 >
                   {copiedShareLink ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      복사됨
-                    </>
+                    <><Check className="w-4 h-4" />복사됨</>
                   ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      공유 링크 복사
-                    </>
+                    <><Copy className="w-4 h-4" />공유 링크 복사</>
                   )}
                 </button>
                 <button
@@ -435,113 +487,154 @@ export default function OrderDetail({
         </div>
       )}
 
+      {/* Status Overview Bar */}
+      {!isFactoryUser && (
+        <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">주문</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${orderStatusColor(order.order_status)}`}>
+              {orderStatusLabel(order.order_status)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">결제</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentStatusColor(order.payment_status)}`}>
+              {paymentStatusLabel(order.payment_status)}
+            </span>
+          </div>
+          {order.assigned_manufacturer_id && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">공장</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(order.factory_status)}`}>
+                {factoryStatusLabel(order.factory_status)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">구분</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${order.order_category === 'cobuy' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700'}`}>
+              {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+            </span>
+          </div>
+          <div className="ml-auto text-xs text-gray-400">
+            {formatDate(order.created_at)}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column - Order Info */}
         <div className="lg:col-span-2 space-y-4">
           {/* Order Items */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900 mb-3">주문 상품</h3>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {orderItems.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => handleItemClick(item.id)}
-                    className="flex gap-4 p-3 border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all"
-                  >
-                    <div className="w-20 h-20 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
-                      {item.thumbnail_url ? (
-                        <img
-                          src={item.thumbnail_url}
-                          alt={item.product_title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Package className="w-8 h-8 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-black">{item.product_title}</h4>
-                      {item.products?.product_code && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          상품코드: {item.products.product_code}
-                        </p>
-                      )}
-                      <div className="flex justify-between items-center mt-2">
-                        <span className="text-sm text-gray-600">수량: {item.quantity}</span>
-                        {/* Hide price from factory users */}
-                        {!isFactoryUser && (
-                          <span className="font-semibold text-gray-900">
-                            {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
-                          </span>
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+              <Package className="w-4 h-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-gray-900">주문 상품</h3>
+              {!loading && <span className="text-xs text-gray-400">({orderItems.length})</span>}
+            </div>
+            <div className="p-4">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleItemClick(item.id)}
+                      className="flex gap-4 p-3 border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer transition-all"
+                    >
+                      <div className="w-20 h-20 bg-gray-100 rounded shrink-0 overflow-hidden">
+                        {item.thumbnail_url ? (
+                          <img
+                            src={item.thumbnail_url}
+                            alt={item.product_title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-8 h-8 text-gray-400" />
+                          </div>
                         )}
                       </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-black">{item.product_title}</h4>
+                        {item.products?.product_code && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            상품코드: {item.products.product_code}
+                          </p>
+                        )}
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-sm text-gray-600">수량: {item.quantity}</span>
+                          {!isFactoryUser && (
+                            <span className="font-semibold text-gray-900">
+                              {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-
 
           {/* Customer Note & Attachments */}
           {(order.customer_note || (order.attachment_urls && order.attachment_urls.length > 0)) && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              {order.customer_note && (
-                <div className="mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MessageSquare className="w-4 h-4 text-gray-600" />
-                    <h3 className="text-sm font-semibold text-gray-900">고객 요청사항</h3>
-                  </div>
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-amber-50/50">
+                <MessageSquare className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-semibold text-gray-900">고객 요청사항</h3>
+              </div>
+              <div className="p-4 space-y-3">
+                {order.customer_note && (
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
-                </div>
-              )}
-              {order.attachment_urls && order.attachment_urls.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Paperclip className="w-4 h-4 text-gray-600" />
-                    <h3 className="text-sm font-semibold text-gray-900">첨부파일 ({order.attachment_urls.length})</h3>
+                )}
+                {order.attachment_urls && order.attachment_urls.length > 0 && (
+                  <div>
+                    {order.customer_note && <div className="border-t border-gray-100 pt-3" />}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Paperclip className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-xs text-gray-500">첨부파일 ({order.attachment_urls.length})</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {order.attachment_urls.map((url, index) => {
+                        const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
+                        return (
+                          <a
+                            key={index}
+                            href={url}
+                            download
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-md hover:bg-blue-100 transition-colors"
+                          >
+                            <Download className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{decodeURIComponent(filename)}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {order.attachment_urls.map((url, index) => {
-                      const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
-                      return (
-                        <a
-                          key={index}
-                          href={url}
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-md hover:bg-blue-100 transition-colors"
-                        >
-                          <Download className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{decodeURIComponent(filename)}</span>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
           {/* CoBuy participant information - hidden for factory users (contains personal info) */}
           {order.order_category === 'cobuy' && !isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">공동구매 참여자</h3>
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-purple-50/50">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-purple-600" />
+                  <h3 className="text-sm font-semibold text-gray-900">공동구매 참여자</h3>
                   {cobuySession && (
-                    <p className="text-xs text-gray-500 mt-1">{cobuySession.title}</p>
+                    <span className="text-xs text-gray-400">{cobuySession.title}</span>
                   )}
                 </div>
-                <div className='flex gap-2'>
+                <div className="flex gap-2">
                   <button
                     onClick={fetchCobuyParticipants}
                     disabled={loadingCobuyParticipants}
@@ -552,59 +645,63 @@ export default function OrderDetail({
                   <button
                     onClick={handleDownloadCobuyExcel}
                     disabled={downloadingCobuyExcel}
-                    className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-60"
                     title={`공동구매 참여자 엑셀 다운로드 (${cobuySession?.title})`}
                   >
-                    <Download className="w-4 h-4" />
-                    {downloadingCobuyExcel ? '다운로드 중...' : '공동구매 엑셀 다운로드'}
+                    <Download className="w-3.5 h-3.5" />
+                    {downloadingCobuyExcel ? '다운로드 중...' : '엑셀 다운로드'}
                   </button>
                 </div>
               </div>
+              <div className="p-4">
+                {cobuyParticipantsError && (
+                  <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
+                    {cobuyParticipantsError}
+                  </div>
+                )}
 
-              {cobuyParticipantsError && (
-                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-                  {cobuyParticipantsError}
-                </div>
-              )}
-
-              {loadingCobuyParticipants ? (
-                <div className="text-sm text-gray-500">불러오는 중...</div>
-              ) : cobuyParticipants.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                  {cobuyParticipantSessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="text-xs text-gray-500">총 {cobuyParticipants.length}명</div>
+                {loadingCobuyParticipants ? (
+                  <div className="text-sm text-gray-500">불러오는 중...</div>
+                ) : cobuyParticipants.length === 0 ? (
+                  <div className="text-sm text-gray-500">
+                    {cobuyParticipantSessionId ? '참여자가 없습니다.' : '세션 정보를 찾을 수 없습니다.'}
+                  </div>
+                ) : (
                   <div className="space-y-2">
-                    {cobuyParticipants.map((participant) => (
-                      <div key={participant.id} className="border border-gray-200 rounded-md p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                            <div className="mt-1 text-xs text-gray-600">{participant.email}</div>
-                            <div className="text-xs text-gray-600">{participant.phone || '-'}</div>
-                          </div>
-                          <div className="text-right text-xs text-gray-600">
+                    <div className="text-xs text-gray-500">총 {cobuyParticipants.length}명</div>
+                    <div className="space-y-2">
+                      {cobuyParticipants.map((participant) => (
+                        <div key={participant.id} className="border border-gray-200 rounded-md p-3">
+                          <div className="flex items-start justify-between gap-3">
                             <div>
-                              {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
+                              <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                              <div className="mt-1 text-xs text-gray-600">{participant.email}</div>
+                              <div className="text-xs text-gray-600">{participant.phone || '-'}</div>
                             </div>
-                            <div className="mt-1">사이즈: {participant.selected_size || '-'}</div>
+                            <div className="text-right text-xs text-gray-600">
+                              <div>
+                                {cobuyPaymentStatusLabel[participant.payment_status] || participant.payment_status}
+                              </div>
+                              <div className="mt-1">사이즈: {participant.selected_size || '-'}</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
-          {/* Order Summary - hidden for factory users (contains actual prices) */}
+          {/* Order Summary - hidden for factory users */}
           {!isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <h3 className="text-base font-semibold text-gray-900 mb-3">주문 요약</h3>
-              <div className="space-y-3">
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                <Receipt className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">주문 요약</h3>
+              </div>
+              <div className="p-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">소계</span>
                   <span className="font-medium text-gray-900">{subtotal.toLocaleString()}원</span>
@@ -616,7 +713,7 @@ export default function OrderDetail({
                   </span>
                 </div>
                 <div className="border-t pt-3 flex justify-between">
-                  <span className="text-base font-semibold text-gray-900">총 금액</span>
+                  <span className="text-sm font-semibold text-gray-900">총 금액</span>
                   <span className="text-base font-bold text-blue-600">
                     {(order.total_amount ?? 0).toLocaleString()}원
                   </span>
@@ -626,217 +723,204 @@ export default function OrderDetail({
           )}
 
           {/* Factory Assignment */}
-          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
             <button
               onClick={() => setFactoryAccordionOpen(!factoryAccordionOpen)}
-              className="w-full flex items-center justify-between p-4"
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50/50 border-b border-gray-100"
             >
               <div className="flex items-center gap-2">
-                <FactoryIcon className="w-5 h-5 text-gray-600" />
-                <h3 className="text-base font-semibold text-gray-900">공장 배정</h3>
+                <FactoryIcon className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">공장 배정</h3>
+                {order.assigned_manufacturer_id && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(order.factory_status)}`}>
+                    {factoryStatusLabel(order.factory_status)}
+                  </span>
+                )}
               </div>
-              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${factoryAccordionOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${factoryAccordionOpen ? 'rotate-180' : ''}`} />
             </button>
             {factoryAccordionOpen && (
-              <div className="px-4 pb-4 space-y-3 text-sm">
-              <div>
-                <p className="text-sm text-gray-500">현재 배정</p>
-                <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
-              </div>
-
-              {/* Factory assignment status badge */}
-              {order.assigned_manufacturer_id && (
+              <div className="p-4 space-y-3 text-sm">
                 <div>
-                  <p className="text-sm text-gray-500">공장 배정 상태</p>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
-                    order.factory_status === 'assigned' ? 'bg-blue-100 text-blue-800' :
-                    order.factory_status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                    order.factory_status === 'completed' ? 'bg-green-100 text-green-800' :
-                    order.factory_status === 'shipped' ? 'bg-indigo-100 text-indigo-800' :
-                    order.factory_status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {order.factory_status === 'pending' ? '대기중' :
-                     order.factory_status === 'assigned' ? '배정완료' :
-                     order.factory_status === 'in_progress' ? '작업중' :
-                     order.factory_status === 'completed' ? '작업완료' :
-                     order.factory_status === 'shipped' ? '출고완료' :
-                     order.factory_status === 'cancelled' ? '취소' : '대기중'}
-                  </span>
+                  <p className="text-xs text-gray-500 mb-0.5">현재 배정</p>
+                  <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
                 </div>
-              )}
 
-              {canAssign && (
-                <>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
-                    <select
-                      value={selectedFactoryId}
-                      onChange={(event) => setSelectedFactoryId(event.target.value)}
-                      disabled={loadingFactories || assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="">미배정</option>
-                      {factories.map((factory) => (
-                        <option key={factory.id} value={factory.id}>
-                          {factory.name || factory.email || factory.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {canAssign && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">공장 선택</label>
+                      <select
+                        value={selectedFactoryId}
+                        onChange={(event) => setSelectedFactoryId(event.target.value)}
+                        disabled={loadingFactories || assigning}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                      >
+                        <option value="">미배정</option>
+                        {factories.map((factory) => (
+                          <option key={factory.id} value={factory.id}>
+                            {factory.name || factory.email || factory.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">마감일</label>
-                    <input
-                      type="date"
-                      value={deadline}
-                      onChange={(event) => setDeadline(event.target.value)}
-                      disabled={assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">마감일</label>
+                      <input
+                        type="date"
+                        value={deadline}
+                        onChange={(event) => setDeadline(event.target.value)}
+                        disabled={assigning}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">금액 (공장 배정 금액)</label>
-                    <input
-                      type="number"
-                      value={factoryAmount}
-                      onChange={(event) => setFactoryAmount(event.target.value)}
-                      disabled={assigning}
-                      placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">금액 (공장 배정 금액)</label>
+                      <input
+                        type="number"
+                        value={factoryAmount}
+                        onChange={(event) => setFactoryAmount(event.target.value)}
+                        disabled={assigning}
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">결제 예정일</label>
-                    <input
-                      type="date"
-                      value={factoryPaymentDate}
-                      onChange={(event) => setFactoryPaymentDate(event.target.value)}
-                      disabled={assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">결제 예정일</label>
+                      <input
+                        type="date"
+                        value={factoryPaymentDate}
+                        onChange={(event) => setFactoryPaymentDate(event.target.value)}
+                        disabled={assigning}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                      />
+                    </div>
 
-                  <button
-                    onClick={handleAssignFactory}
-                    disabled={assigning || loadingFactories}
-                    className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
-                  >
-                    {assigning ? '저장 중...' : '저장'}
-                  </button>
-
-                  {/* 결제 상태 — only shown after factory is assigned */}
-                  {order.assigned_manufacturer_id && (
-                    <div className="border-t border-gray-200 pt-3 mt-1">
-                      <label className="block text-sm text-gray-500 mb-1">결제 상태</label>
-                      <div className="flex gap-2">
+                    {/* 결제 상태 — only shown after factory is assigned */}
+                    {order.assigned_manufacturer_id && (
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">결제 상태</label>
                         <select
                           value={factoryPaymentStatus}
                           onChange={(event) => setFactoryPaymentStatus(event.target.value)}
                           disabled={assigning}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
                         >
                           <option value="pending">대기</option>
                           <option value="completed">완료</option>
                           <option value="cancelled">취소</option>
                         </select>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
+                    )}
 
-              {assignError && (
-                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                  {assignError}
-                </div>
-              )}
-            </div>
+                    <button
+                      onClick={handleAssignFactory}
+                      disabled={assigning || loadingFactories}
+                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
+                    >
+                      {assigning ? '저장 중...' : '저장'}
+                    </button>
+                  </>
+                )}
+
+                {assignError && (
+                  <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                    {assignError}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
         </div>
 
-        {/* Right Column - Customer & Shipping Info (hidden for factory users) */}
+        {/* Right Column */}
         <div className="space-y-4">
-          {/* Customer & Shipping Information - hidden for factory users */}
+          {/* Customer Info - hidden for factory users */}
           {!isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
-              <div className="space-y-3">
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                <User className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">고객 정보</h3>
+              </div>
+              <div className="p-4 space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">이름</p>
-                  <p className="font-medium text-gray-900">{order.customer_name}</p>
+                  <p className="text-xs text-gray-500">이름</p>
+                  <p className="text-sm font-medium text-gray-900">{order.customer_name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">이메일</p>
-                  <p className="font-medium text-gray-900">{order.customer_email}</p>
+                  <p className="text-xs text-gray-500">이메일</p>
+                  <p className="text-sm font-medium text-gray-900">{order.customer_email}</p>
                 </div>
                 {order.customer_phone && (
                   <div>
-                    <p className="text-sm text-gray-500">전화번호</p>
-                    <p className="font-medium text-gray-900">{order.customer_phone}</p>
+                    <p className="text-xs text-gray-500">전화번호</p>
+                    <p className="text-sm font-medium text-gray-900">{order.customer_phone}</p>
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              <div className="border-t border-gray-200 mt-4 pt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <MapPin className="w-5 h-5 text-gray-600" />
-                  <h3 className="text-base font-semibold text-gray-900">배송 정보</h3>
+          {/* Shipping Info - hidden for factory users */}
+          {!isFactoryUser && (
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                <Truck className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">배송 정보</h3>
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <p className="text-xs text-gray-500">배송 방법</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {order.shipping_method === 'pickup' ? '직접 수령' :
+                     order.shipping_method === 'domestic' ? '국내 배송' :
+                     order.shipping_method === 'international' ? '해외 배송' :
+                     order.shipping_method || '-'}
+                  </p>
                 </div>
-                <div className="space-y-3">
+                {order.shipping_method === 'international' && order.country_code && (
                   <div>
-                    <p className="text-sm text-gray-500">배송 방법</p>
-                    <p className="font-medium text-gray-900">
-                      {order.shipping_method === 'pickup' ? '직접 수령' :
-                       order.shipping_method === 'domestic' ? '국내 배송' :
-                       order.shipping_method === 'international' ? '해외 배송' :
-                       order.shipping_method || '-'}
+                    <p className="text-xs text-gray-500">국가</p>
+                    <p className="text-sm font-medium text-gray-900">{order.country_code}</p>
+                  </div>
+                )}
+                {(order.postal_code || order.address_line_1) && (
+                  <div>
+                    <p className="text-xs text-gray-500">주소</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {order.postal_code && `[${order.postal_code}] `}
+                      {order.address_line_1}
+                      {order.address_line_2 && ` ${order.address_line_2}`}
                     </p>
                   </div>
-                  {order.shipping_method === 'international' && order.country_code && (
-                    <div>
-                      <p className="text-sm text-gray-500">국가</p>
-                      <p className="font-medium text-gray-900">{order.country_code}</p>
-                    </div>
-                  )}
-                  {(order.postal_code || order.address_line_1) && (
-                    <div>
-                      <p className="text-sm text-gray-500">주소</p>
-                      <p className="font-medium text-gray-900">
-                        {order.postal_code && `[${order.postal_code}] `}
-                        {order.address_line_1}
-                        {order.address_line_2 && ` ${order.address_line_2}`}
-                      </p>
-                    </div>
-                  )}
-                  {order.shipping_method === 'international' && (order.state || order.city) && (
-                    <div>
-                      <p className="text-sm text-gray-500">지역</p>
-                      <p className="font-medium text-gray-900">
-                        {[order.state, order.city].filter(Boolean).join(' ')}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                )}
+                {order.shipping_method === 'international' && (order.state || order.city) && (
+                  <div>
+                    <p className="text-xs text-gray-500">지역</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {[order.state, order.city].filter(Boolean).join(' ')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* Payment Information - hidden for factory users */}
           {!isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard className="w-5 h-5 text-gray-600" />
-                <h3 className="text-base font-semibold text-gray-900">결제 정보</h3>
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                <CreditCard className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">결제 정보</h3>
               </div>
-              <div className="space-y-3">
+              <div className="p-4 space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">결제 수단</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">결제 수단</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.payment_method === 'toss'
                       ? '토스페이'
                       : order.payment_method === 'paypal'
@@ -845,21 +929,19 @@ export default function OrderDetail({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">결제 상태</p>
-                  <p className="font-medium text-gray-900">{order.payment_status}</p>
+                  <p className="text-xs text-gray-500">결제 상태</p>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${paymentStatusColor(order.payment_status)}`}>
+                    {paymentStatusLabel(order.payment_status)}
+                  </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">주문 상태</p>
-                  <p className="font-medium text-gray-900">{order.order_status}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">주문 일시</p>
-                  <p className="font-medium text-gray-900">{formatDate(order.created_at)}</p>
+                  <p className="text-xs text-gray-500">주문 일시</p>
+                  <p className="text-sm font-medium text-gray-900">{formatDate(order.created_at)}</p>
                 </div>
                 {order.refund_reason && (
                   <div>
-                    <p className="text-sm text-gray-500">환불 사유</p>
-                    <p className="font-medium text-red-600">{order.refund_reason}</p>
+                    <p className="text-xs text-gray-500">환불 사유</p>
+                    <p className="text-sm font-medium text-red-600">{order.refund_reason}</p>
                   </div>
                 )}
                 {order.payment_status === 'completed' && (
@@ -877,20 +959,20 @@ export default function OrderDetail({
 
           {/* Factory Order Info - shown only for factory users */}
           {isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard className="w-5 h-5 text-gray-600" />
-                <h3 className="text-base font-semibold text-gray-900">주문 정보</h3>
+            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                <FactoryIcon className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">주문 정보</h3>
               </div>
-              <div className="space-y-3">
+              <div className="p-4 space-y-3">
                 <div>
-                  <p className="text-sm text-gray-500">주문 구분</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">주문 구분</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.order_category === 'cobuy' ? '공동구매' : '일반'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">공장 배정 상태</p>
+                  <p className="text-xs text-gray-500 mb-1">공장 배정 상태</p>
                   <select
                     value={order.factory_status || 'assigned'}
                     onChange={async (e) => {
@@ -913,13 +995,7 @@ export default function OrderDetail({
                       }
                     }}
                     disabled={order.factory_status === 'shipped'}
-                    className={`w-full px-3 py-2 rounded-md text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${
-                      order.factory_status === 'assigned' ? 'bg-blue-100 text-blue-800' :
-                      order.factory_status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                      order.factory_status === 'completed' ? 'bg-green-100 text-green-800' :
-                      order.factory_status === 'shipped' ? 'bg-indigo-100 text-indigo-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}
+                    className={`w-full px-3 py-2 rounded-md text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${factoryStatusColor(order.factory_status)}`}
                   >
                     <option value="assigned">배정완료</option>
                     <option value="in_progress">작업중</option>
@@ -928,26 +1004,26 @@ export default function OrderDetail({
                   </select>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">마감일</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">마감일</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.deadline ? formatDate(order.deadline) : '-'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">금액</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">금액</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">결제 예정일</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">결제 예정일</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.factory_payment_date ? formatDate(order.factory_payment_date) : '-'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">결제 상태</p>
-                  <p className="font-medium text-gray-900">
+                  <p className="text-xs text-gray-500">결제 상태</p>
+                  <p className="text-sm font-medium text-gray-900">
                     {order.factory_payment_status === 'pending' ? '대기' :
                      order.factory_payment_status === 'completed' ? '완료' :
                      order.factory_payment_status === 'cancelled' ? '취소' : '-'}

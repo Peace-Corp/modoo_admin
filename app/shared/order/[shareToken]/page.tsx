@@ -116,6 +116,7 @@ function SharedItemView({
       size_options: item.products.size_options || null,
       product_code: item.products.product_code,
       manufacturers: item.products.manufacturers,
+      sort_order: 0,
       is_active: true,
       is_featured: false,
       created_at: item.created_at,
