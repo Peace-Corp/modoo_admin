@@ -1315,15 +1315,15 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
-        <nav className="flex space-x-1">
+        <nav className="flex -mb-px">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-white border-t border-l border-r border-gray-200 text-blue-600 -mb-px'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               {tab.label}
@@ -1541,51 +1541,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               )}
             </div>
           </div>
+        </div>
 
-          {/* Print Methods */}
-          {product?.id && (
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-3">가능한 인쇄 방식</h3>
-            {allPrintMethods.length === 0 ? (
-              <p className="text-sm text-gray-500">등록된 인쇄 방식이 없습니다.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {allPrintMethods
-                  .filter((pm) => pm.is_active)
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((pm) => {
-                    const isLinked = productPrintMethods.some((ppm) => ppm.print_method_id === pm.id);
-                    const isToggling = togglingPrintMethodId === pm.id;
-                    return (
-                      <button
-                        key={pm.id}
-                        onClick={() => handleTogglePrintMethod(pm)}
-                        disabled={isToggling}
-                        className={`flex items-center gap-2 p-2 rounded-md border text-left transition-colors ${
-                          isLinked
-                            ? 'border-blue-300 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        } ${isToggling ? 'opacity-50' : ''}`}
-                      >
-                        {pm.image_url ? (
-                          <img src={pm.image_url} alt={pm.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-[10px] text-gray-400">img</span>
-                          </div>
-                        )}
-                        <div className="min-w-0 flex items-center gap-1">
-                          <span className="text-xs font-medium truncate">{pm.name}</span>
-                          {isLinked && <Check className="w-3 h-3 text-blue-500 flex-shrink-0" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-          )}
-
+        {/* Right Panel - Images */}
+        <div className="space-y-4">
           {/* Product Images */}
           <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">제품 이미지</h3>
@@ -2161,6 +2120,44 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             </div>
           )}
           </div>
+
+          {/* Right Panel - Print Methods */}
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
+              <h3 className="font-semibold text-gray-900 mb-3">인쇄 방법</h3>
+              <p className="text-xs text-gray-500 mb-3">이 제품에 사용 가능한 인쇄 방법을 선택하세요.</p>
+              {allPrintMethods.length === 0 ? (
+                <p className="text-sm text-gray-500">등록된 인쇄 방법이 없습니다.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {allPrintMethods.map((pm) => {
+                    const linked = productPrintMethods.some((ppm) => ppm.print_method_id === pm.id);
+                    const isToggling = togglingPrintMethodId === pm.id;
+                    return (
+                      <button
+                        key={pm.id}
+                        onClick={() => handleTogglePrintMethod(pm)}
+                        disabled={isToggling || !product?.id}
+                        className={`w-full flex items-center gap-2 p-2 border rounded-md text-left transition-all ${
+                          linked ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        } ${isToggling ? 'opacity-50' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          linked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                        }`}>
+                          {linked && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-sm text-gray-900">{pm.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {!product?.id && (
+                <p className="text-xs text-gray-500 mt-2">제품을 저장한 후 인쇄 방법을 설정할 수 있습니다.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -2264,6 +2261,33 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     <ChevronRight className="w-5 h-5" />
                   </button>
                 </div>
+              </div>
+
+              {/* Image Preview */}
+              <div className="bg-white border border-gray-200/60 rounded-md p-3 shadow-sm">
+                <h3 className="text-xs font-medium text-gray-500 mb-2">미리보기</h3>
+                {isCurrentSideLayered ? (
+                  currentSideLayers.filter(l => l.imageUrl).length > 0 ? (
+                    <div className="flex gap-2 overflow-x-auto py-1">
+                      {currentSideLayers.filter(l => l.imageUrl).map((layer, idx) => (
+                        <div key={idx} className="shrink-0 text-center">
+                          <img src={layer.imageUrl} alt={layer.name} className="h-28 object-contain rounded border border-gray-200" />
+                          <p className="text-[10px] text-gray-500 mt-1">{layer.name} (z:{layer.zIndex})</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-6 text-gray-300">
+                      <ImageIcon className="w-10 h-10" />
+                    </div>
+                  )
+                ) : currentSide.imageUrl ? (
+                  <img src={currentSide.imageUrl} alt={currentSide.name} className="h-36 object-contain rounded border border-gray-200 mx-auto" />
+                ) : (
+                  <div className="flex items-center justify-center py-6 text-gray-300">
+                    <ImageIcon className="w-10 h-10" />
+                  </div>
+                )}
               </div>
 
               {/* Side Settings */}

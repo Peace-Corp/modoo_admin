@@ -2,9 +2,28 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { BarChart3, Factory, MessageSquare, Package, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  payment_completed: '결제완료',
+  in_production: '제작중',
+  shipping: '배송중',
+  delivered: '배송완료',
+  cancelled: '취소',
+  partially_cancelled: '부분취소',
+};
+
+const ORDER_STATUS_COLOR: Record<string, string> = {
+  payment_completed: 'bg-blue-100 text-blue-800',
+  in_production: 'bg-yellow-100 text-yellow-800',
+  shipping: 'bg-indigo-100 text-indigo-800',
+  delivered: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+  partially_cancelled: 'bg-red-100 text-red-800',
+};
 
 type DashboardCountsBase = {
   orders_total: number;
@@ -59,6 +78,7 @@ const formatDateTime = (value: string) =>
   });
 
 export default function Dashboard() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { data: payload = null, isLoading, error: swrError } = useSWR<DashboardPayload>('/api/admin/dashboard');
   const errorMessage = swrError?.message || null;
@@ -74,6 +94,7 @@ export default function Dashboard() {
           hint: `결제완료 ${payload.counts.orders_payment_completed} · 제작중 ${payload.counts.orders_in_production}`,
           href: '/orders',
           icon: BarChart3,
+          accent: 'border-l-blue-500',
         },
         {
           label: '결제완료',
@@ -81,6 +102,7 @@ export default function Dashboard() {
           hint: '신규 주문 확인 필요',
           href: '/orders',
           icon: BarChart3,
+          accent: 'border-l-blue-400',
         },
         {
           label: '제작중',
@@ -88,6 +110,7 @@ export default function Dashboard() {
           hint: '제작/출고 진행중',
           href: '/orders',
           icon: BarChart3,
+          accent: 'border-l-yellow-500',
         },
         {
           label: '배송완료',
@@ -95,17 +118,19 @@ export default function Dashboard() {
           hint: '완료된 주문',
           href: '/orders',
           icon: BarChart3,
+          accent: 'border-l-green-500',
         },
       ];
     }
 
     return [
       {
-        label: '주문',
+        label: '전체 주문',
         value: payload.counts.orders_total,
         hint: `결제완료 ${payload.counts.orders_payment_completed} · 제작중 ${payload.counts.orders_in_production}`,
         href: '/orders',
         icon: BarChart3,
+        accent: 'border-l-blue-500',
       },
       {
         label: '미배정 주문',
@@ -113,20 +138,23 @@ export default function Dashboard() {
         hint: '공장 배정이 필요합니다',
         href: '/orders',
         icon: Factory,
+        accent: 'border-l-orange-500',
       },
       {
-        label: '제품(활성)',
+        label: '활성 제품',
         value: payload.counts.products_active,
         hint: `전체 ${payload.counts.products_total}`,
         href: '/products',
         icon: Package,
+        accent: 'border-l-green-500',
       },
       {
-        label: '문의(대기)',
+        label: '대기 문의',
         value: payload.counts.inquiries_pending,
         hint: '답변이 필요한 문의',
         href: '/content/inquiries',
         icon: MessageSquare,
+        accent: 'border-l-amber-500',
       },
       {
         label: '사용자',
@@ -134,6 +162,7 @@ export default function Dashboard() {
         hint: `관리자 ${payload.counts.users_admin} · 공장 ${payload.counts.users_factory} · 고객 ${payload.counts.users_customer}`,
         href: '/users',
         icon: Users,
+        accent: 'border-l-purple-500',
       },
       {
         label: '공장',
@@ -141,6 +170,7 @@ export default function Dashboard() {
         hint: '등록된 공장',
         href: '/factories',
         icon: Factory,
+        accent: 'border-l-slate-500',
       },
     ];
   }, [payload]);
@@ -179,22 +209,22 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {cards.map((card) => (
               <Link
                 key={card.label}
                 href={card.href}
-                className="group bg-white border border-gray-200/60 rounded-md p-4 shadow-sm hover:border-gray-300 transition-colors"
+                className={`group bg-white border border-gray-200/60 border-l-[3px] ${card.accent} rounded-md px-4 py-3 shadow-sm hover:shadow-md transition-all`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-gray-600">{card.label}</p>
-                    <p className="mt-1 text-2xl font-semibold text-gray-900">
+                    <p className="text-xs font-medium text-gray-500">{card.label}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-gray-900">
                       {formatNumber(card.value)}
                     </p>
-                    {card.hint && <p className="mt-1 text-xs text-gray-500">{card.hint}</p>}
+                    {card.hint && <p className="mt-1 text-[11px] text-gray-400">{card.hint}</p>}
                   </div>
-                  <card.icon className="w-5 h-5 text-gray-400 group-hover:text-gray-500 transition-colors" />
+                  <card.icon className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
                 </div>
               </Link>
             ))}
@@ -210,7 +240,7 @@ export default function Dashboard() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="text-left text-xs text-gray-500 border-b border-gray-200">
+                  <thead className="text-left text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-200">
                     <tr>
                       <th className="px-4 py-2 font-medium">주문 ID</th>
                       <th className="px-4 py-2 font-medium">고객</th>
@@ -219,27 +249,37 @@ export default function Dashboard() {
                       <th className="px-4 py-2 font-medium">일시</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-100">
                     {(payload?.recentOrders || []).map((order) => (
-                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-sm font-mono text-gray-700">
-                          {order.id.slice(0, 8)}…
+                      <tr
+                        key={order.id}
+                        onClick={() => router.push(`/orders/${order.id}`)}
+                        className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-2.5 text-xs font-mono text-gray-500">
+                          {order.id.slice(0, 8)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
+                        <td className="px-4 py-2.5 text-sm text-gray-900">
                           {order.customer_name || '-'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{order.order_status}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${ORDER_STATUS_COLOR[order.order_status] || 'bg-gray-100 text-gray-800'}`}
+                          >
+                            {ORDER_STATUS_LABEL[order.order_status] || order.order_status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-sm tabular-nums text-gray-900">
                           {formatNumber(order.total_amount)}원
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
+                        <td className="px-4 py-2.5 text-xs text-gray-400">
                           {formatDateTime(order.created_at)}
                         </td>
                       </tr>
                     ))}
                     {(payload?.recentOrders || []).length === 0 && (
                       <tr>
-                        <td className="px-4 py-8 text-sm text-gray-500 text-center" colSpan={5}>
+                        <td className="px-4 py-8 text-sm text-gray-400 text-center" colSpan={5}>
                           최근 주문이 없습니다.
                         </td>
                       </tr>

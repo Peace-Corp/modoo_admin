@@ -286,9 +286,7 @@ export default function ProductsTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {!isFiltered && (
-                  <th className="w-8 px-2 py-2"></th>
-                )}
+                <th className="w-8 px-2 py-2"></th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   제품명
                 </th>
@@ -317,16 +315,14 @@ export default function ProductsTab() {
                 <tr
                   key={product.id}
                   className="hover:bg-gray-50 transition-colors"
-                  draggable={!isFiltered}
+                  draggable
                   onDragStart={() => handleDragStart(idx)}
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDrop={handleDrop}
                 >
-                  {!isFiltered && (
-                    <td className="w-8 px-2 py-3">
-                      <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
-                    </td>
-                  )}
+                  <td className="w-8 px-2 py-3">
+                    <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       {product.thumbnail_image_link?.[0] ? (
@@ -416,7 +412,7 @@ export default function ProductsTab() {
             <div
               key={product.id}
               className="p-3 space-y-2"
-              draggable={!isFiltered}
+              draggable
               onDragStart={() => handleDragStart(idx)}
               onDragOver={(e) => handleDragOver(e, idx)}
               onDrop={handleDrop}
@@ -424,9 +420,7 @@ export default function ProductsTab() {
               {/* Top row: drag handle + title + status */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  {!isFiltered && (
-                    <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0" />
-                  )}
+                  <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0" />
                   {product.thumbnail_image_link?.[0] ? (
                     <img src={product.thumbnail_image_link[0]} alt={product.title} className="w-8 h-8 rounded object-cover shrink-0" />
                   ) : (
