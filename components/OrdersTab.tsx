@@ -381,10 +381,10 @@ export default function OrdersTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <select
-                          value={(order as Record<string, unknown>).factory_status as string || 'assigned'}
+                          value={order.factory_status || 'assigned'}
                           onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                          disabled={updatingFactoryStatusId === order.id || (order as Record<string, unknown>).factory_status === 'shipped'}
-                          className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor((order as Record<string, unknown>).factory_status as string)}`}
+                          disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
+                          className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
                         >
                           <option value="assigned">배정완료</option>
                           <option value="in_progress">작업중</option>
@@ -501,10 +501,10 @@ export default function OrdersTab() {
                     <div className="text-xs font-mono text-blue-600 truncate">{order.id}</div>
                     <div onClick={(e) => e.stopPropagation()}>
                       <select
-                        value={(order as Record<string, unknown>).factory_status as string || 'assigned'}
+                        value={order.factory_status || 'assigned'}
                         onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                        disabled={updatingFactoryStatusId === order.id || (order as Record<string, unknown>).factory_status === 'shipped'}
-                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor((order as Record<string, unknown>).factory_status as string)}`}
+                        disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
                       >
                         <option value="assigned">배정완료</option>
                         <option value="in_progress">작업중</option>
