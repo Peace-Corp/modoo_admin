@@ -66,7 +66,11 @@ export async function GET(request: Request) {
     }
 
     if (status !== 'all') {
-      query = query.eq('order_status', status);
+      if (profile.role === 'factory') {
+        query = query.eq('factory_status', status);
+      } else {
+        query = query.eq('order_status', status);
+      }
     }
 
     const { data, error } = await query;

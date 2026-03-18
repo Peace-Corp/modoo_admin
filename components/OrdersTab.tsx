@@ -264,14 +264,20 @@ export default function OrdersTab() {
       {/* Filters */}
       <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
-          {[
+          {(isFactoryUser ? [
+            { value: 'all', label: '전체' },
+            { value: 'assigned', label: '배정완료' },
+            { value: 'in_progress', label: '작업중' },
+            { value: 'completed', label: '작업완료' },
+            { value: 'shipped', label: '출고완료' },
+          ] : [
             { value: 'all', label: '전체' },
             { value: 'payment_completed', label: '결제완료' },
             { value: 'in_production', label: '제작중' },
             { value: 'shipping', label: '배송중' },
             { value: 'delivered', label: '배송완료' },
             { value: 'cancelled', label: '취소' },
-          ].map((filter) => (
+          ]).map((filter) => (
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value)}
