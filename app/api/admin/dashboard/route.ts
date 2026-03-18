@@ -83,19 +83,19 @@ export async function GET() {
 
     const [
       ordersTotal,
-      ordersPending,
-      ordersProcessing,
-      ordersCompleted,
+      ordersPaymentCompleted,
+      ordersInProduction,
+      ordersShipping,
+      ordersDelivered,
       ordersCancelled,
-      ordersRefunded,
       ordersUnassigned,
     ] = await Promise.all([
       countQuery(ordersCountQuery()),
-      countQuery(ordersCountQuery('pending')),
-      countQuery(ordersCountQuery('processing')),
-      countQuery(ordersCountQuery('completed')),
+      countQuery(ordersCountQuery('payment_completed')),
+      countQuery(ordersCountQuery('in_production')),
+      countQuery(ordersCountQuery('shipping')),
+      countQuery(ordersCountQuery('delivered')),
       countQuery(ordersCountQuery('cancelled')),
-      countQuery(ordersCountQuery('refunded')),
       profile.role === 'admin'
         ? countQuery(adminClient.from('orders').select('id', { count: 'exact', head: true }).is('assigned_manufacturer_id', null))
         : Promise.resolve(0),
@@ -121,11 +121,11 @@ export async function GET() {
 
     const baseCounts = {
       orders_total: ordersTotal,
-      orders_pending: ordersPending,
-      orders_processing: ordersProcessing,
-      orders_completed: ordersCompleted,
+      orders_payment_completed: ordersPaymentCompleted,
+      orders_in_production: ordersInProduction,
+      orders_shipping: ordersShipping,
+      orders_delivered: ordersDelivered,
       orders_cancelled: ordersCancelled,
-      orders_refunded: ordersRefunded,
     };
 
     if (profile.role === 'factory') {

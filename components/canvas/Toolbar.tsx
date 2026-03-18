@@ -488,12 +488,22 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
       } else if (isCtrlOrCmd && e.key === 'z') {
         e.preventDefault();
         undo();
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (!canvas) return;
+        const selectedObjects = canvas.getActiveObjects();
+        if (selectedObjects.length > 0) {
+          e.preventDefault();
+          selectedObjects.forEach(obj => canvas.remove(obj));
+          canvas.discardActiveObject();
+          canvas.renderAll();
+          incrementCanvasVersion();
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [getActiveCanvas, undo, redo]);
+  }, [getActiveCanvas, undo, redo, incrementCanvasVersion]);
 
   // Only show toolbar in edit mode
   if (!isEditMode) return null;

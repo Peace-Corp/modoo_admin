@@ -38,6 +38,7 @@ interface EditorData {
   error: string | null;
   refetchTemplates: () => Promise<void>;
   setSelectedTemplate: (template: DesignTemplate | null) => void;
+  updateOrderItemCanvasState: (canvasState: Record<string, unknown>) => void;
 }
 
 export function useEditorData({
@@ -240,6 +241,10 @@ export function useEditorData({
     };
   }, [productId, mode, orderItemId, templateId, designId, fetchProduct, fetchProductColors, fetchOrderItem, fetchTemplates, fetchSavedDesign]);
 
+  const updateOrderItemCanvasState = useCallback((canvasState: Record<string, unknown>) => {
+    setOrderItem((prev) => prev ? { ...prev, canvas_state: canvasState as Record<string, CanvasState> } : prev);
+  }, []);
+
   return {
     product,
     productColors,
@@ -254,5 +259,6 @@ export function useEditorData({
     error,
     refetchTemplates,
     setSelectedTemplate,
+    updateOrderItemCanvasState,
   };
 }

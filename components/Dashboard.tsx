@@ -8,11 +8,11 @@ import { useAuthStore } from '@/store/useAuthStore';
 
 type DashboardCountsBase = {
   orders_total: number;
-  orders_pending: number;
-  orders_processing: number;
-  orders_completed: number;
+  orders_payment_completed: number;
+  orders_in_production: number;
+  orders_shipping: number;
+  orders_delivered: number;
   orders_cancelled: number;
-  orders_refunded: number;
 };
 
 type DashboardCountsAdmin = DashboardCountsBase & {
@@ -71,27 +71,27 @@ export default function Dashboard() {
         {
           label: '배정 주문',
           value: payload.counts.orders_total,
-          hint: `대기 ${payload.counts.orders_pending} · 처리 ${payload.counts.orders_processing}`,
+          hint: `결제완료 ${payload.counts.orders_payment_completed} · 제작중 ${payload.counts.orders_in_production}`,
           href: '/orders',
           icon: BarChart3,
         },
         {
-          label: '대기중',
-          value: payload.counts.orders_pending,
+          label: '결제완료',
+          value: payload.counts.orders_payment_completed,
           hint: '신규 주문 확인 필요',
           href: '/orders',
           icon: BarChart3,
         },
         {
-          label: '처리중',
-          value: payload.counts.orders_processing,
+          label: '제작중',
+          value: payload.counts.orders_in_production,
           hint: '제작/출고 진행중',
           href: '/orders',
           icon: BarChart3,
         },
         {
-          label: '완료',
-          value: payload.counts.orders_completed,
+          label: '배송완료',
+          value: payload.counts.orders_delivered,
           hint: '완료된 주문',
           href: '/orders',
           icon: BarChart3,
@@ -103,7 +103,7 @@ export default function Dashboard() {
       {
         label: '주문',
         value: payload.counts.orders_total,
-        hint: `대기 ${payload.counts.orders_pending} · 처리 ${payload.counts.orders_processing}`,
+        hint: `결제완료 ${payload.counts.orders_payment_completed} · 제작중 ${payload.counts.orders_in_production}`,
         href: '/orders',
         icon: BarChart3,
       },

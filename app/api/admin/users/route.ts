@@ -36,6 +36,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const role = url.searchParams.get('role') || 'all';
     const search = url.searchParams.get('search')?.trim() || '';
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
     let manufacturerId = url.searchParams.get('factoryId');
 
     // Factory users can only see users from their own factory
@@ -43,38 +47,55 @@ export async function GET(request: Request) {
       manufacturerId = profile.manufacturer_id;
       if (!manufacturerId) {
         // A factory user must have a manufacturer_id assigned
-        return NextResponse.json({ data: [] });
+        return NextResponse.json({ data: [], total: 0, page, limit, totalPages: 0 });
       }
     }
 
     const adminClient = createAdminClient();
-    let query = adminClient
+
+    if (role !== 'all' && !allowedRoles.has(role)) {
+      return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
+    }
+
+    // Get total count
+    let countQuery = adminClient
       .from('profiles')
-      .select('id, email, name, phone_number, role, manufacturer_id, created_at, updated_at')
-      .order('created_at', { ascending: false });
+      .select('*', { count: 'exact', head: true });
 
-    if (role !== 'all') {
-      if (!allowedRoles.has(role)) {
-        return NextResponse.json({ error: '유효하지 않은 사용자 권한입니다.' }, { status: 400 });
-      }
-      query = query.eq('role', role);
+    if (role !== 'all') countQuery = countQuery.eq('role', role);
+    if (manufacturerId) countQuery = countQuery.eq('manufacturer_id', manufacturerId);
+    if (search) countQuery = countQuery.or(`email.ilike.%${search}%,name.ilike.%${search}%,phone_number.ilike.%${search}%`);
+
+    const { count, error: countError } = await countQuery;
+
+    if (countError) {
+      return NextResponse.json({ error: countError.message }, { status: 500 });
     }
 
-    if (manufacturerId) {
-      query = query.eq('manufacturer_id', manufacturerId);
-    }
+    // Get paginated data
+    let dataQuery = adminClient
+      .from('profiles')
+      .select('id, email, name, phone_number, role, manufacturer_id, created_at, updated_at');
 
-    if (search) {
-      query = query.or(`email.ilike.%${search}%,name.ilike.%${search}%,phone_number.ilike.%${search}%`);
-    }
+    if (role !== 'all') dataQuery = dataQuery.eq('role', role);
+    if (manufacturerId) dataQuery = dataQuery.eq('manufacturer_id', manufacturerId);
+    if (search) dataQuery = dataQuery.or(`email.ilike.%${search}%,name.ilike.%${search}%,phone_number.ilike.%${search}%`);
 
-    const { data, error } = await query;
+    const { data, error } = await dataQuery
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    return NextResponse.json({
+      data: data || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : '사용자 목록을 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });

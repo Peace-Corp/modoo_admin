@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronDown, MapPin, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 
 type CoBuyParticipantSummary = Pick<
@@ -48,9 +48,6 @@ export default function OrderDetail({
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  // Order status (admin can change)
-  const [orderStatus, setOrderStatus] = useState<string>(order.order_status || 'pending');
-
   // Factory-specific fields (admin can set these)
   const [deadline, setDeadline] = useState<string>(order.deadline ? order.deadline.split('T')[0] : '');
   const [factoryAmount, setFactoryAmount] = useState<string>(order.factory_amount?.toString() || '');
@@ -65,6 +62,7 @@ export default function OrderDetail({
   const [cobuyParticipantsError, setCobuyParticipantsError] = useState<string | null>(null);
 
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [factoryAccordionOpen, setFactoryAccordionOpen] = useState(true);
 
   // Share link state
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -174,12 +172,11 @@ export default function OrderDetail({
 
   // Sync factory fields when order changes
   useEffect(() => {
-    setOrderStatus(order.order_status || 'pending');
     setDeadline(order.deadline ? order.deadline.split('T')[0] : '');
     setFactoryAmount(order.factory_amount?.toString() || '');
     setFactoryPaymentDate(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
     setFactoryPaymentStatus(order.factory_payment_status || 'pending');
-  }, [order.order_status, order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
+  }, [order.factory_status, order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -328,17 +325,23 @@ export default function OrderDetail({
     setAssigning(true);
     setAssignError(null);
     try {
+      // Auto-set statuses when assigning a factory for the first time
+      const isNewAssignment = selectedFactoryId && !order.assigned_manufacturer_id;
+
       const response = await fetch('/api/admin/orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: order.id,
-          orderStatus: orderStatus || null,
           factoryId: selectedFactoryId || null,
           deadline: deadline || null,
           factoryAmount: factoryAmount ? parseFloat(factoryAmount) : null,
           factoryPaymentDate: factoryPaymentDate || null,
           factoryPaymentStatus: factoryPaymentStatus || null,
+          ...(isNewAssignment ? {
+            factoryStatus: 'assigned',
+            orderStatus: 'in_production',
+          } : {}),
         }),
       });
 
@@ -582,35 +585,48 @@ export default function OrderDetail({
           )}
 
           {/* Factory Assignment */}
-          <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <FactoryIcon className="w-5 h-5 text-gray-600" />
-              <h3 className="text-base font-semibold text-gray-900">공장 배정</h3>
-            </div>
-            <div className="space-y-3 text-sm">
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm">
+            <button
+              onClick={() => setFactoryAccordionOpen(!factoryAccordionOpen)}
+              className="w-full flex items-center justify-between p-4"
+            >
+              <div className="flex items-center gap-2">
+                <FactoryIcon className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-semibold text-gray-900">공장 배정</h3>
+              </div>
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${factoryAccordionOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {factoryAccordionOpen && (
+              <div className="px-4 pb-4 space-y-3 text-sm">
               <div>
                 <p className="text-sm text-gray-500">현재 배정</p>
                 <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
               </div>
 
+              {/* Factory assignment status badge */}
+              {order.assigned_manufacturer_id && (
+                <div>
+                  <p className="text-sm text-gray-500">공장 배정 상태</p>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+                    order.factory_status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                    order.factory_status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                    order.factory_status === 'completed' ? 'bg-green-100 text-green-800' :
+                    order.factory_status === 'shipped' ? 'bg-indigo-100 text-indigo-800' :
+                    order.factory_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {order.factory_status === 'pending' ? '대기중' :
+                     order.factory_status === 'assigned' ? '배정완료' :
+                     order.factory_status === 'in_progress' ? '작업중' :
+                     order.factory_status === 'completed' ? '작업완료' :
+                     order.factory_status === 'shipped' ? '출고완료' :
+                     order.factory_status === 'cancelled' ? '취소' : '대기중'}
+                  </span>
+                </div>
+              )}
+
               {canAssign && (
                 <>
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">주문 상태</label>
-                    <select
-                      value={orderStatus}
-                      onChange={(event) => setOrderStatus(event.target.value)}
-                      disabled={assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="pending">대기중</option>
-                      <option value="processing">처리중</option>
-                      <option value="completed">완료</option>
-                      <option value="cancelled">취소</option>
-                      <option value="refunded">환불</option>
-                    </select>
-                  </div>
-
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">공장 선택</label>
                     <select
@@ -662,20 +678,6 @@ export default function OrderDetail({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm text-gray-500 mb-1">결제 상태</label>
-                    <select
-                      value={factoryPaymentStatus}
-                      onChange={(event) => setFactoryPaymentStatus(event.target.value)}
-                      disabled={assigning}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                    >
-                      <option value="pending">대기</option>
-                      <option value="completed">완료</option>
-                      <option value="cancelled">취소</option>
-                    </select>
-                  </div>
-
                   <button
                     onClick={handleAssignFactory}
                     disabled={assigning || loadingFactories}
@@ -683,6 +685,25 @@ export default function OrderDetail({
                   >
                     {assigning ? '저장 중...' : '저장'}
                   </button>
+
+                  {/* 결제 상태 — only shown after factory is assigned */}
+                  {order.assigned_manufacturer_id && (
+                    <div className="border-t border-gray-200 pt-3 mt-1">
+                      <label className="block text-sm text-gray-500 mb-1">결제 상태</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={factoryPaymentStatus}
+                          onChange={(event) => setFactoryPaymentStatus(event.target.value)}
+                          disabled={assigning}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+                        >
+                          <option value="pending">대기</option>
+                          <option value="completed">완료</option>
+                          <option value="cancelled">취소</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -692,13 +713,14 @@ export default function OrderDetail({
                 </div>
               )}
             </div>
+            )}
           </div>
 
         </div>
 
         {/* Right Column - Customer & Shipping Info (hidden for factory users) */}
         <div className="space-y-4">
-          {/* Customer Information - hidden for factory users */}
+          {/* Customer & Shipping Information - hidden for factory users */}
           {!isFactoryUser && (
             <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
               <h3 className="text-base font-semibold text-gray-900 mb-3">고객 정보</h3>
@@ -718,51 +740,47 @@ export default function OrderDetail({
                   </div>
                 )}
               </div>
-            </div>
-          )}
 
-          {/* Shipping Information - hidden for factory users */}
-          {!isFactoryUser && (
-            <div className="bg-white border border-gray-200/60 rounded-md p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <MapPin className="w-5 h-5 text-gray-600" />
-                <h3 className="text-base font-semibold text-gray-900">배송 정보</h3>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">배송 방법</p>
-                  <p className="font-medium text-gray-900">
-                    {order.shipping_method === 'pickup' ? '직접 수령' :
-                     order.shipping_method === 'domestic' ? '국내 배송' :
-                     order.shipping_method === 'international' ? '해외 배송' :
-                     order.shipping_method || '-'}
-                  </p>
+              <div className="border-t border-gray-200 mt-4 pt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="w-5 h-5 text-gray-600" />
+                  <h3 className="text-base font-semibold text-gray-900">배송 정보</h3>
                 </div>
-                {order.shipping_method === 'international' && order.country_code && (
+                <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-500">국가</p>
-                    <p className="font-medium text-gray-900">{order.country_code}</p>
+                    <p className="text-sm text-gray-500">배송 방법</p>
+                    <p className="font-medium text-gray-900">
+                      {order.shipping_method === 'pickup' ? '직접 수령' :
+                       order.shipping_method === 'domestic' ? '국내 배송' :
+                       order.shipping_method === 'international' ? '해외 배송' :
+                       order.shipping_method || '-'}
+                    </p>
                   </div>
-                )}
-                {(order.postal_code || order.address_line_1 || order.state || order.city) && (
-                  <div>
-                    <p className="text-sm text-gray-500">주소</p>
-                    <div className="font-medium text-gray-900 space-y-1">
-                      {order.postal_code && (
-                        <p>[{order.postal_code}]</p>
-                      )}
-                      {(order.state || order.city) && (
-                        <p>{[order.state, order.city].filter(Boolean).join(' ')}</p>
-                      )}
-                      {order.address_line_1 && (
-                        <p>{order.address_line_1}</p>
-                      )}
-                      {order.address_line_2 && (
-                        <p className="text-gray-600">{order.address_line_2}</p>
-                      )}
+                  {order.shipping_method === 'international' && order.country_code && (
+                    <div>
+                      <p className="text-sm text-gray-500">국가</p>
+                      <p className="font-medium text-gray-900">{order.country_code}</p>
                     </div>
-                  </div>
-                )}
+                  )}
+                  {(order.postal_code || order.address_line_1) && (
+                    <div>
+                      <p className="text-sm text-gray-500">주소</p>
+                      <p className="font-medium text-gray-900">
+                        {order.postal_code && `[${order.postal_code}] `}
+                        {order.address_line_1}
+                        {order.address_line_2 && ` ${order.address_line_2}`}
+                      </p>
+                    </div>
+                  )}
+                  {order.shipping_method === 'international' && (order.state || order.city) && (
+                    <div>
+                      <p className="text-sm text-gray-500">지역</p>
+                      <p className="font-medium text-gray-900">
+                        {[order.state, order.city].filter(Boolean).join(' ')}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -831,14 +849,42 @@ export default function OrderDetail({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">주문 상태</p>
-                  <p className="font-medium text-gray-900">
-                    {order.order_status === 'pending' ? '대기중' :
-                     order.order_status === 'processing' ? '처리중' :
-                     order.order_status === 'completed' ? '완료' :
-                     order.order_status === 'cancelled' ? '취소' :
-                     order.order_status === 'refunded' ? '환불' : order.order_status}
-                  </p>
+                  <p className="text-sm text-gray-500 mb-1">공장 배정 상태</p>
+                  <select
+                    value={order.factory_status || 'assigned'}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value;
+                      try {
+                        const response = await fetch('/api/admin/orders', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
+                        });
+                        if (!response.ok) {
+                          const payload = await response.json().catch(() => ({}));
+                          throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+                        }
+                        const { data } = await response.json();
+                        onOrderUpdate(data as Order);
+                        onUpdate();
+                      } catch (error) {
+                        alert(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+                      }
+                    }}
+                    disabled={order.factory_status === 'shipped'}
+                    className={`w-full px-3 py-2 rounded-md text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${
+                      order.factory_status === 'assigned' ? 'bg-blue-100 text-blue-800' :
+                      order.factory_status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                      order.factory_status === 'completed' ? 'bg-green-100 text-green-800' :
+                      order.factory_status === 'shipped' ? 'bg-indigo-100 text-indigo-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    <option value="assigned">배정완료</option>
+                    <option value="in_progress">작업중</option>
+                    <option value="completed">작업완료</option>
+                    <option value="shipped">출고완료</option>
+                  </select>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">마감일</p>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Factory, Order } from '@/types/types';
+import { Factory, Order, OrderItem } from '@/types/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from '@/components/OrderDetail';
 
@@ -81,6 +81,24 @@ export default function OrderDetailPage() {
       if (user.role === 'admin') {
         await Promise.all([fetchOrder(), fetchFactories()]);
       } else if (user.role === 'factory') {
+        // Factory users: redirect directly to the editor for the first order item
+        try {
+          const res = await fetch(`/api/admin/orders/items?orderId=${orderId}`);
+          if (res.ok) {
+            const payload = await res.json();
+            const items: OrderItem[] = payload?.data || [];
+            if (items.length > 0) {
+              const firstItem = items[0];
+              const returnUrl = encodeURIComponent('/orders');
+              router.replace(
+                `/editor/${firstItem.product_id}?mode=order&orderId=${orderId}&orderItemId=${firstItem.id}&returnUrl=${returnUrl}`
+              );
+              return;
+            }
+          }
+        } catch {
+          // Fall through to normal order detail view
+        }
         await fetchOrder();
         if (user.manufacturer_id) {
           setFactories([

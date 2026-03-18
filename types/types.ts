@@ -207,11 +207,12 @@ export interface Order {
   payment_key: string | null;
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
-  order_status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+  order_status: 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
   assigned_manufacturer_id: string | null;
   total_amount: number;
 
   // Factory-specific fields (set by admin)
+  factory_status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
   deadline: string | null;
   factory_amount: number | null;
   factory_payment_date: string | null;
