@@ -55,7 +55,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   const lastCanvasStateRef = useRef<string | null>(null);
   const lastCanvasSideRef = useRef<string | null>(null);
 
-  const { registerCanvas, unregisterCanvas, productColor: productColorFromStore, markImageLoaded, incrementCanvasVersion, initializeLayerColors, layerColors, resetZoom, saveHistory } = useCanvasStore();
+  const { registerCanvas, unregisterCanvas, productColor: productColorFromStore, markImageLoaded, incrementCanvasVersion, initializeLayerColors, layerColors, resetZoom, saveHistory, resetHistory } = useCanvasStore();
 
   // Loading state to track when all images are loaded
   const [isLoading, setIsLoading] = useState(true);
@@ -1254,7 +1254,7 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         });
       }
       suppressObjectAddedRef.current = false;
-      saveHistory(side.id); // Save initial snapshot after canvas state is loaded
+      resetHistory(side.id); // Reset history so loaded state becomes the initial state
 
       if (onCanvasReady) {
         onCanvasReady(canvas, side.id, scaleRef.current);

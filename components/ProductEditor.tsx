@@ -1055,6 +1055,14 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     void persistProductImageField('description_image', updated.length > 0 ? updated : null);
   };
 
+  const reorderThumbnailImages = (fromIndex: number, toIndex: number) => {
+    const updated = [...thumbnailImages];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setThumbnailImages(updated);
+    void persistProductImageField('thumbnail_image_link', updated);
+  };
+
   const reorderDescriptionImages = (fromIndex: number, toIndex: number) => {
     const updated = [...descriptionImages];
     const [moved] = updated.splice(fromIndex, 1);
@@ -1065,11 +1073,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && uploadTarget) {
+    const files = e.target.files;
+    if (files && files.length > 0 && uploadTarget) {
       const target = uploadTarget;
       setUploadTarget(null);
-      void handleImageUpload(target, file);
+      for (let i = 0; i < files.length; i++) {
+        void handleImageUpload(target, files[i]);
+      }
     }
     e.target.value = ''; // Reset input
   };
@@ -1470,19 +1480,28 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">제품 썸네일 (thumbnail_image_link)</label>
                 {thumbnailImages.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-1">
                     {thumbnailImages.map((url, idx) => (
-                      <div key={idx} className="relative group">
-                        <img
-                          src={url}
-                          alt={`썸네일 ${idx + 1}`}
-                          className="w-20 h-20 object-cover rounded border border-gray-200"
-                        />
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(idx)); e.dataTransfer.effectAllowed = 'move'; }}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number(e.dataTransfer.getData('text/plain'));
+                          if (!isNaN(from) && from !== idx) reorderThumbnailImages(from, idx);
+                        }}
+                        className="flex items-center gap-2 p-1.5 bg-gray-50 rounded border border-gray-200 group"
+                      >
+                        <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0" />
+                        <img src={url} alt={`썸네일 ${idx + 1}`} className="w-14 h-14 object-cover rounded border border-gray-200" />
+                        <span className="text-xs text-gray-500 truncate flex-1 min-w-0">{url.split('/').pop()}</span>
                         <button
                           onClick={() => removeThumbnailImage(idx)}
-                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
                         >
-                          ×
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -1508,6 +1527,33 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                     </button>
                   )}
                 </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const input = e.currentTarget.elements.namedItem('thumbImgUrl') as HTMLInputElement;
+                    const url = input.value.trim();
+                    if (!url) return;
+                    const updated = [...thumbnailImages, url];
+                    setThumbnailImages(updated);
+                    void persistProductImageField('thumbnail_image_link', updated);
+                    input.value = '';
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    name="thumbImgUrl"
+                    type="text"
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    placeholder="이미지 링크 입력 (https://...)"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    추가
+                  </button>
+                </form>
                 {!product?.id && (
                   <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
                 )}
@@ -2564,6 +2610,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileInputChange}
         className="hidden"
       />

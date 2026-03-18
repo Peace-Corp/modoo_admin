@@ -468,6 +468,33 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     return previews;
   }, [isModalOpen, sides, canvasMap]);
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if typing in an input or textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      // Skip if a fabric.js IText is in editing mode
+      const canvas = getActiveCanvas();
+      const active = canvas?.getActiveObject();
+      if (active && 'isEditing' in active && (active as fabric.IText).isEditing) return;
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      if (isCtrlOrCmd && e.shiftKey && e.key === 'Z') {
+        e.preventDefault();
+        redo();
+      } else if (isCtrlOrCmd && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [getActiveCanvas, undo, redo]);
+
   // Only show toolbar in edit mode
   if (!isEditMode) return null;
 
@@ -512,10 +539,10 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
           <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
 
           {/* Undo/Redo */}
-          <button onClick={() => undo()} disabled={!canUndo()} className={`${editorBtnBase} ${canUndo() ? editorBtnIdle : editorBtnDisabled}`} title="실행 취소">
+          <button onClick={() => undo()} disabled={!canUndo()} className={`${editorBtnBase} ${canUndo() ? editorBtnIdle : editorBtnDisabled}`} title="실행 취소 (Ctrl+Z)">
             <Undo2 className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => redo()} disabled={!canRedo()} className={`${editorBtnBase} ${canRedo() ? editorBtnIdle : editorBtnDisabled}`} title="다시 실행">
+          <button onClick={() => redo()} disabled={!canRedo()} className={`${editorBtnBase} ${canRedo() ? editorBtnIdle : editorBtnDisabled}`} title="다시 실행 (Ctrl+Shift+Z)">
             <Redo2 className="w-3.5 h-3.5" />
           </button>
 

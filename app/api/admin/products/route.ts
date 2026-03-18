@@ -49,6 +49,7 @@ export async function GET() {
     const { data, error } = await adminClient
       .from('products')
       .select('*, manufacturers(id, name)')
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -297,6 +298,13 @@ export async function PATCH(request: Request) {
       updateData.manufacturer_id = payload.manufacturer_id ?? null;
     }
 
+    if (payload?.sort_order !== undefined) {
+      const sortOrder = Number(payload.sort_order);
+      if (!Number.isNaN(sortOrder)) {
+        updateData.sort_order = sortOrder;
+      }
+    }
+
     if (Object.keys(updateData).length === 1) {
       return NextResponse.json({ error: '업데이트할 항목이 없습니다.' }, { status: 400 });
     }
@@ -345,6 +353,42 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ data: { id: productId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : '제품 삭제에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const payload = await request.json().catch(() => null);
+    const items: Array<{ id: string; sort_order: number }> = payload?.items;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: '정렬할 항목이 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    for (const item of items) {
+      if (!item.id || typeof item.id !== 'string') continue;
+      const sortOrder = Number(item.sort_order);
+      if (Number.isNaN(sortOrder)) continue;
+
+      const { error } = await adminClient
+        .from('products')
+        .update({ sort_order: sortOrder, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '정렬 순서 변경에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

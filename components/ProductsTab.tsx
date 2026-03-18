@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import useSWR from 'swr';
 import { Product } from '@/types/types';
-import { Eye, EyeOff, Plus, Package, Edit2, Trash2, Star, Search, X } from 'lucide-react';
+import { Eye, EyeOff, Plus, Package, Edit2, Trash2, Star, Search, X, GripVertical, ChevronDown } from 'lucide-react';
 import ProductEditor from './ProductEditor';
 import { getCategoryName, CATEGORIES } from '@/lib/categories';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function ProductsTab() {
   const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
@@ -14,8 +16,11 @@ export default function ProductsTab() {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const dragItemIndex = useRef<number | null>(null);
+  const dragOverIndex = useRef<number | null>(null);
+
+  const isFiltered = searchQuery !== '' || categoryFilter !== 'all';
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch = searchQuery === '' ||
@@ -25,13 +30,64 @@ export default function ProductsTab() {
       (product.product_code?.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
     return matchesSearch && matchesCategory;
-  }).sort((a, b) => Number(b.is_active) - Number(a.is_active));
+  });
 
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProducts.length;
+
+  const handleReorder = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    const reordered = [...products];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+
+    const items = reordered.map((p, i) => ({ id: p.id, sort_order: i }));
+    const updated = reordered.map((p, i) => ({ ...p, sort_order: i }));
+
+    mutate(updated, { revalidate: false });
+
+    try {
+      const response = await fetch('/api/admin/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      if (!response.ok) {
+        mutate();
+      }
+    } catch {
+      mutate();
+    }
+  };
+
+  const handleDragStart = (index: number) => {
+    dragItemIndex.current = index;
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragOverIndex.current = index;
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const from = dragItemIndex.current;
+    const to = dragOverIndex.current;
+    dragItemIndex.current = null;
+    dragOverIndex.current = null;
+    if (from !== null && to !== null && from !== to) {
+      // Map visible indices back to full products array indices
+      const fromProduct = visibleProducts[from];
+      const toProduct = visibleProducts[to];
+      const realFrom = products.findIndex(p => p.id === fromProduct.id);
+      const realTo = products.findIndex(p => p.id === toProduct.id);
+      if (realFrom !== -1 && realTo !== -1) {
+        void handleReorder(realFrom, realTo);
+      }
+    }
+  };
 
   const toggleProductStatus = async (productId: string, currentStatus: boolean) => {
     try {
@@ -177,7 +233,7 @@ export default function ProductsTab() {
             type="text"
             placeholder="제품명, ID, 제조사, 제품코드 검색..."
             value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => { setSearchQuery(e.target.value); setVisibleCount(ITEMS_PER_PAGE); }}
             className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
           {searchQuery && (
@@ -191,7 +247,7 @@ export default function ProductsTab() {
         </div>
         <select
           value={categoryFilter}
-          onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+          onChange={(e) => { setCategoryFilter(e.target.value); setVisibleCount(ITEMS_PER_PAGE); }}
           className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white sm:w-36"
         >
           {CATEGORIES.map((cat) => (
@@ -207,6 +263,9 @@ export default function ProductsTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                {!isFiltered && (
+                  <th className="w-8 px-2 py-2"></th>
+                )}
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   제품명
                 </th>
@@ -234,8 +293,20 @@ export default function ProductsTab() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+              {visibleProducts.map((product, idx) => (
+                <tr
+                  key={product.id}
+                  className="hover:bg-gray-50 transition-colors"
+                  draggable={!isFiltered}
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={handleDrop}
+                >
+                  {!isFiltered && (
+                    <td className="w-8 px-2 py-3">
+                      <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
+                    </td>
+                  )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-xs font-medium text-gray-900">{product.title}</div>
                     <div className="text-xs text-gray-500">ID: {product.id.slice(0, 8)}...</div>
@@ -316,13 +387,25 @@ export default function ProductsTab() {
 
         {/* Mobile Card List */}
         <div className="md:hidden divide-y divide-gray-200">
-          {paginatedProducts.map((product) => (
-            <div key={product.id} className="p-3 space-y-2">
-              {/* Top row: title + status */}
+          {visibleProducts.map((product, idx) => (
+            <div
+              key={product.id}
+              className="p-3 space-y-2"
+              draggable={!isFiltered}
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDrop={handleDrop}
+            >
+              {/* Top row: drag handle + title + status */}
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-gray-900 truncate">{product.title}</div>
-                  <div className="text-[11px] text-gray-400">ID: {product.id.slice(0, 8)}...</div>
+                <div className="flex items-start gap-1.5 min-w-0">
+                  {!isFiltered && (
+                    <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-gray-900 truncate">{product.title}</div>
+                    <div className="text-[11px] text-gray-400">ID: {product.id.slice(0, 8)}...</div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -397,52 +480,16 @@ export default function ProductsTab() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-200 bg-gray-50">
-            <span className="text-xs text-gray-500">
-              {(currentPage - 1) * ITEMS_PER_PAGE + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} / {filteredProducts.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                이전
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
-                .reduce<(number | '...')[]>((acc, page, idx, arr) => {
-                  if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('...');
-                  acc.push(page);
-                  return acc;
-                }, [])
-                .map((page, idx) =>
-                  page === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400">...</span>
-                  ) : (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`min-w-7 px-1.5 py-1 text-xs rounded ${
-                        currentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  )
-                )}
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                다음
-              </button>
-            </div>
+        {/* Show More */}
+        {hasMore && (
+          <div className="flex items-center justify-center px-4 py-2.5 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={() => setVisibleCount(c => c + ITEMS_PER_PAGE)}
+              className="inline-flex items-center gap-1 px-4 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              더 보기 ({visibleCount} / {filteredProducts.length})
+            </button>
           </div>
         )}
       </div>

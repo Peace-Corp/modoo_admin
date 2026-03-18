@@ -12,6 +12,7 @@ export interface Product {
   discount_rates?: Array<{ min_quantity: number; discount_rate: number }> | null;
   manufacturer_id?: string | null;
   manufacturers?: { id: string; name: string } | null;
+  sort_order: number;
   is_active: boolean;
   is_featured: boolean;
   created_at: string;
