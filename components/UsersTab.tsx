@@ -4,13 +4,32 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useMemo, useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Factory, Profile, Coupon } from '@/types/types';
-import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search } from 'lucide-react';
+import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface PaginatedResponse {
+  data: Profile[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const paginatedFetcher = async (url: string): Promise<PaginatedResponse> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload?.error || 'Failed to fetch');
+  }
+  return res.json();
+};
 
 export default function UsersTab() {
   const { user: currentUser } = useAuthStore();
   const [filterRole, setFilterRole] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const limit = 20;
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [updatingFactoryId, setUpdatingFactoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,14 +45,17 @@ export default function UsersTab() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   // Build users SWR key
   const usersKey = useMemo(() => {
     if (!currentUser) return null;
-    let url = `/api/admin/users?role=${filterRole}`;
+    let url = `/api/admin/users?page=${currentPage}&limit=${limit}&role=${filterRole}`;
     if (debouncedSearch) {
       url += `&search=${encodeURIComponent(debouncedSearch)}`;
     }
@@ -41,9 +63,12 @@ export default function UsersTab() {
       url += `&factoryId=${currentUser.manufacturer_id}`;
     }
     return url;
-  }, [currentUser, filterRole, debouncedSearch]);
+  }, [currentUser, filterRole, debouncedSearch, currentPage]);
 
-  const { data: users = [], isLoading: loading, mutate: mutateUsers } = useSWR<Profile[]>(usersKey);
+  const { data: response, isLoading: loading, mutate: mutateUsers } = useSWR<PaginatedResponse>(usersKey, paginatedFetcher);
+  const users = response?.data || [];
+  const totalPages = response?.totalPages || 0;
+  const total = response?.total || 0;
 
   // Factories: only fetch for admin
   const { data: factories = [], isLoading: loadingFactories } = useSWR<Factory[]>(
@@ -54,7 +79,7 @@ export default function UsersTab() {
     setUpdatingUserId(userId);
     setError(null);
     try {
-      const response = await fetch('/api/admin/users', {
+      const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -62,24 +87,28 @@ export default function UsersTab() {
         body: JSON.stringify({ userId, role: newRole }),
       });
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => ({}));
         throw new Error(errorPayload?.error || '사용자 권한 변경에 실패했습니다.');
       }
 
-      const payload = await response.json();
+      const payload = await res.json();
       const updatedUser = payload?.data as Profile | undefined;
       const updatedRole = updatedUser?.role ?? newRole;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? null;
 
       if (filterRole !== 'all' && updatedRole !== filterRole) {
-        mutateUsers(users.filter((user) => user.id !== userId), { revalidate: false });
+        if (response) {
+          mutateUsers({ ...response, data: users.filter((user) => user.id !== userId), total: total - 1 }, { revalidate: false });
+        }
       } else {
-        mutateUsers(users.map((user) =>
-          user.id === userId
-            ? { ...user, role: updatedRole, manufacturer_id: updatedManufacturerId }
-            : user
-        ), { revalidate: false });
+        if (response) {
+          mutateUsers({ ...response, data: users.map((user) =>
+            user.id === userId
+              ? { ...user, role: updatedRole, manufacturer_id: updatedManufacturerId }
+              : user
+          ) }, { revalidate: false });
+        }
       }
     } catch (error) {
       console.error('Error updating user role:', error);
@@ -93,7 +122,7 @@ export default function UsersTab() {
     setUpdatingFactoryId(userId);
     setError(null);
     try {
-      const response = await fetch('/api/admin/users', {
+      const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -101,21 +130,23 @@ export default function UsersTab() {
         body: JSON.stringify({ userId, factoryId }),
       });
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => ({}));
         throw new Error(errorPayload?.error || '공장 배정에 실패했습니다.');
       }
 
-      const payload = await response.json();
+      const payload = await res.json();
       const updatedUser = payload?.data as Profile | undefined;
       const updatedManufacturerId = updatedUser?.manufacturer_id ?? factoryId;
 
-      mutateUsers(
-        users.map((user) =>
-          user.id === userId ? { ...user, manufacturer_id: updatedManufacturerId } : user
-        ),
-        { revalidate: false }
-      );
+      if (response) {
+        mutateUsers(
+          { ...response, data: users.map((user) =>
+            user.id === userId ? { ...user, manufacturer_id: updatedManufacturerId } : user
+          ) },
+          { revalidate: false }
+        );
+      }
     } catch (error) {
       console.error('Error updating factory assignment:', error);
       setError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
@@ -270,7 +301,7 @@ export default function UsersTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">사용자 관리</h2>
-          <p className="text-xs text-gray-500 mt-1">총 {users.length}명의 사용자</p>
+          <p className="text-xs text-gray-500 mt-1">총 {total}명의 사용자</p>
         </div>
         {currentUser?.role === 'admin' && selectedUserIds.size > 0 && (
           <button
@@ -322,7 +353,7 @@ export default function UsersTab() {
             ].map((filter) => (
               <button
                 key={filter.value}
-                onClick={() => setFilterRole(filter.value)}
+                onClick={() => { setFilterRole(filter.value); setCurrentPage(1); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   filterRole === filter.value
                     ? 'bg-blue-600 text-white'
@@ -592,6 +623,36 @@ export default function UsersTab() {
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <h3 className="text-sm font-semibold text-gray-900 mb-1">사용자가 없습니다</h3>
             <p className="text-xs text-gray-500">등록된 사용자가 없습니다.</p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-xs text-gray-500">
+              {total}명 중 {(currentPage - 1) * limit + 1}-{Math.min(currentPage * limit, total)}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                이전
+              </button>
+              <span className="text-xs text-gray-700">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                다음
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>

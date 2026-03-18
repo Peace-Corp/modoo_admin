@@ -229,7 +229,7 @@ export async function POST(request: Request) {
       payment_method: 'toss',
       payment_key: null,
       payment_status: 'completed',
-      order_status: 'pending',
+      order_status: 'payment_completed',
       total_amount: totalAmount,
     };
 

@@ -17,6 +17,8 @@ import Toolbar from '@/components/canvas/Toolbar';
 import DesignModePanel from './panels/DesignModePanel';
 import OrderModePanel from './panels/OrderModePanel';
 import OrderEditPanel from './panels/OrderEditPanel';
+import FactoryOrderInfoPanel from './panels/FactoryOrderInfoPanel';
+import { useAuthStore } from '@/store/useAuthStore';
 import TemplateModePanel from './panels/TemplateModePanel';
 import {
   coerceImageUrlsBySide,
@@ -72,15 +74,20 @@ export default function UnifiedEditor({
   presetType,
 }: UnifiedEditorProps) {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const isFactoryUser = user?.role === 'factory';
   const modeConfig = useEditorMode({ mode, returnUrl });
   const editorData = useEditorData({ productId, mode, orderId, orderItemId, templateId, designId });
-  const { setEditMode, setActiveSide, canvasMap } = useCanvasStore();
+  const { setEditMode, setActiveSide, canvasMap, setProductColor: setStoreProductColor } = useCanvasStore();
 
   // Editing state
   const [isEditing, setIsEditing] = useState(modeConfig.initiallyEditable);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Factory user order mode tab
+  const [factoryTab, setFactoryTab] = useState<'design' | 'order'>('design');
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -252,6 +259,17 @@ export default function UnifiedEditor({
     return () => setEditMode(false);
   }, [isEditing, setEditMode]);
 
+  // Reset color filter states when leaving the editor
+  useEffect(() => {
+    return () => {
+      useCanvasStore.setState({
+        productColor: '#FFFFFF',
+        layerColors: {},
+        objectPrintMethods: {},
+      });
+    };
+  }, []);
+
   // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
@@ -407,9 +425,10 @@ export default function UnifiedEditor({
 
     if (result.success) {
       if (mode === 'order') {
-        // Update local canvas states with saved data (includes productColor)
+        // Update local canvas states and orderItem with saved data (includes productColor)
         if (result.canvasState) {
           setCanvasStates(result.canvasState as Record<string, CanvasState | string | null>);
+          editorData.updateOrderItemCanvasState(result.canvasState);
         }
         editSnapshotRef.current = {};
         setIsEditing(false);
@@ -462,17 +481,20 @@ export default function UnifiedEditor({
   }, [executeSave, mode, router, cobuyRequestId, editorData, partnerMallAddData, handleSaveToPartnerMall]);
 
   // Handle edit toggle (order mode) — snapshot on enter, restore on cancel
+  const colorSnapshotRef = useRef<string>('#FFFFFF');
+
   const handleToggleEdit = useCallback(() => {
     if (!isEditing) {
-      // Entering edit mode — snapshot all canvases
+      // Entering edit mode — snapshot all canvases and store color
       const snapshot: Record<string, object> = {};
       Object.entries(canvasMap).forEach(([sideId, canvas]) => {
         snapshot[sideId] = canvas.toJSON();
       });
       editSnapshotRef.current = snapshot;
+      colorSnapshotRef.current = useCanvasStore.getState().productColor;
       setIsEditing(true);
     } else {
-      // Cancelling edit mode — restore from snapshot
+      // Cancelling edit mode — restore from snapshot and revert color
       Object.entries(editSnapshotRef.current).forEach(([sideId, json]) => {
         const canvas = canvasMap[sideId];
         if (canvas) {
@@ -482,12 +504,13 @@ export default function UnifiedEditor({
           });
         }
       });
+      setStoreProductColor(colorSnapshotRef.current);
       editSnapshotRef.current = {};
       setSelectedTextObject(null);
       setIsEditing(false);
     }
     setSaveError(null);
-  }, [isEditing, canvasMap]);
+  }, [isEditing, canvasMap, setStoreProductColor]);
 
   // Handle selected object change
   const handleSelectedObjectChange = useCallback((obj: fabric.FabricObject | null) => {
@@ -785,11 +808,53 @@ export default function UnifiedEditor({
                     onSave={handleSave}
                     isSaving={isSaving}
                   />
+                ) : isFactoryUser && orderId && orderItemId ? (
+                  <>
+                    {/* Factory user tabs */}
+                    <div className="flex border-b border-gray-200 shrink-0 sticky top-0 z-10 bg-white">
+                      <button
+                        onClick={() => setFactoryTab('design')}
+                        className={`flex-1 px-3 py-2 text-[11px] font-medium transition-colors ${
+                          factoryTab === 'design'
+                            ? 'text-blue-600 border-b-2 border-blue-600'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        디자인 정보
+                      </button>
+                      <button
+                        onClick={() => setFactoryTab('order')}
+                        className={`flex-1 px-3 py-2 text-[11px] font-medium transition-colors ${
+                          factoryTab === 'order'
+                            ? 'text-blue-600 border-b-2 border-blue-600'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        주문 정보
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                      {factoryTab === 'design' ? (
+                        <OrderModePanel
+                          product={product}
+                          orderItem={editorData.orderItem}
+                          productColors={editorData.productColors}
+                          orderId={orderId}
+                        />
+                      ) : (
+                        <FactoryOrderInfoPanel
+                          orderId={orderId}
+                          currentOrderItemId={orderItemId}
+                        />
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <OrderModePanel
                     product={product}
                     orderItem={editorData.orderItem}
                     productColors={editorData.productColors}
+                    orderId={orderId}
                   />
                 )
               )}

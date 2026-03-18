@@ -43,10 +43,10 @@ export async function GET(request: Request) {
 
     // Select only fields needed for the list view, include order_items count
     const selectFields = isFactoryUser
-      ? `id, order_category, order_status, deadline, factory_amount, factory_payment_date, factory_payment_status, created_at, order_items(count)`
-      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_amount, factory_payment_date, factory_payment_status, notes, order_items(count)`;
+      ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(count)`
+      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(count)`;
 
-    let query = adminClient.from('orders').select(selectFields);
+    let query = adminClient.from('orders').select(selectFields as string);
 
     if (isFactoryUser) {
       // For factory users, sort by deadline (nulls last to show orders with deadlines first)
@@ -66,7 +66,11 @@ export async function GET(request: Request) {
     }
 
     if (status !== 'all') {
-      query = query.eq('order_status', status);
+      if (profile.role === 'factory') {
+        query = query.eq('factory_status', status);
+      } else {
+        query = query.eq('order_status', status);
+      }
     }
 
     const { data, error } = await query;
@@ -108,12 +112,68 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+      return NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 });
     }
+
+    const isFactoryUser = profile.role === 'factory';
 
     const payload = await request.json().catch(() => null);
     const orderId = payload?.orderId;
+
+    if (!orderId || typeof orderId !== 'string') {
+      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    // Factory users can only update factory_status on their own orders
+    if (isFactoryUser) {
+      const factoryStatusInput = payload?.factoryStatus;
+      const validFactoryStatuses = ['assigned', 'in_progress', 'completed', 'shipped'];
+      if (!factoryStatusInput || !validFactoryStatuses.includes(factoryStatusInput)) {
+        return NextResponse.json({ error: '유효하지 않은 공장 배정 상태입니다.' }, { status: 400 });
+      }
+
+      // Verify order belongs to this factory
+      const { data: existingOrder, error: orderCheckError } = await adminClient
+        .from('orders')
+        .select('id, assigned_manufacturer_id')
+        .eq('id', orderId)
+        .single();
+
+      if (orderCheckError || !existingOrder) {
+        return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      if (existingOrder.assigned_manufacturer_id !== profile.manufacturer_id) {
+        return NextResponse.json({ error: '이 주문에 대한 권한이 없습니다.' }, { status: 403 });
+      }
+
+      // Auto-set order_status based on factory_status
+      // shipped → order_status = shipping
+      // assigned, in_progress, completed → order_status = in_production
+      const orderStatus = factoryStatusInput === 'shipped' ? 'shipping' : 'in_production';
+
+      const { data, error } = await adminClient
+        .from('orders')
+        .update({
+          factory_status: factoryStatusInput,
+          order_status: orderStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ data });
+    }
+
+    // Admin flow below
     const manufacturerId = payload?.factoryId ?? null;
 
     // Factory-specific fields
@@ -122,19 +182,22 @@ export async function PATCH(request: Request) {
     const factoryPaymentDateInput = payload?.factoryPaymentDate ?? null;
     const factoryPaymentStatusInput = payload?.factoryPaymentStatus ?? null;
     const orderStatusInput = payload?.orderStatus ?? null;
-
-    if (!orderId || typeof orderId !== 'string') {
-      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
-    }
+    const factoryStatusInput = payload?.factoryStatus ?? null;
 
     if (manufacturerId !== null && typeof manufacturerId !== 'string') {
       return NextResponse.json({ error: '공장 ID 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
     // Validate order status
-    const validOrderStatuses = ['pending', 'processing', 'completed', 'cancelled', 'refunded'];
+    const validOrderStatuses = ['payment_completed', 'in_production', 'shipping', 'delivered', 'cancelled', 'partially_cancelled'];
     if (orderStatusInput !== null && !validOrderStatuses.includes(orderStatusInput)) {
       return NextResponse.json({ error: '유효하지 않은 주문 상태입니다.' }, { status: 400 });
+    }
+
+    // Validate factory status
+    const validFactoryStatuses = ['pending', 'assigned', 'in_progress', 'completed', 'shipped', 'cancelled'];
+    if (factoryStatusInput !== null && !validFactoryStatuses.includes(factoryStatusInput)) {
+      return NextResponse.json({ error: '유효하지 않은 공장 배정 상태입니다.' }, { status: 400 });
     }
 
     // Validate factory payment status
@@ -143,7 +206,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '유효하지 않은 결제 상태입니다.' }, { status: 400 });
     }
 
-    const adminClient = createAdminClient();
     if (manufacturerId !== null) {
       const { data: manufacturer, error: manufacturerError } = await adminClient
         .from('manufacturers')
@@ -177,6 +239,9 @@ export async function PATCH(request: Request) {
     }
     if (orderStatusInput !== null) {
       updateData.order_status = orderStatusInput;
+    }
+    if (factoryStatusInput !== null) {
+      updateData.factory_status = factoryStatusInput;
     }
 
     const { data, error } = await adminClient

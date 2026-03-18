@@ -220,7 +220,7 @@ export async function POST(request: Request) {
       payment_method: 'admin', // Special payment method for admin-created orders
       payment_key: null,
       payment_status: 'completed', // Bypass payment
-      order_status: 'pending',
+      order_status: 'payment_completed',
       total_amount: totalAmount,
       notes: notes || null,
     };

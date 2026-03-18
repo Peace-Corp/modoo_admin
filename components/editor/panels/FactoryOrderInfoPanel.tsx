@@ -1,0 +1,283 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { Package, Clock, CreditCard, MessageSquare, Paperclip, Download } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
+import type { Order, OrderItem } from '@/types/types';
+
+interface FactoryOrderInfoPanelProps {
+  orderId: string;
+  currentOrderItemId: string;
+}
+
+export default function FactoryOrderInfoPanel({
+  orderId,
+  currentOrderItemId,
+}: FactoryOrderInfoPanelProps) {
+  const router = useRouter();
+  const { user } = useAuthStore();
+
+  const [order, setOrder] = useState<Order | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (user?.manufacturer_id) {
+        params.set('factoryId', user.manufacturer_id);
+      }
+      const [ordersRes, itemsRes] = await Promise.all([
+        fetch(`/api/admin/orders${params.toString() ? `?${params}` : ''}`),
+        fetch(`/api/admin/orders/items?orderId=${orderId}`),
+      ]);
+
+      if (ordersRes.ok) {
+        const ordersPayload = await ordersRes.json();
+        const orders: Order[] = ordersPayload?.data || [];
+        const found = orders.find((o) => o.id === orderId);
+        if (found) setOrder(found);
+      }
+
+      if (itemsRes.ok) {
+        const itemsPayload = await itemsRes.json();
+        setOrderItems(itemsPayload?.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching factory order info:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId, user?.manufacturer_id]);
+
+  useEffect(() => {
+    if (user) fetchData();
+  }, [user, fetchData]);
+
+  const handleFactoryStatusChange = useCallback(async (newStatus: string) => {
+    if (!order) return;
+    setUpdatingStatus(true);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+      }
+      const { data } = await response.json();
+      setOrder((prev) => prev ? { ...prev, factory_status: data.factory_status, order_status: data.order_status } : prev);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }, [order]);
+
+  const handleItemClick = useCallback((item: OrderItem) => {
+    const returnUrl = encodeURIComponent('/orders');
+    router.push(
+      `/editor/${item.product_id}?mode=order&orderId=${orderId}&orderItemId=${item.id}&returnUrl=${returnUrl}`
+    );
+  }, [router, orderId]);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status: string | null) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    const colors: Record<string, string> = {
+      assigned: 'bg-blue-100 text-blue-800',
+      in_progress: 'bg-yellow-100 text-yellow-800',
+      completed: 'bg-green-100 text-green-800',
+      shipped: 'bg-indigo-100 text-indigo-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-y-auto">
+      {/* Order Info */}
+      {order && (
+        <div className="p-3 border-b">
+          <div className="flex items-center gap-1.5 mb-2">
+            <CreditCard className="w-3.5 h-3.5 text-gray-500" />
+            <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">주문 정보</h3>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">주문 구분</span>
+              <span className="text-[11px] font-medium text-gray-800">
+                {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+              </span>
+            </div>
+
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">배정 상태</span>
+              <select
+                value={order.factory_status || 'assigned'}
+                onChange={(e) => handleFactoryStatusChange(e.target.value)}
+                disabled={updatingStatus || order.factory_status === 'shipped'}
+                className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(order.factory_status)}`}
+              >
+                <option value="assigned">배정완료</option>
+                <option value="in_progress">작업중</option>
+                <option value="completed">작업완료</option>
+                <option value="shipped">출고완료</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">마감일</span>
+              <span className="text-[11px] font-medium text-gray-800 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-gray-400" />
+                {formatDate(order.deadline)}
+              </span>
+            </div>
+
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">금액</span>
+              <span className="text-[11px] font-semibold text-gray-800">
+                {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
+              </span>
+            </div>
+
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 예정일</span>
+              <span className="text-[11px] font-medium text-gray-800">
+                {formatDate(order.factory_payment_date)}
+              </span>
+            </div>
+
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 상태</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                order.factory_payment_status === 'completed' ? 'bg-green-100 text-green-800' :
+                order.factory_payment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                {order.factory_payment_status === 'pending' ? '대기' :
+                 order.factory_payment_status === 'completed' ? '완료' :
+                 order.factory_payment_status === 'cancelled' ? '취소' : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Note & Attachments */}
+      {order && (order.customer_note || (order.attachment_urls && order.attachment_urls.length > 0)) && (
+        <div className="p-3 border-b">
+          {order.customer_note && (
+            <div className="mb-2">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-gray-500" />
+                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">고객 요청사항</h3>
+              </div>
+              <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
+            </div>
+          )}
+          {order.attachment_urls && order.attachment_urls.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-gray-500" />
+                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">첨부파일 ({order.attachment_urls.length})</h3>
+              </div>
+              <div className="space-y-1">
+                {order.attachment_urls.map((url, index) => {
+                  const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
+                  return (
+                    <a
+                      key={index}
+                      href={url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-colors"
+                    >
+                      <Download className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{decodeURIComponent(filename)}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Order Items Navigation */}
+      {orderItems.length > 0 && (
+        <div className="p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Package className="w-3.5 h-3.5 text-gray-500" />
+            <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              주문 상품 ({orderItems.length})
+            </h3>
+          </div>
+          <div className="space-y-1.5">
+            {orderItems.map((item) => {
+              const isActive = item.id === currentOrderItemId;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => !isActive && handleItemClick(item)}
+                  className={`w-full flex items-center gap-2.5 p-2 rounded-md text-left transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'border border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                  }`}
+                >
+                  <div className="w-10 h-10 bg-gray-100 rounded shrink-0 overflow-hidden">
+                    {item.thumbnail_url ? (
+                      <img
+                        src={item.thumbnail_url}
+                        alt={item.product_title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-4 h-4 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-[11px] font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-800'}`}>
+                      {item.product_title}
+                    </div>
+                    <div className="text-[10px] text-gray-400">
+                      수량: {item.quantity}
+                      {item.products?.product_code && ` · ${item.products.product_code}`}
+                    </div>
+                  </div>
+                  {isActive && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

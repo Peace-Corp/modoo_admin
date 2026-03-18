@@ -71,11 +71,12 @@ export default function OrdersTab() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      processing: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
+      payment_completed: 'bg-blue-100 text-blue-800',
+      in_production: 'bg-yellow-100 text-yellow-800',
+      shipping: 'bg-indigo-100 text-indigo-800',
+      delivered: 'bg-green-100 text-green-800',
       cancelled: 'bg-red-100 text-red-800',
-      refunded: 'bg-gray-100 text-gray-800',
+      partially_cancelled: 'bg-red-100 text-red-800',
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
@@ -128,6 +129,59 @@ export default function OrdersTab() {
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
+
+  const getFactoryStatusColor = (status: string | null) => {
+    if (!status) return 'bg-gray-100 text-gray-800';
+    const colors: Record<string, string> = {
+      pending: 'bg-gray-100 text-gray-800',
+      assigned: 'bg-blue-100 text-blue-800',
+      in_progress: 'bg-yellow-100 text-yellow-800',
+      completed: 'bg-green-100 text-green-800',
+      shipped: 'bg-indigo-100 text-indigo-800',
+      cancelled: 'bg-red-100 text-red-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getFactoryStatusLabel = (status: string | null) => {
+    if (!status) return '-';
+    const labels: Record<string, string> = {
+      pending: '대기중',
+      assigned: '배정완료',
+      in_progress: '작업중',
+      completed: '작업완료',
+      shipped: '출고완료',
+      cancelled: '취소',
+    };
+    return labels[status] || status;
+  };
+
+  const [updatingFactoryStatusId, setUpdatingFactoryStatusId] = useState<string | null>(null);
+
+  const handleFactoryStatusChange = useCallback(async (orderId: string, newStatus: string) => {
+    setUpdatingFactoryStatusId(orderId);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, factoryStatus: newStatus }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+      }
+      const { data } = await response.json();
+      mutateOrders(
+        orders.map((o) => (o.id === orderId ? { ...o, factory_status: data.factory_status, order_status: data.order_status } : o)),
+        { revalidate: false }
+      );
+    } catch (error) {
+      console.error('Error updating factory status:', error);
+      setErrorMessage(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+    } finally {
+      setUpdatingFactoryStatusId(null);
+    }
+  }, [orders, mutateOrders]);
 
   const factoryMap = useMemo(() => {
     const map = new Map<string, Factory>();
@@ -210,14 +264,20 @@ export default function OrdersTab() {
       {/* Filters */}
       <div className="bg-white border border-gray-200/60 rounded-md p-2 sm:p-3 shadow-sm">
         <div className="flex gap-2 flex-wrap">
-          {[
+          {(isFactoryUser ? [
             { value: 'all', label: '전체' },
-            { value: 'pending', label: '대기중' },
-            { value: 'processing', label: '처리중' },
-            { value: 'completed', label: '완료' },
+            { value: 'assigned', label: '배정완료' },
+            { value: 'in_progress', label: '작업중' },
+            { value: 'completed', label: '작업완료' },
+            { value: 'shipped', label: '출고완료' },
+          ] : [
+            { value: 'all', label: '전체' },
+            { value: 'payment_completed', label: '결제완료' },
+            { value: 'in_production', label: '제작중' },
+            { value: 'shipping', label: '배송중' },
+            { value: 'delivered', label: '배송완료' },
             { value: 'cancelled', label: '취소' },
-            { value: 'refunded', label: '환불' },
-          ].map((filter) => (
+          ]).map((filter) => (
             <button
               key={filter.value}
               onClick={() => setFilterStatus(filter.value)}
@@ -250,13 +310,13 @@ export default function OrdersTab() {
                     주문 ID
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    제품 종류
+                    주문 구분
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     수량
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    구분
+                    공장 배정 상태
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     마감일
@@ -281,9 +341,6 @@ export default function OrdersTab() {
                     고객 정보
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 구분
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     주문 일시
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -293,13 +350,7 @@ export default function OrdersTab() {
                     주문 상태
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    결제 상태
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     공장 배정
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    배송 방법
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     작업
@@ -328,18 +379,18 @@ export default function OrdersTab() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm text-gray-900">{getOrderItemCount(order)}</span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                            order.order_status
-                          )}`}
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={order.factory_status || 'assigned'}
+                          onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                          disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
+                          className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
                         >
-                          {order.order_status === 'pending' ? '대기중' :
-                           order.order_status === 'processing' ? '처리중' :
-                           order.order_status === 'completed' ? '완료' :
-                           order.order_status === 'cancelled' ? '취소' :
-                           order.order_status === 'refunded' ? '환불' : order.order_status}
-                        </span>
+                          <option value="assigned">배정완료</option>
+                          <option value="in_progress">작업중</option>
+                          <option value="completed">작업완료</option>
+                          <option value="shipped">출고완료</option>
+                        </select>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 text-sm text-gray-900">
@@ -377,14 +428,10 @@ export default function OrdersTab() {
                         <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
                         <div className="text-xs text-gray-500">{order.customer_email}</div>
                       </td>
-                      <td className='px-4 py-3 whitespace-nowrap text-xs'>
-                        {order.order_category === 'cobuy' ? '공동구매' : '일반'}
-                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          {formatDate(order.created_at)}
-                        </div>
+                        <span className="text-xs text-gray-600">
+                          {new Date(order.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                        </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm font-semibold text-gray-900">
@@ -398,34 +445,17 @@ export default function OrdersTab() {
                           disabled={updatingStatusId === order.id}
                           className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(order.order_status)}`}
                         >
-                          <option value="pending">대기중</option>
-                          <option value="processing">처리중</option>
-                          <option value="completed">완료</option>
+                          <option value="payment_completed">결제완료</option>
+                          <option value="in_production">제작중</option>
+                          <option value="shipping">배송중</option>
+                          <option value="delivered">배송완료</option>
                           <option value="cancelled">취소</option>
-                          <option value="refunded">환불</option>
+                          <option value="partially_cancelled">부분취소</option>
                         </select>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(
-                            order.payment_status
-                          )}`}
-                        >
-                          {order.payment_status}
-                        </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_manufacturer_id) === '미배정' && 'text-red-500'}`}>
                           {getFactoryLabel(order.assigned_manufacturer_id)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-sm text-gray-900">
-                          {order.shipping_method === 'domestic'
-                            ? '국내배송'
-                            : order.shipping_method === 'international'
-                            ? '해외배송'
-                            : '픽업'}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -469,9 +499,19 @@ export default function OrdersTab() {
                 <>
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-xs font-mono text-blue-600 truncate">{order.id}</div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${getStatusColor(order.order_status)}`}>
-                      {order.order_status === 'pending' ? '대기중' : order.order_status === 'processing' ? '처리중' : order.order_status === 'completed' ? '완료' : order.order_status === 'cancelled' ? '취소' : order.order_status === 'refunded' ? '환불' : order.order_status}
-                    </span>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={order.factory_status || 'assigned'}
+                        onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                        disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
+                      >
+                        <option value="assigned">배정완료</option>
+                        <option value="in_progress">작업중</option>
+                        <option value="completed">작업완료</option>
+                        <option value="shipped">출고완료</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                     <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
@@ -501,11 +541,12 @@ export default function OrdersTab() {
                         disabled={updatingStatusId === order.id}
                         className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getStatusColor(order.order_status)}`}
                       >
-                        <option value="pending">대기중</option>
-                        <option value="processing">처리중</option>
-                        <option value="completed">완료</option>
+                        <option value="payment_completed">결제완료</option>
+                        <option value="in_production">제작중</option>
+                        <option value="shipping">배송중</option>
+                        <option value="delivered">배송완료</option>
                         <option value="cancelled">취소</option>
-                        <option value="refunded">환불</option>
+                        <option value="partially_cancelled">부분취소</option>
                       </select>
                     </div>
                   </div>
@@ -518,7 +559,7 @@ export default function OrdersTab() {
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-gray-400">
                       <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.created_at)}</span>
                       <span className={getFactoryLabel(order.assigned_manufacturer_id) === '미배정' ? 'text-red-500' : ''}>{getFactoryLabel(order.assigned_manufacturer_id)}</span>
-                      <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}</span>
+                      <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}{order.shipping_method !== 'pickup' && order.address_line_1 ? ` · ${order.address_line_1}` : ''}</span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
