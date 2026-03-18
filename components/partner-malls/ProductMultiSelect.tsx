@@ -195,9 +195,9 @@ export default function ProductMultiSelect({
 
                 {/* Product image */}
                 <div className="aspect-square bg-gray-100 rounded-md overflow-hidden mb-1.5 sm:mb-2">
-                  {product.thumbnail_image_link ? (
+                  {product.thumbnail_image_link?.[0] ? (
                     <img
-                      src={product.thumbnail_image_link}
+                      src={product.thumbnail_image_link[0]}
                       alt={product.title}
                       className="w-full h-full object-cover"
                     />

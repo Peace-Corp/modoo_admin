@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Plus, Star, Trash2, X, Award, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit2, Plus, Star, Trash2, X, Award, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import type { ReviewRecord, ProductSummary, ReviewFormState } from './types';
 import {
   REVIEW_IMAGE_BUCKET,
@@ -46,6 +46,13 @@ export default function ReviewsSection() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Fetch best reviews
+  const { data: bestResponse, error: bestSwrError, mutate: mutateBest } = useSWR<PaginatedResponse>(
+    '/api/admin/reviews?page=1&limit=50&is_best=true',
+    paginatedFetcher
+  );
+  const bestReviews = bestResponse?.data || [];
 
   const searchParams = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
   const { data: response, error: swrError, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
@@ -216,8 +223,8 @@ export default function ReviewsSection() {
         throw new Error(errorPayload?.error || '리뷰 저장에 실패했습니다.');
       }
 
-      // Revalidate to refresh the current page
       mutate();
+      mutateBest();
 
       setReviewForm(emptyReviewForm);
       setReviewFormOpen(false);
@@ -244,8 +251,8 @@ export default function ReviewsSection() {
         throw new Error(payload?.error || '리뷰 삭제에 실패했습니다.');
       }
 
-      // Revalidate to refresh the current page
       mutate();
+      mutateBest();
     } catch (err) {
       console.error('Error deleting review:', err);
       setError(err instanceof Error ? err.message : '리뷰 삭제에 실패했습니다.');
@@ -274,16 +281,45 @@ export default function ReviewsSection() {
       const payload = await res.json();
       const updatedReview = payload?.data as ReviewRecord;
 
-      // Update the current page data
       if (response?.data) {
         const updatedData = response.data.map((item) =>
           item.id === updatedReview.id ? updatedReview : item
         );
         mutate({ ...response, data: updatedData }, { revalidate: false });
       }
+      mutateBest();
     } catch (err) {
       console.error('Error toggling best review:', err);
       setError(err instanceof Error ? err.message : 'BEST 상태 변경에 실패했습니다.');
+    }
+  };
+
+  const handleReorder = async (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= bestReviews.length) return;
+
+    const reordered = [...bestReviews];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+
+    // Optimistic update
+    if (bestResponse) {
+      mutateBest({ ...bestResponse, data: reordered }, { revalidate: false });
+    }
+
+    try {
+      const res = await fetch('/api/admin/reviews/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: reordered.map((r) => r.id) }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || '순서 변경에 실패했습니다.');
+      }
+    } catch (err) {
+      mutateBest(); // Revert on error
+      setError(err instanceof Error ? err.message : '순서 변경에 실패했습니다.');
     }
   };
 
@@ -311,9 +347,9 @@ export default function ReviewsSection() {
 
   return (
     <div className="space-y-4">
-      {(swrError || error) && (
+      {(swrError || bestSwrError || error) && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800">
-          {swrError?.message || error}
+          {swrError?.message || bestSwrError?.message || error}
         </div>
       )}
 
@@ -509,6 +545,75 @@ export default function ReviewsSection() {
           </div>
         )}
       </div>
+
+      {/* Best Reviews Section */}
+      {bestReviews.length > 0 && (
+        <div className="bg-white border border-yellow-200 rounded-md shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 bg-yellow-50 border-b border-yellow-200 flex items-center gap-2">
+            <Award className="w-4 h-4 text-yellow-500" />
+            <h3 className="text-sm font-semibold text-gray-900">BEST 리뷰 ({bestReviews.length})</h3>
+            <span className="text-xs text-gray-500 ml-auto">이 순서대로 홈페이지에 노출됩니다</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {bestReviews.map((review, index) => (
+              <div key={review.id} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors">
+                {/* Order controls */}
+                <div className="flex flex-col shrink-0">
+                  <button
+                    onClick={() => handleReorder(index, index - 1)}
+                    disabled={index === 0}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleReorder(index, index + 1)}
+                    disabled={index === bestReviews.length - 1}
+                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <span className="text-xs text-gray-400 w-5 text-center shrink-0">{index + 1}</span>
+
+                {/* Thumbnail */}
+                {review.review_image_urls && review.review_image_urls.length > 0 ? (
+                  <img src={review.review_image_urls[0]} alt="" className="w-9 h-9 object-cover rounded border border-gray-200 shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 bg-gray-100 rounded border border-gray-200 shrink-0" />
+                )}
+
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 truncate">{review.title}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{review.author_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 truncate">{review.product?.title}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star key={s} className={`w-3 h-3 ${s <= review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => handleEdit(review)} className="p-1 text-gray-400 hover:text-gray-600" title="편집">
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => handleToggleBest(review)} className="p-1 text-yellow-500 hover:text-red-500" title="BEST 해제">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">

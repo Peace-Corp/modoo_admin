@@ -385,9 +385,9 @@ export default function PartnerMallCreator({ onClose, onCreated }: PartnerMallCr
                     {products.map((product) => (
                       <div key={product.id} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
                         <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded border border-gray-200 overflow-hidden shrink-0">
-                          {product.thumbnail_image_link && (
+                          {product.thumbnail_image_link?.[0] && (
                             <img
-                              src={product.thumbnail_image_link}
+                              src={product.thumbnail_image_link[0]}
                               alt={product.title}
                               className="w-full h-full object-contain"
                             />

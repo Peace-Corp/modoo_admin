@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Product, ProductColor, ProductLayer, ProductSide, SizeOption, Manufacturer, ManufacturerColor, LogoPlacement, PartnerMallPreset, PrintMethodRecord, ProductPrintMethod } from '@/types/types';
 import { createClient } from '@/lib/supabase-client';
-import { CATEGORIES } from '@/lib/categories';
+import type { CategoryConfig } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers, GripVertical } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
@@ -70,7 +70,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [basePrice, setBasePrice] = useState(product?.base_price || 0);
   const [category, setCategory] = useState(product?.category || '');
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
-  const [thumbnailImageLink, setThumbnailImageLink] = useState(product?.thumbnail_image_link ?? '');
+  const [thumbnailImages, setThumbnailImages] = useState<string[]>(product?.thumbnail_image_link ?? []);
   const [descriptionImages, setDescriptionImages] = useState<string[]>(product?.description_image ?? []);
   const [sizingChartImage, setSizingChartImage] = useState(product?.sizing_chart_image ?? '');
   const [productCode, setProductCode] = useState(product?.product_code ?? '');
@@ -149,6 +149,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [allPrintMethods, setAllPrintMethods] = useState<PrintMethodRecord[]>([]);
   const [productPrintMethods, setProductPrintMethods] = useState<ProductPrintMethod[]>([]);
   const [togglingPrintMethodId, setTogglingPrintMethodId] = useState<string | null>(null);
+
+  // Categories
+  const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
 
   // Tab state
   type EditorTab = 'basic' | 'sides' | 'size-color' | 'partner-mall' | 'print-area' | 'template';
@@ -338,9 +345,10 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
     }
   };
 
-  // Fetch manufacturers when component mounts (for both layered and non-layered products)
+  // Fetch manufacturers and categories when component mounts
   useEffect(() => {
     void fetchManufacturers();
+    void fetchCategories();
   }, []);
 
   // Load manufacturer colors if product already has a linked manufacturer
@@ -364,6 +372,69 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
       console.error('Error fetching manufacturers:', error);
     } finally {
       setManufacturersLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    setCategoriesLoading(true);
+    try {
+      const response = await fetch('/api/admin/categories');
+      if (!response.ok) throw new Error('카테고리 데이터를 불러오지 못했습니다.');
+      const payload = await response.json();
+      setCategories((payload?.data || []).map((c: { key: string; name: string; icon?: string }) => ({
+        key: c.key,
+        name: c.name,
+        icon: c.icon || '',
+      })));
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategory(true);
+    try {
+      const response = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '카테고리 생성에 실패했습니다.');
+      }
+      const payload = await response.json();
+      const created = payload?.data;
+      if (created) {
+        setCategories((prev) => [...prev, { key: created.key, name: created.name, icon: created.icon || '' }]);
+        setCategory(created.key);
+      }
+      setNewCategoryName('');
+      setShowNewCategoryInput(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '카테고리 생성에 실패했습니다.');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (key: string) => {
+    const cat = categories.find((c) => c.key === key);
+    if (!cat || !confirm(`"${cat.name}" 카테고리를 삭제하시겠습니까?`)) return;
+    try {
+      const response = await fetch(`/api/admin/categories?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '카테고리 삭제에 실패했습니다.');
+      }
+      setCategories((prev) => prev.filter((c) => c.key !== key));
+      if (category === key) setCategory('');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '카테고리 삭제에 실패했습니다.');
     }
   };
 
@@ -1000,8 +1071,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
           updateSideField(target.sideIndex, 'imageUrl', publicUrl);
         }
       } else if (target.field === 'thumbnail_image_link') {
-        setThumbnailImageLink(publicUrl);
-        await persistProductImageField('thumbnail_image_link', publicUrl);
+        const updated = [...thumbnailImages, publicUrl];
+        setThumbnailImages(updated);
+        await persistProductImageField('thumbnail_image_link', updated);
       } else if (target.field === 'description_image') {
         const updated = [...descriptionImages, publicUrl];
         setDescriptionImages(updated);
@@ -1033,19 +1105,33 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   const clearProductImage = (field: 'thumbnail_image_link' | 'description_image' | 'sizing_chart_image') => {
     if (field === 'thumbnail_image_link') {
-      setThumbnailImageLink('');
+      setThumbnailImages([]);
     } else if (field === 'description_image') {
       setDescriptionImages([]);
     } else {
       setSizingChartImage('');
     }
-    void persistProductImageField(field, field === 'description_image' ? [] : null);
+    void persistProductImageField(field, field === 'description_image' || field === 'thumbnail_image_link' ? [] : null);
+  };
+
+  const removeThumbnailImage = (index: number) => {
+    const updated = thumbnailImages.filter((_, i) => i !== index);
+    setThumbnailImages(updated);
+    void persistProductImageField('thumbnail_image_link', updated.length > 0 ? updated : null);
   };
 
   const removeDescriptionImage = (index: number) => {
     const updated = descriptionImages.filter((_, i) => i !== index);
     setDescriptionImages(updated);
     void persistProductImageField('description_image', updated.length > 0 ? updated : null);
+  };
+
+  const reorderThumbnailImages = (fromIndex: number, toIndex: number) => {
+    const updated = [...thumbnailImages];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setThumbnailImages(updated);
+    void persistProductImageField('thumbnail_image_link', updated);
   };
 
   const reorderDescriptionImages = (fromIndex: number, toIndex: number) => {
@@ -1058,11 +1144,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
 
   // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && uploadTarget) {
+    const files = e.target.files;
+    if (files && files.length > 0 && uploadTarget) {
       const target = uploadTarget;
       setUploadTarget(null);
-      void handleImageUpload(target, file);
+      for (let i = 0; i < files.length; i++) {
+        void handleImageUpload(target, files[i]);
+      }
     }
     e.target.value = ''; // Reset input
   };
@@ -1155,7 +1243,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         is_active: isActive,
         configuration,
         size_options: sizeOptions.length > 0 ? sizeOptions : null,
-        thumbnail_image_link: thumbnailImageLink.trim() ? thumbnailImageLink.trim() : null,
+        thumbnail_image_link: thumbnailImages.length > 0 ? thumbnailImages : null,
         description_image: descriptionImages.length > 0 ? descriptionImages : null,
         sizing_chart_image: sizingChartImage.trim() ? sizingChartImage.trim() : null,
         product_code: productCode.trim() ? productCode.trim() : null,
@@ -1279,18 +1367,60 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                >
-                  <option value="">-- 카테고리 선택 --</option>
-                  {CATEGORIES.filter((cat) => cat.key !== 'all').map((cat) => (
-                    <option key={cat.key} value={cat.key}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    disabled={categoriesLoading}
+                  >
+                    <option value="">-- 카테고리 선택 --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.key} value={cat.key}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {category && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteCategory(category)}
+                      className="px-2 py-2 border border-red-200 rounded-md hover:bg-red-50 text-red-500"
+                      title="카테고리 삭제"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
+                    className="px-2 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-gray-600"
+                    title="카테고리 추가"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {showNewCategoryInput && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                      placeholder="새 카테고리 이름"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleAddCategory(); } }}
+                      disabled={addingCategory}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleAddCategory()}
+                      disabled={addingCategory || !newCategoryName.trim()}
+                      className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {addingCategory ? <Loader2 className="w-3 h-3 animate-spin" /> : '추가'}
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">제품 코드 (product_code)</label>
@@ -1462,51 +1592,84 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">제품 썸네일 (thumbnail_image_link)</label>
-                <div className="flex items-start gap-3">
-                  {thumbnailImageLink ? (
-                    <img
-                      src={thumbnailImageLink}
-                      alt="제품 썸네일"
-                      className="w-20 h-20 object-cover rounded border border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <ImageIcon className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <input
-                      type="text"
-                      value={thumbnailImageLink}
-                      onChange={(e) => setThumbnailImageLink(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                      placeholder="https://..."
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => triggerProductFileInput('thumbnail_image_link')}
-                        disabled={uploading}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                {thumbnailImages.length > 0 && (
+                  <div className="space-y-1">
+                    {thumbnailImages.map((url, idx) => (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(idx)); e.dataTransfer.effectAllowed = 'move'; }}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number(e.dataTransfer.getData('text/plain'));
+                          if (!isNaN(from) && from !== idx) reorderThumbnailImages(from, idx);
+                        }}
+                        className="flex items-center gap-2 p-1.5 bg-gray-50 rounded border border-gray-200 group"
                       >
-                        <Upload className="w-4 h-4" />
-                        업로드
-                      </button>
-                      {!!thumbnailImageLink && (
+                        <GripVertical className="w-4 h-4 text-gray-400 cursor-grab shrink-0" />
+                        <img src={url} alt={`썸네일 ${idx + 1}`} className="w-14 h-14 object-cover rounded border border-gray-200" />
+                        <span className="text-xs text-gray-500 truncate flex-1 min-w-0">{url.split('/').pop()}</span>
                         <button
-                          onClick={() => clearProductImage('thumbnail_image_link')}
-                          disabled={uploading}
-                          className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                          onClick={() => removeThumbnailImage(idx)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          지우기
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                    </div>
-                    {!product?.id && (
-                      <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
-                    )}
+                      </div>
+                    ))}
                   </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => triggerProductFileInput('thumbnail_image_link')}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4" />
+                    이미지 추가
+                  </button>
+                  {thumbnailImages.length > 0 && (
+                    <button
+                      onClick={() => clearProductImage('thumbnail_image_link')}
+                      disabled={uploading}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      전체 삭제
+                    </button>
+                  )}
                 </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const input = e.currentTarget.elements.namedItem('thumbImgUrl') as HTMLInputElement;
+                    const url = input.value.trim();
+                    if (!url) return;
+                    const updated = [...thumbnailImages, url];
+                    setThumbnailImages(updated);
+                    void persistProductImageField('thumbnail_image_link', updated);
+                    input.value = '';
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    name="thumbImgUrl"
+                    type="text"
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                    placeholder="이미지 링크 입력 (https://...)"
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    추가
+                  </button>
+                </form>
+                {!product?.id && (
+                  <p className="text-xs text-gray-500">새 제품은 저장 후 링크가 DB에 저장됩니다.</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -2560,6 +2723,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileInputChange}
         className="hidden"
       />

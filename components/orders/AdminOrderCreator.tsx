@@ -193,9 +193,9 @@ export default function AdminOrderCreator({ onClose, onSuccess, initialProductId
                       className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-blue-500 hover:shadow-md transition-all text-left"
                     >
                       <div className="aspect-square bg-gray-100 flex items-center justify-center">
-                        {product.thumbnail_image_link ? (
+                        {product.thumbnail_image_link?.[0] ? (
                           <img
-                            src={product.thumbnail_image_link}
+                            src={product.thumbnail_image_link[0]}
                             alt={product.title}
                             className="w-full h-full object-cover"
                           />

@@ -40,6 +40,7 @@ interface CanvasStore {
   markImageLoaded: (sideId: string) => void;
   incrementCanvasVersion: () => void;
   saveHistory: (sideId: string) => void;
+  resetHistory: (sideId: string) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   canUndo: () => boolean;
@@ -247,6 +248,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         historyIndex: { ...prev.historyIndex, [sideId]: next.length - 1 },
       };
     });
+  },
+
+  resetHistory: (sideId: string) => {
+    set((prev) => ({
+      canvasHistory: { ...prev.canvasHistory, [sideId]: [] },
+      historyIndex: { ...prev.historyIndex, [sideId]: -1 },
+    }));
+    get().saveHistory(sideId);
   },
 
   canUndo: () => {

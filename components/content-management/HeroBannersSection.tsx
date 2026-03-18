@@ -4,13 +4,15 @@ import { useState, type ChangeEvent } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
-import type { HeroBannerRecord, HeroBannerFormState } from './types';
+import { Edit2, Eye, EyeOff, Link2, Plus, Trash2, X } from 'lucide-react';
+import type { HeroBannerRecord, HeroBannerFormState, AnnouncementRecord } from './types';
 import {
   BANNER_IMAGE_BUCKET,
   BANNER_IMAGE_FOLDER,
   emptyHeroBannerForm,
   sortHeroBanners,
+  sortAnnouncements,
+  formatDate,
 } from './utils';
 
 export default function HeroBannersSection() {
@@ -22,25 +24,46 @@ export default function HeroBannersSection() {
   const [bannerFormError, setBannerFormError] = useState<string | null>(null);
   const [savingBanner, setSavingBanner] = useState(false);
   const [uploadingBannerImage, setUploadingBannerImage] = useState(false);
+  const [linkType, setLinkType] = useState<'url' | 'announcement'>('url');
+  const [announcementPickerOpen, setAnnouncementPickerOpen] = useState(false);
+  const [linkedAnnouncementTitle, setLinkedAnnouncementTitle] = useState<string | null>(null);
+
+  const { data: rawAnnouncements } = useSWR<AnnouncementRecord[]>(
+    announcementPickerOpen ? '/api/admin/announcements' : null
+  );
+  const announcements = rawAnnouncements ? sortAnnouncements(rawAnnouncements) : [];
+
+  const ANNOUNCEMENT_ROUTE_PREFIX = '/support/notices/';
+
+  const resetLinkState = () => {
+    setLinkType('url');
+    setLinkedAnnouncementTitle(null);
+  };
 
   const handleBannerFormToggle = () => {
     setBannerFormOpen((prev) => !prev);
     setBannerFormError(null);
     if (bannerFormOpen) {
       setBannerForm(emptyHeroBannerForm);
+      resetLinkState();
     }
   };
 
   const handleBannerEdit = (banner: HeroBannerRecord) => {
+    const link = banner.redirect_link ?? '';
+    const isAnnouncementLink = link.startsWith(ANNOUNCEMENT_ROUTE_PREFIX);
+
     setBannerForm({
       id: banner.id,
       title: banner.title ?? '',
       subtitle: banner.subtitle ?? '',
       image_link: banner.image_link ?? '',
-      redirect_link: banner.redirect_link ?? '',
+      redirect_link: link,
       sort_order: banner.sort_order ?? 0,
       is_active: Boolean(banner.is_active),
     });
+    setLinkType(isAnnouncementLink ? 'announcement' : 'url');
+    setLinkedAnnouncementTitle(isAnnouncementLink ? link : null);
     setBannerFormOpen(true);
     setBannerFormError(null);
   };
@@ -143,6 +166,7 @@ export default function HeroBannersSection() {
 
       setBannerForm(emptyHeroBannerForm);
       setBannerFormOpen(false);
+      resetLinkState();
     } catch (err) {
       console.error('Error saving hero banner:', err);
       setError(err instanceof Error ? err.message : '히어로 배너 저장에 실패했습니다.');
@@ -253,17 +277,79 @@ export default function HeroBannersSection() {
                 />
               </label>
             </div>
-            <label className="space-y-2 text-sm text-gray-700">
-              링크 URL
-              <input
-                type="text"
-                value={bannerForm.redirect_link}
-                onChange={(event) =>
-                  setBannerForm((prev) => ({ ...prev, redirect_link: event.target.value }))
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </label>
+            <div className="space-y-2 text-sm text-gray-700">
+              <span>링크 설정</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLinkType('url');
+                    setBannerForm((prev) => ({ ...prev, redirect_link: '' }));
+                    setLinkedAnnouncementTitle(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    linkType === 'url'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  직접 입력
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLinkType('announcement');
+                    setBannerForm((prev) => ({ ...prev, redirect_link: '' }));
+                    setLinkedAnnouncementTitle(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    linkType === 'announcement'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  공지 연결
+                </button>
+              </div>
+              {linkType === 'url' ? (
+                <input
+                  type="text"
+                  placeholder="https://..."
+                  value={bannerForm.redirect_link}
+                  onChange={(event) =>
+                    setBannerForm((prev) => ({ ...prev, redirect_link: event.target.value }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  {linkedAnnouncementTitle ? (
+                    <div className="flex items-center gap-2 flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white">
+                      <Link2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="truncate text-sm">{linkedAnnouncementTitle}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBannerForm((prev) => ({ ...prev, redirect_link: '' }));
+                          setLinkedAnnouncementTitle(null);
+                        }}
+                        className="ml-auto text-gray-400 hover:text-red-500"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAnnouncementPickerOpen(true)}
+                      className="w-full px-3 py-2 border border-dashed border-gray-300 rounded-md text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                      공지를 선택하세요
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-3 text-sm text-gray-700 md:col-span-2">
                 <label className="space-y-2 text-sm text-gray-700">
@@ -326,6 +412,7 @@ export default function HeroBannersSection() {
                   setBannerForm(emptyHeroBannerForm);
                   setBannerFormOpen(false);
                   setBannerFormError(null);
+                  resetLinkState();
                 }}
                 className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
               >
@@ -464,6 +551,62 @@ export default function HeroBannersSection() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {announcementPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900">공지 선택</h4>
+              <button
+                onClick={() => setAnnouncementPickerOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+              {!rawAnnouncements ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : announcements.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-500">
+                  등록된 공지가 없습니다.
+                </div>
+              ) : (
+                announcements.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      setBannerForm((prev) => ({
+                        ...prev,
+                        redirect_link: `${ANNOUNCEMENT_ROUTE_PREFIX}${a.id}`,
+                      }));
+                      setLinkedAnnouncementTitle(a.title);
+                      setAnnouncementPickerOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`shrink-0 w-2 h-2 rounded-full ${
+                          a.is_published ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                      />
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {a.title}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5 ml-4 truncate">{a.content}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 ml-4">{formatDate(a.created_at)}</p>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
