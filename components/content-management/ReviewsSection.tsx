@@ -279,9 +279,9 @@ export default function ReviewsSection() {
       }
 
       const payload = await res.json();
-      const updatedReview = payload?.data as ReviewRecord;
+      const updatedReview = payload?.data as ReviewRecord | undefined;
 
-      if (response?.data) {
+      if (updatedReview && response?.data) {
         const updatedData = response.data.map((item) =>
           item.id === updatedReview.id ? updatedReview : item
         );

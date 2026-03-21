@@ -26,11 +26,12 @@ export default function OrderDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
+      const queryParams = new URLSearchParams();
+      queryParams.set('orderId', orderId);
       if (user?.role === 'factory' && user.manufacturer_id) {
-        params.set('factoryId', user.manufacturer_id);
+        queryParams.set('factoryId', user.manufacturer_id);
       }
-      const url = `/api/admin/orders${params.toString() ? `?${params}` : ''}`;
+      const url = `/api/admin/orders?${queryParams}`;
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -40,7 +41,7 @@ export default function OrderDetailPage() {
 
       const payload = await response.json();
       const orders: Order[] = payload?.data || [];
-      const foundOrder = orders.find((o) => o.id === orderId);
+      const foundOrder = orders[0];
 
       if (!foundOrder) {
         throw new Error('Order not found.');
