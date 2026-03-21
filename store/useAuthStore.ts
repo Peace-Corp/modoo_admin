@@ -70,8 +70,12 @@ export const useAuthStore = create<AuthState>()(
         }),
 
       logout: async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
+        try {
+          const supabase = createClient();
+          await supabase.auth.signOut();
+        } catch (e) {
+          console.error('Error signing out:', e);
+        }
         set({
           user: null,
           isAuthenticated: false,

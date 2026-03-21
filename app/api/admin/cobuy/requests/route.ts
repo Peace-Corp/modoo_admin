@@ -53,8 +53,9 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json(transformed);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '요청 처리에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -144,7 +145,8 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '요청 처리에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

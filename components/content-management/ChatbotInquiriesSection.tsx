@@ -207,7 +207,7 @@ export default function ChatbotInquiriesSection() {
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-500">우선순위</label>
-                        <p className="text-sm text-gray-900">{inquiry.priorities.join(' → ')}</p>
+                        <p className="text-sm text-gray-900">{(inquiry.priorities || []).join(' → ')}</p>
                       </div>
                       <div>
                         <label className="text-xs font-medium text-gray-500">필요 날짜</label>

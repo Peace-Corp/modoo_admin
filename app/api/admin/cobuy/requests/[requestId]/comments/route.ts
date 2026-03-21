@@ -39,8 +39,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ requ
     }));
 
     return NextResponse.json(transformed);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '댓글을 불러오지 못했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -73,7 +74,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ req
     }
 
     return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '댓글 작성에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

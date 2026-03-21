@@ -268,7 +268,7 @@ export default function UsersTab() {
       }
 
       const payload = await response.json();
-      const { issued, skipped } = payload.data;
+      const { issued = 0, skipped = 0 } = payload.data ?? {};
 
       let msg = `${issued}명에게 쿠폰이 발급되었습니다.`;
       if (skipped > 0) {
