@@ -261,8 +261,15 @@ export default function FactoryOrderInfoPanel({
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className={`text-[11px] font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-800'}`}>
-                      {item.product_title}
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[11px] font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-800'}`}>
+                        {item.product_title}
+                      </span>
+                      {item.retouch_requested && (
+                        <span className="px-1 py-0.5 text-[8px] font-semibold bg-orange-100 text-orange-700 rounded shrink-0">
+                          리터치
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-gray-400">
                       수량: {item.quantity}

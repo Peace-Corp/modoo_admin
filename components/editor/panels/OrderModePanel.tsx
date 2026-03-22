@@ -165,6 +165,8 @@ export default function OrderModePanel({
         let objectType = obj.type || 'Object';
         objectType = objectType.charAt(0).toUpperCase() + objectType.slice(1);
 
+        const backgroundRemovalRequested = obj.data?.backgroundRemovalRequested || false;
+
         const dimension: ObjectDimensions = {
           objectId,
           sideId: side.id,
@@ -175,6 +177,7 @@ export default function OrderModePanel({
           fill: obj.fill && typeof obj.fill === 'string' && obj.fill !== 'transparent' ? obj.fill : undefined,
           colors: colors.length > 0 ? colors : undefined,
           printMethod: printMethod as ObjectDimensions['printMethod'],
+          backgroundRemovalRequested,
         };
 
         const typeLower = (obj.type || '').toLowerCase();
@@ -411,6 +414,13 @@ export default function OrderModePanel({
 
   return (
     <>
+      {/* Retouch Request Banner */}
+      {orderItem.retouch_requested && (
+        <div className="p-2.5 border-b border-orange-200 bg-orange-50 text-[11px] font-semibold text-orange-800">
+          담당자 리터치 요청됨
+        </div>
+      )}
+
       {/* Customer Note & Attachments */}
       {(customerNote || attachmentUrls.length > 0) && (
         <div className="p-3 border-b">
@@ -621,6 +631,13 @@ export default function OrderModePanel({
                                 <div className="flex gap-1">
                                   <span className="text-gray-400 shrink-0 w-7">폰트</span>
                                   <span className="text-gray-700 truncate">{dim.fontFamily}</span>
+                                </div>
+                              )}
+                              {dim.backgroundRemovalRequested && (
+                                <div className="mt-1">
+                                  <span className="font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                                    배경제거 요청
+                                  </span>
                                 </div>
                               )}
                             </div>
