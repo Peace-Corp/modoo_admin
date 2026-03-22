@@ -1552,10 +1552,10 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                 {objectDimensions.map((dimension, index) => (
                   <div
                     key={index}
-                    className="p-3 border border-gray-200 rounded-md bg-gray-50"
+                    className={`p-3 rounded-md ${dimension.backgroundRemovalRequested ? 'border-2 border-red-400 bg-red-50/30' : 'border border-gray-200 bg-gray-50'}`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-16 h-16 rounded border border-gray-200 bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                      <div className="relative w-16 h-16 rounded border border-gray-200 bg-white flex items-center justify-center shrink-0 overflow-hidden">
                         {dimension.preview ? (
                           <img
                             src={dimension.preview}
@@ -1567,6 +1567,11 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                           />
                         ) : (
                           <span className="text-xs text-gray-400">No Preview</span>
+                        )}
+                        {dimension.backgroundRemovalRequested && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-red-600 text-white text-[8px] font-bold text-center py-0.5">
+                            배경제거
+                          </div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
