@@ -543,7 +543,11 @@ export default function OrderDetail({
                     <div
                       key={item.id}
                       onClick={() => handleItemClick(item.id)}
-                      className="flex gap-4 p-3 border border-gray-200 rounded-md hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer transition-all"
+                      className={`flex gap-4 p-3 rounded-md cursor-pointer transition-all ${
+                        item.retouch_requested
+                          ? 'border-2 border-orange-400 bg-orange-50/30 hover:border-orange-500 hover:bg-orange-50/50'
+                          : 'border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'
+                      }`}
                     >
                       <div className="w-20 h-20 bg-gray-100 rounded shrink-0 overflow-hidden">
                         {item.thumbnail_url ? (
@@ -559,7 +563,14 @@ export default function OrderDetail({
                         )}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-black">{item.product_title}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-black">{item.product_title}</h4>
+                          {item.retouch_requested && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-orange-100 text-orange-700 rounded">
+                              리터치 요청
+                            </span>
+                          )}
+                        </div>
                         {item.products?.product_code && (
                           <p className="text-xs text-gray-500 mt-0.5">
                             상품코드: {item.products.product_code}

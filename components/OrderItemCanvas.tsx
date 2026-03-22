@@ -573,7 +573,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
     objects.forEach((obj) => {
       // Skip the background image
-      const objData = obj as { data?: { id?: string; objectId?: string; printMethod?: string } };
+      const objData = obj as { data?: { id?: string; objectId?: string; printMethod?: string; backgroundRemovalRequested?: boolean } };
       if (objData.data?.id === 'background-product-image') {
         return;
       }
@@ -590,6 +590,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
 
       const stateInfo = objectId ? stateDimensionsById.get(objectId) : undefined;
       const printMethod = objData.data?.printMethod || stateInfo?.printMethod;
+      const backgroundRemovalRequested = objData.data?.backgroundRemovalRequested || false;
 
       // Calculate dimensions
       const fill = obj.fill;
@@ -701,6 +702,7 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         colors: colors.size > 0 ? Array.from(colors) : undefined,
         preview: preview || undefined,
         printMethod: printMethod as ObjectDimensions['printMethod'],
+        backgroundRemovalRequested,
       };
 
       // Add text content for text objects (including CurvedText)
@@ -1356,6 +1358,13 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
         </div>
       )}
 
+      {/* Retouch request banner */}
+      {orderItem.retouch_requested && (
+        <div className="text-sm font-semibold text-orange-800 bg-orange-100 border border-orange-300 rounded-md px-4 py-2.5">
+          담당자 리터치 요청됨 — 자주 사용되는 위치로 변경하여 작업을 진행해주세요.
+        </div>
+      )}
+
       {/* Edit mode banner */}
       {isEditMode && (
         <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -1662,11 +1671,18 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
                             </span>
                           </div>
                         </div>
-                        <div className="mt-2">
-                          <span className="text-xs text-gray-500">인쇄방법:</span>
-                          <span className={`ml-1 text-xs font-medium px-2 py-0.5 rounded ${getPrintMethodColor(dimension.printMethod)}`}>
-                            {getPrintMethodName(dimension.printMethod)}
-                          </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <div>
+                            <span className="text-xs text-gray-500">인쇄방법:</span>
+                            <span className={`ml-1 text-xs font-medium px-2 py-0.5 rounded ${getPrintMethodColor(dimension.printMethod)}`}>
+                              {getPrintMethodName(dimension.printMethod)}
+                            </span>
+                          </div>
+                          {dimension.backgroundRemovalRequested && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                              배경제거 요청
+                            </span>
+                          )}
                         </div>
                         {dimension.rawType !== 'image' && (
                           dimension.colors && dimension.colors.length > 0 ? (

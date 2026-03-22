@@ -269,6 +269,9 @@ export interface OrderItem {
   // Custom fonts used in the design
   custom_fonts?: CustomFont[] | string | null;
 
+  // Retouch request flag
+  retouch_requested?: boolean;
+
   // Joined from products table
   products?: { product_code: string | null } | null;
 
@@ -338,6 +341,8 @@ export interface ObjectDimensions {
   curveIntensity?: number;
   // Print method
   printMethod?: PrintMethod;
+  // Background removal request
+  backgroundRemovalRequested?: boolean;
 }
 
 export interface Profile {
