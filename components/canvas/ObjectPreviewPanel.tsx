@@ -45,11 +45,11 @@ const ObjectPreviewPanel: React.FC<ObjectPreviewPanelProps> = ({ sides, quantity
   useEffect(() => {
     const calculatePricing = async () => {
       if (Object.keys(canvasMap).length === 0) return;
-      const summary = await calculateAllSidesPricing(canvasMap, sides, quantity);
+      const summary = await calculateAllSidesPricing(canvasMap, sides);
       setPricingSummary(summary);
     };
     calculatePricing();
-  }, [canvasMap, sides, quantity, canvasVersion]);
+  }, [canvasMap, sides, canvasVersion]);
 
   // Extract all user objects from all canvases
   const allObjects = useMemo(() => {

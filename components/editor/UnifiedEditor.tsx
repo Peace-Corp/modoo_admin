@@ -469,7 +469,12 @@ export default function UnifiedEditor({
 
         // Only navigate back if not CoBuy (CoBuy shows pricing send UI)
         if (!cobuyRequestId) {
-          router.back();
+          if (returnUrl && result.id) {
+            const separator = returnUrl.includes('?') ? '&' : '?';
+            router.push(`${returnUrl}${separator}designId=${result.id}`);
+          } else {
+            router.back();
+          }
         }
       } else if (mode === 'template') {
         // Refresh templates list
@@ -478,7 +483,7 @@ export default function UnifiedEditor({
     } else {
       setSaveError(result.error || '저장에 실패했습니다.');
     }
-  }, [executeSave, mode, router, cobuyRequestId, editorData, partnerMallAddData, handleSaveToPartnerMall]);
+  }, [executeSave, mode, router, returnUrl, cobuyRequestId, editorData, partnerMallAddData, handleSaveToPartnerMall]);
 
   // Handle edit toggle (order mode) — snapshot on enter, restore on cancel
   const colorSnapshotRef = useRef<string>('#FFFFFF');

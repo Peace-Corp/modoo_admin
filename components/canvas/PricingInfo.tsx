@@ -25,13 +25,13 @@ export default function PricingInfo({ basePrice, sides, quantity = 1, compact = 
         setPricingData(null);
         return;
       }
-      const summary = await calculateAllSidesPricing(canvasMap, sides, quantity);
+      const summary = await calculateAllSidesPricing(canvasMap, sides);
       setPricingData(summary);
     };
     calculatePricing();
     // canvasVersion triggers recalculation when canvas objects change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasMap, sides, quantity, canvasVersion]);
+  }, [canvasMap, sides, canvasVersion]);
 
   if (!pricingData) {
     return null;

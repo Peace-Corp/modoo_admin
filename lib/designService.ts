@@ -170,6 +170,9 @@ export async function updateDesign(
     if (data.previewImage !== undefined) {
       updateData.preview_url = data.previewImage;
     }
+    if (data.pricePerItem !== undefined) {
+      updateData.price_per_item = data.pricePerItem;
+    }
 
     const { data: updatedDesign, error } = await supabase
       .from('saved_designs')
