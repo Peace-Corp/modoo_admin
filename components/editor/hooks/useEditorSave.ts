@@ -6,6 +6,7 @@ import { Product, OrderItem, DesignTemplate, SavedDesign, CanvasState } from '@/
 import { serializeCanvasState } from '@/lib/canvasUtils';
 import { saveDesign, updateDesign, SaveDesignData } from '@/lib/designService';
 import { parseCanvasState } from '@/lib/downloadUtils';
+import { calculateAllSidesPricing } from '@/app/utils/canvasPricing';
 import { EditorMode } from './useEditorMode';
 
 interface UseEditorSaveParams {
@@ -95,6 +96,10 @@ export function useEditorSave({
       }
     }
 
+    // Calculate design price including print method costs
+    const pricingSummary = await calculateAllSidesPricing(canvasMap, sides);
+    const pricePerItem = product!.base_price + pricingSummary.totalAdditionalPrice;
+
     // Update existing design or create new one
     if (savedDesign?.id) {
       const updateData: Partial<SaveDesignData> = {
@@ -102,6 +107,7 @@ export function useEditorSave({
         productColor,
         canvasState,
         previewImage,
+        pricePerItem,
       };
 
       const updated = await updateDesign(savedDesign.id, updateData);
@@ -114,7 +120,7 @@ export function useEditorSave({
         productColor,
         canvasState,
         previewImage,
-        pricePerItem: product!.base_price,
+        pricePerItem,
       };
 
       const newDesign = await saveDesign(designData);

@@ -41,6 +41,7 @@ export default function OrderDetailsForm({
   const [variants, setVariants] = useState<OrderVariant[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [designPricePerItem, setDesignPricePerItem] = useState<number | null>(null);
 
   // Shipping fields
   const [shippingMethod, setShippingMethod] = useState<ShippingMethod>('pickup');
@@ -52,6 +53,25 @@ export default function OrderDetailsForm({
     addressLine1: '',
     addressLine2: '',
   });
+
+  // Fetch saved design price
+  useEffect(() => {
+    const fetchDesignPrice = async () => {
+      try {
+        const res = await fetch(`/api/admin/designs/${savedDesignId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const price = data?.data?.price_per_item;
+          if (price && price > 0) {
+            setDesignPricePerItem(price);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch design price:', err);
+      }
+    };
+    fetchDesignPrice();
+  }, [savedDesignId]);
 
   // Initialize variants from product size options
   useEffect(() => {
@@ -69,9 +89,11 @@ export default function OrderDetailsForm({
     return variants.reduce((sum, v) => sum + v.quantity, 0);
   }, [variants]);
 
+  const unitPrice = designPricePerItem ?? product.base_price;
+
   const totalAmount = useMemo(() => {
-    return product.base_price * totalQuantity;
-  }, [product.base_price, totalQuantity]);
+    return unitPrice * totalQuantity;
+  }, [unitPrice, totalQuantity]);
 
   const handleQuantityChange = (index: number, delta: number) => {
     setVariants((prev) => {
@@ -396,8 +418,14 @@ export default function OrderDetailsForm({
           </div>
           <div className="flex justify-between text-gray-700">
             <span>단가</span>
-            <span>{product.base_price.toLocaleString()}원</span>
+            <span>{unitPrice.toLocaleString()}원</span>
           </div>
+          {designPricePerItem && designPricePerItem > product.base_price && (
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>기본가 + 디자인</span>
+              <span>{product.base_price.toLocaleString()}원 + {(designPricePerItem - product.base_price).toLocaleString()}원</span>
+            </div>
+          )}
           <div className="flex justify-between text-gray-700">
             <span>총 수량</span>
             <span>{totalQuantity}개</span>
