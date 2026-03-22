@@ -259,7 +259,7 @@ export default function CoBuyRequestDetailPage() {
   const router = useRouter();
   const requestId = params.requestId as string;
 
-  const { data: requests, mutate } = useSWR<CoBuyRequest[]>(
+  const { data: requests, error: swrError, mutate } = useSWR<CoBuyRequest[]>(
     `/api/admin/cobuy/requests?id=${requestId}`,
     fetcher
   );
@@ -345,6 +345,20 @@ export default function CoBuyRequestDetailPage() {
       mutateComments();
     } catch { /* ignore */ }
   };
+
+  if (swrError) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm text-red-500 mb-3">데이터를 불러오지 못했습니다.</p>
+        <button
+          onClick={() => router.push('/cobuy/requests')}
+          className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md"
+        >
+          목록으로
+        </button>
+      </div>
+    );
+  }
 
   if (!request) {
     return (

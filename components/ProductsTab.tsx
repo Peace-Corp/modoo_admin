@@ -18,7 +18,10 @@ export default function ProductsTab() {
   const { data: products = [], isLoading: loading, mutate } = useSWR<Product[]>('/api/admin/products');
   const { data: categoriesData } = useSWRImmutable<CategoryRecord[]>(
     '/api/admin/categories',
-    (url: string) => fetch(url).then((r) => r.json()).then((j) => j.data || [])
+    (url: string) => fetch(url).then((r) => {
+      if (!r.ok) throw new Error('Failed to fetch categories');
+      return r.json();
+    }).then((j) => j.data || [])
   );
   const categories = categoriesData || [];
   const getCategoryName = (key: string) => categories.find((c) => c.key === key)?.name || key;

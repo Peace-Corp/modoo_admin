@@ -135,7 +135,9 @@ export default function CouponsTab() {
       }
 
       const payload = await response.json();
-      setCoupons((prev) => [payload.data, ...prev]);
+      if (payload.data) {
+        setCoupons((prev) => [payload.data, ...prev]);
+      }
       setShowCreateModal(false);
       resetForm();
     } catch (error) {
@@ -178,9 +180,11 @@ export default function CouponsTab() {
       }
 
       const payload = await response.json();
-      setCoupons((prev) =>
-        prev.map((c) => (c.id === selectedCoupon.id ? payload.data : c))
-      );
+      if (payload.data) {
+        setCoupons((prev) =>
+          prev.map((c) => (c.id === selectedCoupon.id ? payload.data : c))
+        );
+      }
       setShowEditModal(false);
       setSelectedCoupon(null);
       resetForm();

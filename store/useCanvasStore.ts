@@ -283,29 +283,33 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const prevIdx = idx - 1;
     set({ isUndoRedoing: true });
 
-    // Remove current user objects
-    const toRemove = canvas.getObjects().filter(obj => {
-      if (obj.excludeFromExport) return false;
-      // @ts-expect-error - custom data property
-      if (obj.data?.id === 'background-product-image') return false;
-      return true;
-    });
-    toRemove.forEach(obj => canvas.remove(obj));
+    try {
+      // Remove current user objects
+      const toRemove = canvas.getObjects().filter(obj => {
+        if (obj.excludeFromExport) return false;
+        // @ts-expect-error - custom data property
+        if (obj.data?.id === 'background-product-image') return false;
+        return true;
+      });
+      toRemove.forEach(obj => canvas.remove(obj));
 
-    // Restore objects from history
-    const saved = JSON.parse(canvasHistory[activeSideId][prevIdx]);
-    if (saved.length > 0) {
-      const objects = await fabric.util.enlivenObjects(saved);
-      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+      // Restore objects from history
+      const saved = JSON.parse(canvasHistory[activeSideId][prevIdx]);
+      if (saved.length > 0) {
+        const objects = await fabric.util.enlivenObjects(saved);
+        objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+      }
+      canvas.discardActiveObject();
+      canvas.renderAll();
+    } catch (e) {
+      console.error('Failed to undo canvas state:', e);
+    } finally {
+      set((prev) => ({
+        isUndoRedoing: false,
+        historyIndex: { ...prev.historyIndex, [activeSideId]: prevIdx },
+        canvasVersion: prev.canvasVersion + 1,
+      }));
     }
-    canvas.discardActiveObject();
-    canvas.renderAll();
-
-    set((prev) => ({
-      isUndoRedoing: false,
-      historyIndex: { ...prev.historyIndex, [activeSideId]: prevIdx },
-      canvasVersion: prev.canvasVersion + 1,
-    }));
   },
 
   redo: async () => {
@@ -320,29 +324,33 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const nextIdx = idx + 1;
     set({ isUndoRedoing: true });
 
-    // Remove current user objects
-    const toRemove = canvas.getObjects().filter(obj => {
-      if (obj.excludeFromExport) return false;
-      // @ts-expect-error - custom data property
-      if (obj.data?.id === 'background-product-image') return false;
-      return true;
-    });
-    toRemove.forEach(obj => canvas.remove(obj));
+    try {
+      // Remove current user objects
+      const toRemove = canvas.getObjects().filter(obj => {
+        if (obj.excludeFromExport) return false;
+        // @ts-expect-error - custom data property
+        if (obj.data?.id === 'background-product-image') return false;
+        return true;
+      });
+      toRemove.forEach(obj => canvas.remove(obj));
 
-    // Restore objects from history
-    const saved = JSON.parse(history[nextIdx]);
-    if (saved.length > 0) {
-      const objects = await fabric.util.enlivenObjects(saved);
-      objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+      // Restore objects from history
+      const saved = JSON.parse(history[nextIdx]);
+      if (saved.length > 0) {
+        const objects = await fabric.util.enlivenObjects(saved);
+        objects.forEach((obj) => canvas.add(obj as fabric.FabricObject));
+      }
+      canvas.discardActiveObject();
+      canvas.renderAll();
+    } catch (e) {
+      console.error('Failed to redo canvas state:', e);
+    } finally {
+      set((prev) => ({
+        isUndoRedoing: false,
+        historyIndex: { ...prev.historyIndex, [activeSideId]: nextIdx },
+        canvasVersion: prev.canvasVersion + 1,
+      }));
     }
-    canvas.discardActiveObject();
-    canvas.renderAll();
-
-    set((prev) => ({
-      isUndoRedoing: false,
-      historyIndex: { ...prev.historyIndex, [activeSideId]: nextIdx },
-      canvasVersion: prev.canvasVersion + 1,
-    }));
   },
 
   initializeLayerColors: (sideId, layers) =>

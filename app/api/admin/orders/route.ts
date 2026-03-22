@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const status = url.searchParams.get('status') || 'all';
     const factoryId = url.searchParams.get('factoryId');
+    const orderId = url.searchParams.get('orderId');
 
     const adminClient = createAdminClient();
 
@@ -47,6 +48,11 @@ export async function GET(request: Request) {
       : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(count)`;
 
     let query = adminClient.from('orders').select(selectFields as string);
+
+    // Filter by specific orderId if provided
+    if (orderId) {
+      query = query.eq('id', orderId);
+    }
 
     if (isFactoryUser) {
       // For factory users, sort by deadline (nulls last to show orders with deadlines first)
@@ -226,13 +232,23 @@ export async function PATCH(request: Request) {
 
     // Add factory-specific fields if provided
     if (deadlineInput !== undefined) {
-      updateData.deadline = deadlineInput ? new Date(deadlineInput).toISOString() : null;
+      if (deadlineInput) {
+        const date = new Date(deadlineInput);
+        updateData.deadline = isNaN(date.getTime()) ? null : date.toISOString();
+      } else {
+        updateData.deadline = null;
+      }
     }
     if (factoryAmountInput !== undefined) {
       updateData.factory_amount = factoryAmountInput;
     }
     if (factoryPaymentDateInput !== undefined) {
-      updateData.factory_payment_date = factoryPaymentDateInput ? new Date(factoryPaymentDateInput).toISOString() : null;
+      if (factoryPaymentDateInput) {
+        const date = new Date(factoryPaymentDateInput);
+        updateData.factory_payment_date = isNaN(date.getTime()) ? null : date.toISOString();
+      } else {
+        updateData.factory_payment_date = null;
+      }
     }
     if (factoryPaymentStatusInput !== undefined) {
       updateData.factory_payment_status = factoryPaymentStatusInput;
