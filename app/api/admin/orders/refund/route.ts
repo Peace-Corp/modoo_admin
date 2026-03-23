@@ -205,6 +205,7 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
       refund_reason: reason.trim(),
       order_status: 'cancelled',
+      factory_status: 'cancelled',
     };
 
     if (isFullRefund) {
