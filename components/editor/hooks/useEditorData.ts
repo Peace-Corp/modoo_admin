@@ -170,15 +170,17 @@ export function useEditorData({
 
           // Extract product color: canvas state takes priority, then item options
           let extractedColor = '#FFFFFF';
+          let foundInCanvasState = false;
           const states = Object.values(item.canvas_state || {});
           for (const stateRaw of states) {
             const state = parseCanvasState(stateRaw);
             if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
               extractedColor = state.productColor;
+              foundInCanvasState = true;
               break;
             }
           }
-          if (extractedColor === '#FFFFFF') {
+          if (!foundInCanvasState) {
             const variants = item.item_options?.variants;
             if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
               extractedColor = variants[0].color_hex;

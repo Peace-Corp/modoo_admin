@@ -202,6 +202,29 @@ export default function OrderModePanel({
     return dimensions;
   }, [product, orderItem.canvas_state]);
 
+  // Static fallback previews extracted from canvas_state JSON.
+  // Unlike objectPreviews (which relies on live canvas toDataURL and can fail due to
+  // timing / image-decode races), these are available immediately from the stored data.
+  const staticImagePreviews = useMemo(() => {
+    const urls: Record<string, string> = {};
+    const sides = product.configuration || [];
+    for (const side of sides) {
+      const canvasStateRaw = orderItem.canvas_state?.[side.id];
+      const canvasState = parseCanvasState(canvasStateRaw);
+      if (!canvasState || !Array.isArray(canvasState.objects)) continue;
+      for (const obj of canvasState.objects) {
+        if (!obj || typeof obj !== 'object') continue;
+        if (obj.data?.id === 'background-product-image') continue;
+        const objectId = obj.data?.objectId || obj.objectId;
+        if (!objectId) continue;
+        if ((obj.type || '').toLowerCase() !== 'image') continue;
+        const src = obj.data?.supabaseUrl || obj.data?.originalFileUrl || obj.src;
+        if (typeof src === 'string' && src) urls[objectId] = src;
+      }
+    }
+    return urls;
+  }, [product, orderItem.canvas_state]);
+
   // Generate object previews from live canvas using per-object toDataURL
   const objectPreviews = useMemo(() => {
     const previews: Record<string, string> = {};
@@ -564,7 +587,9 @@ export default function OrderModePanel({
                   <div className="text-[11px] font-bold text-gray-700 mb-2 pb-1 border-b border-gray-100">[{side.name}]</div>
                   <div className="space-y-3">
                     {sideObjects.map((dim, index) => {
-                      const preview = dim.objectId ? objectPreviews[dim.objectId] : undefined;
+                      const preview = dim.objectId
+                        ? (objectPreviews[dim.objectId] || staticImagePreviews[dim.objectId])
+                        : undefined;
                       return (
                         <div key={index} className="border border-gray-200 rounded-lg bg-gray-50/50 overflow-hidden">
                           {/* Preview image */}

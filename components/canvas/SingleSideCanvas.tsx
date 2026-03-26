@@ -1258,12 +1258,39 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           canvas.requestRenderAll();
         });
       }
+      // Re-apply color filter from canvasState to handle the timing issue where
+      // the main useEffect ran before canvasState was available, causing the
+      // initial filter to use a stale/default productColor value.
+      if (!hasLayers && parsedState?.productColor) {
+        canvas.getObjects().forEach((obj) => {
+          const objData = obj as { data?: { id?: string } };
+          if (objData.data?.id === 'background-product-image' && obj.type === 'image') {
+            const imgObj = obj as fabric.FabricImage;
+            imgObj.filters = [];
+            const colorFilter = new fabric.filters.BlendColor({
+              color: parsedState.productColor as string,
+              mode: 'multiply',
+              alpha: 1,
+            });
+            imgObj.filters.push(colorFilter);
+            imgObj.applyFilters();
+          }
+        });
+        canvas.requestRenderAll();
+      }
+
       suppressObjectAddedRef.current = false;
       resetHistory(side.id); // Reset history so loaded state becomes the initial state
 
       if (onCanvasReady) {
         onCanvasReady(canvas, side.id, scaleRef.current);
       }
+
+      // Signal that objects are loaded so consumers like objectPreviews can regenerate.
+      // Use rAF to ensure the canvas has painted the new objects before previews are captured.
+      requestAnimationFrame(() => {
+        incrementCanvasVersion();
+      });
     };
 
     applyObjects().catch(() => {
