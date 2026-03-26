@@ -112,6 +112,9 @@ export function useEditorSave({
 
       const updated = await updateDesign(savedDesign.id, updateData);
       if (!updated) return { success: false, error: '디자인 업데이트에 실패했습니다.' };
+
+      syncDesignToOrderItems(savedDesign.id);
+
       return { success: true, id: updated.id };
     } else {
       const designData: SaveDesignData = {
@@ -152,6 +155,7 @@ export function useEditorSave({
         ...existingState,
         objects: serializedObjects,
         productColor,
+        layerColors: layerColors[side.id] || {},
       };
     }
 
@@ -268,4 +272,18 @@ export function useEditorSave({
   }
 
   return { handleSave };
+}
+
+function syncDesignToOrderItems(designId: string) {
+  fetch(`/api/admin/designs/${designId}/sync-orders`, { method: 'POST' })
+    .then((res) => {
+      if (!res.ok) console.warn('order_items sync failed:', res.status);
+      return res.json();
+    })
+    .then((data) => {
+      if (data?.data?.synced > 0) {
+        console.log(`Synced ${data.data.synced} order item(s) with design ${designId}`);
+      }
+    })
+    .catch((err) => console.warn('order_items sync error:', err));
 }

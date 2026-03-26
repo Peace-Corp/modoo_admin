@@ -778,7 +778,7 @@ const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
 
       // Check for color in canvasState first, then fall back
       const state = typeof canvasState === 'string' ? JSON.parse(canvasState) : canvasState;
-      const selectedColor = state?.layerColors?.[layer.id] || layer.colorOptions[0]?.hex || '#FFFFFF';
+      const selectedColor = state?.layerColors?.[layer.id] || state?.productColor || layer.colorOptions[0]?.hex || '#FFFFFF';
 
       layerImages.forEach((layerImg) => {
         // Remove any existing filters

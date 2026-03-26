@@ -155,186 +155,169 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
     addImage();
   };
 
+  const addSingleImageToCanvas = async (file: File, canvas: fabric.Canvas) => {
+    const supabase = createClient();
+
+    let displayUrl: string;
+    let originalFileUploadResult;
+
+    if (isAiOrPsdFile(file)) {
+      console.log('AI/PSD file detected, converting to PNG...');
+
+      setLoadingMessage('파일 변환 중...');
+      setLoadingSubmessage(`${file.name} - AI/PSD 파일을 PNG로 변환하고 있습니다.`);
+      setIsLoadingModalOpen(true);
+
+      const conversionResult = await convertToPNG(file);
+
+      if (!conversionResult.success || !conversionResult.pngBlob) {
+        setIsLoadingModalOpen(false);
+        const errorMessage = getConversionErrorMessage(conversionResult.error);
+        console.error('Conversion failed:', conversionResult.error);
+        alert(errorMessage);
+        return;
+      }
+
+      setLoadingMessage('파일 업로드 중...');
+      setLoadingSubmessage(`${file.name} - 변환된 파일을 저장하고 있습니다.`);
+
+      originalFileUploadResult = await uploadFileToStorage(
+        supabase,
+        file,
+        STORAGE_BUCKETS.USER_DESIGNS,
+        STORAGE_FOLDERS.IMAGES
+      );
+
+      if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
+        setIsLoadingModalOpen(false);
+        console.error('Failed to upload original file:', originalFileUploadResult.error);
+        alert('원본 파일 업로드에 실패했습니다. 다시 시도해주세요.');
+        return;
+      }
+
+      const pngFile = new File([conversionResult.pngBlob], `${file.name.split('.')[0]}.png`, {
+        type: 'image/png',
+      });
+
+      const pngUploadResult = await uploadFileToStorage(
+        supabase,
+        pngFile,
+        STORAGE_BUCKETS.USER_DESIGNS,
+        STORAGE_FOLDERS.IMAGES
+      );
+
+      if (!pngUploadResult.success || !pngUploadResult.url) {
+        setIsLoadingModalOpen(false);
+        console.error('Failed to upload PNG:', pngUploadResult.error);
+        alert('변환된 이미지 업로드에 실패했습니다.');
+        return;
+      }
+
+      displayUrl = pngUploadResult.url;
+    } else {
+      originalFileUploadResult = await uploadFileToStorage(
+        supabase,
+        file,
+        STORAGE_BUCKETS.USER_DESIGNS,
+        STORAGE_FOLDERS.IMAGES
+      );
+
+      if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
+        console.error('Failed to upload image:', originalFileUploadResult.error);
+        alert(`이미지 업로드에 실패했습니다: ${file.name}`);
+        return;
+      }
+
+      displayUrl = originalFileUploadResult.url;
+    }
+
+    const img = await fabric.FabricImage.fromURL(displayUrl, {
+      crossOrigin: 'anonymous',
+    });
+
+    const maxWidth = canvas.width * 0.5;
+    const maxHeight = canvas.height * 0.5;
+
+    if (img.width > maxWidth || img.height > maxHeight) {
+      const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+      img.scale(scale);
+    }
+
+    img.set({
+      left: canvas.width / 2,
+      top: canvas.height / 2,
+      originX: 'center',
+      originY: 'center',
+    });
+
+    // @ts-expect-error - Adding custom data property to FabricImage
+    img.data = {
+      // @ts-expect-error - Reading data property
+      ...(img.data || {}),
+      supabaseUrl: displayUrl,
+      supabasePath: originalFileUploadResult.path,
+      originalFileUrl: originalFileUploadResult.url,
+      originalFileName: file.name,
+      fileType: file.type || 'unknown',
+      isConverted: isAiOrPsdFile(file),
+      uploadedAt: new Date().toISOString(),
+    };
+
+    canvas.add(img);
+    canvas.setActiveObject(img);
+    canvas.renderAll();
+    incrementCanvasVersion();
+  };
+
   const addImage = async () => {
     console.log('addImage called - opening file picker');
     const canvas = getActiveCanvas();
-    if (!canvas) return; // for error handling
+    if (!canvas) return;
 
-    // Create a hidden file input element
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*,.ai,.psd'; // Accept images, AI, and PSD files
+    input.accept = 'image/*,.ai,.psd';
+    input.multiple = true;
 
     input.onchange = async (e: Event) => {
       const target = e.target as HTMLInputElement;
-      const file = target.files?.[0];
-      if (!file) return;
+      const files = target.files;
+      if (!files || files.length === 0) return;
 
-      try {
-        // Create Supabase client for browser
-        const supabase = createClient();
+      const fileList = Array.from(files);
+      const totalCount = fileList.length;
+      const hasConvertible = fileList.some(isAiOrPsdFile);
 
-        let displayUrl: string;
-        let originalFileUploadResult;
+      if (totalCount > 1 || hasConvertible) {
+        setLoadingMessage('이미지 업로드 중...');
+        setLoadingSubmessage(`${totalCount}개 파일 처리 중...`);
+        setIsLoadingModalOpen(true);
+      }
 
-        // Check if file is AI or PSD and needs conversion
-        if (isAiOrPsdFile(file)) {
-          console.log('AI/PSD file detected, converting to PNG...');
-
-          // Show loading modal for conversion
-          setLoadingMessage('파일 변환 중...');
-          setLoadingSubmessage('AI/PSD 파일을 PNG로 변환하고 있습니다. 잠시만 기다려주세요.');
-          setIsLoadingModalOpen(true);
-
-          // Convert AI/PSD to PNG
-          const conversionResult = await convertToPNG(file);
-
-          if (!conversionResult.success || !conversionResult.pngBlob) {
-            setIsLoadingModalOpen(false);
-            const errorMessage = getConversionErrorMessage(conversionResult.error);
-            console.error('Conversion failed:', conversionResult.error);
-            alert(errorMessage);
-            return;
-          }
-
-          console.log('Conversion successful, uploading original file and converted PNG...');
-
-          // Update loading message for upload phase
-          setLoadingMessage('파일 업로드 중...');
-          setLoadingSubmessage('변환된 파일을 저장하고 있습니다.');
-
-          // Upload the ORIGINAL AI/PSD file to Supabase
-          originalFileUploadResult = await uploadFileToStorage(
-            supabase,
-            file,
-            STORAGE_BUCKETS.USER_DESIGNS,
-            STORAGE_FOLDERS.IMAGES
-          );
-
-          if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
-            setIsLoadingModalOpen(false);
-            console.error('Failed to upload original file:', originalFileUploadResult.error);
-            alert('원본 파일 업로드에 실패했습니다. 다시 시도해주세요.');
-            return;
-          }
-
-          console.log('Original file uploaded:', originalFileUploadResult.url);
-
-          // Create a PNG file from the blob for canvas display
-          const pngFile = new File([conversionResult.pngBlob], `${file.name.split('.')[0]}.png`, {
-            type: 'image/png',
-          });
-
-          // Upload the converted PNG for display
-          const pngUploadResult = await uploadFileToStorage(
-            supabase,
-            pngFile,
-            STORAGE_BUCKETS.USER_DESIGNS,
-            STORAGE_FOLDERS.IMAGES
-          );
-
-          if (!pngUploadResult.success || !pngUploadResult.url) {
-            setIsLoadingModalOpen(false);
-            console.error('Failed to upload PNG:', pngUploadResult.error);
-            alert('변환된 이미지 업로드에 실패했습니다.');
-            return;
-          }
-
-          // Use the PNG URL for display
-          displayUrl = pngUploadResult.url;
-          console.log('PNG uploaded for display:', displayUrl);
-        } else {
-          // Regular image file - upload as usual
-          console.log('Uploading image to Supabase...');
-
-          originalFileUploadResult = await uploadFileToStorage(
-            supabase,
-            file,
-            STORAGE_BUCKETS.USER_DESIGNS,
-            STORAGE_FOLDERS.IMAGES
-          );
-
-          if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
-            console.error('Failed to upload image:', originalFileUploadResult.error);
-            alert('이미지 업로드에 실패했습니다. 다시 시도해주세요.');
-            return;
-          }
-
-          // Use the original image URL for display
-          displayUrl = originalFileUploadResult.url;
-          console.log('Image uploaded successfully:', displayUrl);
+      let successCount = 0;
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        if (totalCount > 1) {
+          setLoadingSubmessage(`(${i + 1}/${totalCount}) ${file.name} 처리 중...`);
         }
+        try {
+          await addSingleImageToCanvas(file, canvas);
+          successCount++;
+        } catch (error) {
+          console.error(`Error adding image ${file.name}:`, error);
+        }
+      }
 
-        // Load image from display URL
-        fabric.FabricImage.fromURL(displayUrl, {
-          crossOrigin: 'anonymous',
-        }).then((img) => {
-          // Scale image to fit canvas if it's too large
-          const maxWidth = canvas.width * 0.5;
-          const maxHeight = canvas.height * 0.5;
-
-          if (img.width > maxWidth || img.height > maxHeight) {
-            const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
-            img.scale(scale);
-          }
-
-          // Center the image on canvas
-          img.set({
-            left: canvas.width / 2,
-            top: canvas.height / 2,
-            originX: 'center',
-            originY: 'center',
-          });
-
-          // Store Supabase metadata in the image object
-          // @ts-expect-error - Adding custom data property to FabricImage
-          img.data = {
-            // @ts-expect-error - Reading data property
-            ...(img.data || {}),
-            supabaseUrl: displayUrl, // URL of the display image (PNG for AI/PSD)
-            supabasePath: originalFileUploadResult.path, // Path to original file
-            originalFileUrl: originalFileUploadResult.url, // URL of original file (AI/PSD or image)
-            originalFileName: file.name,
-            fileType: file.type || 'unknown',
-            isConverted: isAiOrPsdFile(file), // Flag to indicate if file was converted
-            uploadedAt: new Date().toISOString(),
-          };
-
-          canvas.add(img);
-          canvas.setActiveObject(img);
-          canvas.renderAll();
-
-          // Trigger pricing recalculation
-          incrementCanvasVersion();
-
-          // Hide loading modal
-          setIsLoadingModalOpen(false);
-
-          // Show success message for converted files
-          if (isAiOrPsdFile(file)) {
-            // Show brief success message
-            setLoadingMessage('완료!');
-            setLoadingSubmessage('파일이 성공적으로 추가되었습니다.');
-            setIsLoadingModalOpen(true);
-
-            // Auto-hide after 1.5 seconds
-            setTimeout(() => {
-              setIsLoadingModalOpen(false);
-            }, 1500);
-          }
-        }).catch((error) => {
-          setIsLoadingModalOpen(false);
-          console.error('Failed to load image:', error);
-          alert('이미지를 불러오는데 실패했습니다.');
-        });
-      } catch (error) {
+      if (totalCount > 1 || hasConvertible) {
+        setLoadingMessage('완료!');
+        setLoadingSubmessage(`${successCount}개 파일이 추가되었습니다.`);
+        setIsLoadingModalOpen(true);
+        setTimeout(() => setIsLoadingModalOpen(false), 1500);
+      } else {
         setIsLoadingModalOpen(false);
-        console.error('Error adding image:', error);
-        alert('이미지 추가 중 오류가 발생했습니다.');
       }
     };
 
-    // Trigger file input click
     input.click();
   };
 

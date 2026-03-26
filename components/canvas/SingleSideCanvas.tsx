@@ -392,9 +392,14 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           const layerImg = layerImagesRef.current.get(layer.id);
           if (layerImg) {
             // Apply initial color filter from canvasState
+            const parsedProductColor = (() => {
+              if (!canvasState) return null;
+              const cs = typeof canvasState === 'string' ? (() => { try { return JSON.parse(canvasState); } catch { return null; } })() : canvasState;
+              return typeof cs?.productColor === 'string' ? cs.productColor : null;
+            })();
             const initialColor = (typeof initialLayerColors[layer.id] === 'string' && (initialLayerColors[layer.id] as string).startsWith('#'))
               ? (initialLayerColors[layer.id] as string)
-              : layer.colorOptions[0]?.hex || '#FFFFFF';
+              : parsedProductColor || layer.colorOptions[0]?.hex || '#FFFFFF';
 
             layerImg.filters = [];
             const colorFilter = new fabric.filters.BlendColor({
