@@ -17,6 +17,7 @@
     "lodash.difference": "^4.5.0",
     "lucide-react": "^0.562.0",
     "next": "^16.1.6",
+    "nodemailer": "^7.0.3",
     "opentype.js": "^1.3.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -27,10 +28,11 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "8.57.1",
-    "eslint-config-next": "^12.0.4",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -238,6 +238,8 @@ export interface OrderItem {
   product_id: string;
   design_id: string | null;
   product_title: string;
+  /** Display name from saved design (nullable in DB) */
+  design_title: string | null;
   quantity: number;
   price_per_item: number;
 
@@ -720,4 +722,22 @@ export interface PartnerMallPreset {
   placement: LogoPlacement;
   created_at: string;
   updated_at: string;
+}
+
+export interface EditorChatMessageSender {
+  name: string | null;
+  role: 'admin' | 'customer' | 'factory';
+  email: string;
+}
+
+export interface EditorChatMessage {
+  id: string;
+  order_item_id: string;
+  sender_id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'resolved';
+  attachment_urls: string[];
+  created_at: string;
+  updated_at: string;
+  sender?: EditorChatMessageSender;
 }

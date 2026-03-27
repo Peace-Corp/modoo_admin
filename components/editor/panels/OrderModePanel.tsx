@@ -11,6 +11,7 @@ import {
   CanvasState,
   CustomFont,
 } from '@/types/types';
+import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import {
   parseCanvasState,
@@ -678,6 +679,16 @@ export default function OrderModePanel({
         ) : (
           <p className="text-[11px] text-gray-400">객체 정보가 없습니다.</p>
         )}
+      </div>
+
+      {/* Design Chat */}
+      <div className="p-3 border-b">
+        <DesignChatPanel
+          orderItemId={orderItem.id}
+          productTitle={product.title}
+          designTitle={orderItem.design_title || undefined}
+          compact
+        />
       </div>
 
       {/* Custom Fonts */}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Package, Clock, CreditCard, MessageSquare, Paperclip, Download } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { Order, OrderItem } from '@/types/types';
+import DesignChatPanel from '@/components/orders/DesignChatPanel';
 
 interface FactoryOrderInfoPanelProps {
   orderId: string;
@@ -224,6 +225,16 @@ export default function FactoryOrderInfoPanel({
           )}
         </div>
       )}
+
+      {/* Design Chat */}
+      <div className="p-3 border-b">
+        <DesignChatPanel
+          orderItemId={currentOrderItemId}
+          productTitle={orderItems.find((i) => i.id === currentOrderItemId)?.product_title}
+          designTitle={orderItems.find((i) => i.id === currentOrderItemId)?.design_title || undefined}
+          compact
+        />
+      </div>
 
       {/* Order Items Navigation */}
       {orderItems.length > 0 && (

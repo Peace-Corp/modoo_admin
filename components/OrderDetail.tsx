@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
 import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, Paperclip, User, Receipt, Truck } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
+import DesignChatPanel from '@/components/orders/DesignChatPanel';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -63,6 +64,7 @@ export default function OrderDetail({
 
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [factoryAccordionOpen, setFactoryAccordionOpen] = useState(false);
+  const [chatItemId, setChatItemId] = useState<string | null>(null);
 
   // Share link state
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -578,11 +580,27 @@ export default function OrderDetail({
                         )}
                         <div className="flex justify-between items-center mt-2">
                           <span className="text-sm text-gray-600">수량: {item.quantity}</span>
-                          {!isFactoryUser && (
-                            <span className="font-semibold text-gray-900">
-                              {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChatItemId(chatItemId === item.id ? null : item.id);
+                              }}
+                              className={`p-1.5 rounded transition-colors ${
+                                chatItemId === item.id
+                                  ? 'bg-blue-100 text-blue-600'
+                                  : 'hover:bg-gray-100 text-gray-400 hover:text-blue-600'
+                              }`}
+                              title="디자인 소통"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                            {!isFactoryUser && (
+                              <span className="font-semibold text-gray-900">
+                                {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -591,6 +609,16 @@ export default function OrderDetail({
               )}
             </div>
           </div>
+
+          {/* Design Chat Panel */}
+          {chatItemId && (
+            <DesignChatPanel
+              orderItemId={chatItemId}
+              productTitle={orderItems.find((i) => i.id === chatItemId)?.product_title}
+              designTitle={orderItems.find((i) => i.id === chatItemId)?.design_title || undefined}
+              onClose={() => setChatItemId(null)}
+            />
+          )}
 
           {/* Customer Note & Attachments */}
           {(order.customer_note || (order.attachment_urls && order.attachment_urls.length > 0)) && (
