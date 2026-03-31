@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase-admin';
+import { sendFactoryAssignmentEmail } from '@/lib/gmail';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -43,8 +45,18 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update the order with factory allocation
-    const updateData: any = {
+    const adminClient = createAdminClient();
+
+    const { data: existingOrder } = await adminClient
+      .from('orders')
+      .select('assigned_manufacturer_id, customer_note, share_token')
+      .eq('id', orderId)
+      .single();
+
+    const previousManufacturerId = existingOrder?.assigned_manufacturer_id ?? null;
+    const isNewFactoryAssignment = assigned_manufacturer_id !== previousManufacturerId;
+
+    const updateData: Record<string, unknown> = {
       assigned_manufacturer_id,
       factory_payment_status: factory_payment_status || 'pending',
     };
@@ -74,6 +86,26 @@ export async function PATCH(request: NextRequest) {
         { error: 'Failed to allocate factory' },
         { status: 500 }
       );
+    }
+
+    if (isNewFactoryAssignment) {
+      const { data: manufacturer } = await adminClient
+        .from('manufacturers')
+        .select('id, name, email')
+        .eq('id', assigned_manufacturer_id)
+        .single();
+
+      if (manufacturer?.email) {
+        sendFactoryAssignmentEmail({
+          factoryName: manufacturer.name,
+          factoryEmail: manufacturer.email,
+          orderId,
+          deadline: deadline ?? null,
+          factoryAmount: factory_amount ?? null,
+          customerNote: existingOrder?.customer_note ?? null,
+          shareToken: data?.share_token ?? existingOrder?.share_token ?? null,
+        }).catch((err) => console.error('Factory assignment email failed:', err));
+      }
     }
 
     return NextResponse.json({ data });

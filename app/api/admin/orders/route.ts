@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
+import { sendFactoryAssignmentEmail } from '@/lib/gmail';
 
 export async function GET(request: Request) {
   try {
@@ -212,17 +213,29 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '유효하지 않은 결제 상태입니다.' }, { status: 400 });
     }
 
+    let manufacturerInfo: { id: string; name: string; email: string | null } | null = null;
+
     if (manufacturerId !== null) {
       const { data: manufacturer, error: manufacturerError } = await adminClient
         .from('manufacturers')
-        .select('id')
+        .select('id, name, email')
         .eq('id', manufacturerId)
         .single();
 
       if (manufacturerError || !manufacturer) {
         return NextResponse.json({ error: '공장을 찾을 수 없습니다.' }, { status: 400 });
       }
+      manufacturerInfo = manufacturer;
     }
+
+    const { data: existingOrder } = await adminClient
+      .from('orders')
+      .select('assigned_manufacturer_id, customer_note, share_token')
+      .eq('id', orderId)
+      .single();
+
+    const previousManufacturerId = existingOrder?.assigned_manufacturer_id ?? null;
+    const isNewFactoryAssignment = manufacturerId !== null && manufacturerId !== previousManufacturerId;
 
     // Build update object
     const updateData: Record<string, unknown> = {
@@ -269,6 +282,18 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (isNewFactoryAssignment && manufacturerInfo?.email) {
+      sendFactoryAssignmentEmail({
+        factoryName: manufacturerInfo.name,
+        factoryEmail: manufacturerInfo.email,
+        orderId,
+        deadline: (updateData.deadline as string | null) ?? deadlineInput ?? null,
+        factoryAmount: factoryAmountInput ?? null,
+        customerNote: existingOrder?.customer_note ?? null,
+        shareToken: data?.share_token ?? existingOrder?.share_token ?? null,
+      }).catch((err) => console.error('Factory assignment email failed:', err));
     }
 
     return NextResponse.json({ data });
