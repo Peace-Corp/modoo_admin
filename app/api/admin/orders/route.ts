@@ -294,6 +294,12 @@ export async function PATCH(request: Request) {
     }
 
     if (isNewFactoryAssignment && manufacturerInfo?.email) {
+      const { data: items } = await adminClient
+        .from('order_items')
+        .select('id, product_id, product_title, design_title, quantity, thumbnail_url')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
+
       sendFactoryAssignmentEmail({
         factoryName: manufacturerInfo.name,
         factoryEmail: manufacturerInfo.email,
@@ -302,6 +308,14 @@ export async function PATCH(request: Request) {
         factoryAmount: factoryAmountInput ?? null,
         customerNote: existingOrder?.customer_note ?? null,
         shareToken: data?.share_token ?? existingOrder?.share_token ?? null,
+        orderItems: (items || []).map((item) => ({
+          id: item.id,
+          productId: item.product_id,
+          productTitle: item.product_title,
+          designTitle: item.design_title,
+          quantity: item.quantity,
+          thumbnailUrl: item.thumbnail_url,
+        })),
       }).catch((err) => console.error('Factory assignment email failed:', err));
     }
 
