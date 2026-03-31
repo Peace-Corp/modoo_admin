@@ -71,6 +71,7 @@ export default function OrderDetail({
   const [generatingShareLink, setGeneratingShareLink] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
+  const [updatingFactoryStatus, setUpdatingFactoryStatus] = useState(false);
 
   useEffect(() => {
     fetchOrderItems();
@@ -365,6 +366,29 @@ export default function OrderDetail({
     }
   };
 
+  const handleFactoryStatusChange = async (newStatus: string) => {
+    setUpdatingFactoryStatus(true);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+      }
+      const { data } = await response.json();
+      onOrderUpdate(data as Order);
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating factory status:', error);
+      setAssignError(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+    } finally {
+      setUpdatingFactoryStatus(false);
+    }
+  };
+
   const handleItemClick = useCallback((itemId: string) => {
     router.push(`/orders/${order.id}/items/${itemId}`);
   }, [router, order.id]);
@@ -507,9 +531,19 @@ export default function OrderDetail({
           {order.assigned_manufacturer_id && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">공장</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(order.factory_status)}`}>
-                {factoryStatusLabel(order.factory_status)}
-              </span>
+              <select
+                value={order.factory_status || 'pending'}
+                onChange={(e) => handleFactoryStatusChange(e.target.value)}
+                disabled={updatingFactoryStatus}
+                className={`px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${factoryStatusColor(order.factory_status)}`}
+              >
+                <option value="pending">대기중</option>
+                <option value="assigned">배정완료</option>
+                <option value="in_progress">작업중</option>
+                <option value="completed">작업완료</option>
+                <option value="shipped">출고완료</option>
+                <option value="cancelled">취소</option>
+              </select>
             </div>
           )}
           <div className="flex items-center gap-2">

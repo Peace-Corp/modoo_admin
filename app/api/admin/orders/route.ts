@@ -266,11 +266,20 @@ export async function PATCH(request: Request) {
     if (factoryPaymentStatusInput !== undefined) {
       updateData.factory_payment_status = factoryPaymentStatusInput;
     }
-    if (orderStatusInput !== null) {
-      updateData.order_status = orderStatusInput;
-    }
     if (factoryStatusInput !== null) {
       updateData.factory_status = factoryStatusInput;
+      if (orderStatusInput !== null) {
+        updateData.order_status = orderStatusInput;
+      } else {
+        // Auto-sync order_status when only factoryStatus is provided
+        if (factoryStatusInput === 'shipped') {
+          updateData.order_status = 'shipping';
+        } else if (['assigned', 'in_progress', 'completed'].includes(factoryStatusInput)) {
+          updateData.order_status = 'in_production';
+        }
+      }
+    } else if (orderStatusInput !== null) {
+      updateData.order_status = orderStatusInput;
     }
 
     const { data, error } = await adminClient
