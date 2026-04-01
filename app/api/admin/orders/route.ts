@@ -300,6 +300,9 @@ export async function PATCH(request: Request) {
         .eq('order_id', orderId)
         .order('created_at', { ascending: true });
 
+      const reqOrigin = new URL(request.url).origin;
+      const emailAppUrl = process.env.NEXT_PUBLIC_APP_URL || reqOrigin;
+
       sendFactoryAssignmentEmail({
         factoryName: manufacturerInfo.name,
         factoryEmail: manufacturerInfo.email,
@@ -308,6 +311,7 @@ export async function PATCH(request: Request) {
         factoryAmount: factoryAmountInput ?? null,
         customerNote: existingOrder?.customer_note ?? null,
         shareToken: data?.share_token ?? existingOrder?.share_token ?? null,
+        appUrl: emailAppUrl,
         orderItems: (items || []).map((item) => ({
           id: item.id,
           productId: item.product_id,

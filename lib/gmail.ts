@@ -30,6 +30,7 @@ export interface FactoryAssignmentEmailParams {
   customerNote: string | null;
   shareToken: string | null;
   orderItems: OrderItemForEmail[];
+  appUrl: string;
 }
 
 let transporter: nodemailer.Transporter | null = null;
@@ -85,9 +86,8 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
     customerNote,
     shareToken,
     orderItems,
+    appUrl,
   } = params;
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
   const shortOrderId = orderId.slice(0, 8).toUpperCase();
   const formattedDeadline = deadline
     ? new Date(deadline).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -131,9 +131,10 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
   const orderItemsHtml = orderItems.map((item) => {
     const name = item.designTitle || item.productTitle;
     const editorLink = appUrl ? `${appUrl}/orders/${orderId}/items/${item.id}` : null;
-    const thumbnailHtml = item.thumbnailUrl
+    const isUsableUrl = item.thumbnailUrl && !item.thumbnailUrl.startsWith('data:');
+    const thumbnailHtml = isUsableUrl
       ? `<img src="${item.thumbnailUrl}" alt="${name}" style="width: 72px; height: 72px; object-fit: contain; border-radius: 6px; border: 1px solid #e5e7eb; background: #f9fafb;" />`
-      : `<div style="width: 72px; height: 72px; border-radius: 6px; border: 1px solid #e5e7eb; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 11px; text-align: center;">미리보기<br/>없음</div>`;
+      : `<div style="width: 72px; height: 72px; border-radius: 6px; border: 1px solid #e5e7eb; background: #f3f4f6; color: #9ca3af; font-size: 11px; text-align: center; line-height: 72px;">미리보기</div>`;
 
     return `
       <tr style="border-bottom: 1px solid #f3f4f6;">
