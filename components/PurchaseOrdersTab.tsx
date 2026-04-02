@@ -77,6 +77,32 @@ function ColorDot({ hex }: { hex?: string }) {
   );
 }
 
+function ImagePreviewModal({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-3xl max-h-[90vh] w-full" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="absolute -top-3 -right-3 z-10 w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-lg text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-auto max-h-[85vh] object-contain rounded-lg shadow-2xl bg-white"
+        />
+        {alt && (
+          <p className="text-center text-sm text-white/80 mt-3">{alt}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PurchaseOrdersTab() {
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +114,7 @@ export default function PurchaseOrdersTab() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('orders');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
 
   const swrKey = useMemo(() => {
     const params = new URLSearchParams();
@@ -449,6 +476,7 @@ export default function PurchaseOrdersTab() {
             formatDate={formatDate}
             formatDateTime={formatDateTime}
             filteredItems={filteredItems}
+            onImageClick={(src, alt) => setPreviewImage({ src, alt })}
           />
         ) : (
           <SummaryView summaryData={summaryData} />
@@ -466,6 +494,14 @@ export default function PurchaseOrdersTab() {
           </div>
         )}
       </div>
+
+      {previewImage && (
+        <ImagePreviewModal
+          src={previewImage.src}
+          alt={previewImage.alt}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
     </div>
   );
 }
@@ -482,6 +518,7 @@ function OrdersView({
   formatDate,
   formatDateTime,
   filteredItems,
+  onImageClick,
 }: {
   groupedByOrder: Map<string, { order: PurchaseOrderItemWithOrder['orders']; items: PurchaseOrderItemWithOrder[] }>;
   expandedOrders: Set<string>;
@@ -494,6 +531,7 @@ function OrdersView({
   formatDate: (d: string | null) => string;
   formatDateTime: (d: string) => string;
   filteredItems: PurchaseOrderItemWithOrder[];
+  onImageClick: (src: string, alt: string) => void;
 }) {
   if (groupedByOrder.size === 0) return null;
 
@@ -583,11 +621,20 @@ function OrdersView({
 
                       {/* Thumbnail */}
                       {item.thumbnail_url && (
-                        <img
-                          src={item.thumbnail_url}
-                          alt=""
-                          className="w-10 h-10 rounded object-cover border border-gray-200 shrink-0"
-                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onImageClick(item.thumbnail_url!, item.design_title || item.product_title);
+                          }}
+                          className="shrink-0 rounded overflow-hidden border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all cursor-zoom-in"
+                        >
+                          <img
+                            src={item.thumbnail_url}
+                            alt=""
+                            className="w-10 h-10 object-cover"
+                          />
+                        </button>
                       )}
 
                       {/* Product Info */}
