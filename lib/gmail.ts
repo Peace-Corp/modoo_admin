@@ -100,7 +100,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
   const orderDetailLink = appUrl ? `${appUrl}/orders/${orderId}` : null;
   const sharedOrderLink = shareToken && appUrl ? `${appUrl}/shared/order/${shareToken}` : null;
 
-  const subject = `[모두의 유니폼] 새로운 주문이 배정되었습니다 (${shortOrderId})`;
+  const subject = `[모두의 유니폼] 작업지시서 전달 드립니다 (${shortOrderId})`;
 
   const itemsText = orderItems.map((item, i) => {
     const name = item.designTitle || item.productTitle;
@@ -110,7 +110,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
   const text = [
     `안녕하세요, ${factoryName}님.`,
     '',
-    `새로운 주문(${shortOrderId})이 귀사에 배정되었습니다.`,
+    `작업지시서(${shortOrderId}) 전달 드립니다.`,
     '',
     formattedDeadline ? `납기일: ${formattedDeadline}` : null,
     formattedAmount ? `공장 금액: ${formattedAmount}` : null,
@@ -153,11 +153,11 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
   const html = `
     <div style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
       <div style="background: #2563eb; color: #fff; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-        <h2 style="margin: 0; font-size: 18px;">새로운 주문이 배정되었습니다</h2>
+        <h2 style="margin: 0; font-size: 18px;">작업지시서 전달 드립니다</h2>
       </div>
       <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
         <p style="margin: 0 0 16px; color: #374151;">안녕하세요, <strong>${factoryName}</strong>님.</p>
-        <p style="margin: 0 0 20px; color: #374151;">새로운 주문이 귀사에 배정되었습니다. 아래 내용을 확인해 주세요.</p>
+        <p style="margin: 0 0 20px; color: #374151;">작업지시서를 전달드립니다. 아래 내용을 확인해 주세요.</p>
 
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
           <tr style="border-bottom: 1px solid #f3f4f6;">
