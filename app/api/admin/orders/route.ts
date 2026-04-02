@@ -44,10 +44,10 @@ export async function GET(request: Request) {
     // Factory users: sort by deadline (마감일), Admin users: sort by created_at
     const isFactoryUser = profile.role === 'factory';
 
-    // Select only fields needed for the list view, include order_items count
+    // Select only fields needed for the list view, include order_items count/status
     const selectFields = isFactoryUser
       ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(count)`
-      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(count)`;
+      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(id, purchase_order_status, design_title)`;
 
     let query = adminClient.from('orders').select(selectFields as string);
 

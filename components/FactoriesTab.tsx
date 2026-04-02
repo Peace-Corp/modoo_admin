@@ -31,6 +31,7 @@ const emptyForm = {
   name: '',
   email: '',
   phone_number: '',
+  address: '',
   is_active: true,
 };
 
@@ -645,6 +646,7 @@ export default function FactoriesTab() {
           name: form.name.trim(),
           email: form.email.trim() || null,
           phone_number: form.phone_number.trim() || null,
+          address: form.address.trim() || null,
           is_active: form.is_active,
         }),
       });
@@ -703,6 +705,7 @@ export default function FactoriesTab() {
       name: factory.name,
       email: factory.email ?? '',
       phone_number: factory.phone_number ?? '',
+      address: factory.address ?? '',
     });
   };
 
@@ -722,6 +725,7 @@ export default function FactoriesTab() {
       name: editDraft.name.trim(),
       email: editDraft.email.trim() || null,
       phone_number: editDraft.phone_number.trim() || null,
+      address: editDraft.address.trim() || null,
     });
 
     if (updated) {
@@ -895,6 +899,16 @@ export default function FactoriesTab() {
             />
           </label>
         </div>
+        <label className="block space-y-2 text-xs sm:text-sm text-gray-700">
+          주소
+          <input
+            type="text"
+            value={form.address}
+            onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+            placeholder="공장 주소를 입력하세요"
+            className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm"
+          />
+        </label>
         <label className="inline-flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
@@ -929,6 +943,9 @@ export default function FactoriesTab() {
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   전화번호
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  주소
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   소속 사용자
@@ -998,6 +1015,24 @@ export default function FactoriesTab() {
                         ) : (
                           <span className="text-sm text-gray-900">
                             {factory.phone_number || '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editDraft?.address || ''}
+                            onChange={(event) =>
+                              setEditDraft((prev) =>
+                                prev ? { ...prev, address: event.target.value } : prev
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                        ) : (
+                          <span className="text-sm text-gray-900 max-w-[200px] truncate block" title={factory.address || ''}>
+                            {factory.address || '-'}
                           </span>
                         )}
                       </td>
@@ -1099,7 +1134,7 @@ export default function FactoriesTab() {
                     </tr>
                     {creatingAccountForId === factory.id && (
                       <tr className="bg-green-50">
-                        <td colSpan={6} className="px-4 py-3">
+                        <td colSpan={7} className="px-4 py-3">
                           <div className="space-y-3">
                             <div className="flex items-center gap-2">
                               <UserPlus className="w-4 h-4 text-green-700" />
@@ -1163,7 +1198,7 @@ export default function FactoriesTab() {
                     )}
                     {isExpanded && (
                       <tr className="bg-gray-50">
-                        <td colSpan={6} className="px-4 py-3">
+                        <td colSpan={7} className="px-4 py-3">
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -1280,14 +1315,18 @@ export default function FactoriesTab() {
                     </button>
                   </div>
                   {isEditing ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="email" value={editDraft?.email || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, email: e.target.value} : prev)} placeholder="이메일" className="px-2 py-1 border border-gray-300 rounded text-xs" />
-                      <input type="text" value={editDraft?.phone_number || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, phone_number: e.target.value} : prev)} placeholder="전화번호" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="email" value={editDraft?.email || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, email: e.target.value} : prev)} placeholder="이메일" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                        <input type="text" value={editDraft?.phone_number || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, phone_number: e.target.value} : prev)} placeholder="전화번호" className="px-2 py-1 border border-gray-300 rounded text-xs" />
+                      </div>
+                      <input type="text" value={editDraft?.address || ''} onChange={(e) => setEditDraft((prev) => prev ? {...prev, address: e.target.value} : prev)} placeholder="주소" className="w-full px-2 py-1 border border-gray-300 rounded text-xs" />
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                       <span>{factory.email || '-'}</span>
                       <span>{factory.phone_number || '-'}</span>
+                      {factory.address && <span className="truncate max-w-[150px]" title={factory.address}>{factory.address}</span>}
                       <button onClick={() => setExpandedFactoryId((prev) => prev === factory.id ? null : factory.id)} className="text-blue-600 hover:text-blue-700"><Users className="w-3 h-3 inline mr-0.5" />{members.length}명</button>
                     </div>
                   )}

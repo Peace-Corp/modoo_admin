@@ -10,9 +10,9 @@ import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 import RefundModal from '@/components/orders/RefundModal';
 
-// Extended order type with item count from API
+// Extended order type with item count/purchase status from API
 type OrderWithItemCount = Order & {
-  order_items?: { count: number }[];
+  order_items?: { count: number }[] | { id: string; purchase_order_status: string; design_title?: string | null }[];
 };
 
 export default function OrdersTab() {
@@ -223,8 +223,26 @@ export default function OrdersTab() {
 
   // Get order item count from the API response
   const getOrderItemCount = (order: OrderWithItemCount) => {
-    const count = order.order_items?.[0]?.count;
-    return count !== undefined ? count : '-';
+    const items = order.order_items;
+    if (!items || items.length === 0) return '-';
+    if ('count' in items[0]) return items[0].count;
+    return items.length;
+  };
+
+  // Get purchase order status summary for admin view
+  const getPurchaseOrderSummary = (order: OrderWithItemCount): { label: string; color: string } => {
+    const items = order.order_items;
+    if (!items || items.length === 0 || ('count' in (items[0] || {}))) {
+      return { label: '-', color: 'bg-gray-100 text-gray-800' };
+    }
+    const statuses = (items as { id: string; purchase_order_status: string }[]).map(
+      (i) => i.purchase_order_status
+    );
+    const allOrdered = statuses.every((s) => s === 'ordered' || s === 'received');
+    const allPending = statuses.every((s) => s === 'pending');
+    if (allPending) return { label: '발주대기', color: 'bg-orange-100 text-orange-800' };
+    if (allOrdered) return { label: '발주완료', color: 'bg-green-100 text-green-800' };
+    return { label: '부분발주', color: 'bg-blue-100 text-blue-800' };
   };
 
   const getFactoryLabel = (manufacturerId: string | null | undefined) => {
@@ -385,6 +403,9 @@ export default function OrdersTab() {
                 // Admin table headers - full info
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    디자인 제목
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     주문 ID
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -404,6 +425,9 @@ export default function OrdersTab() {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     배정 상태
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    발주
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     작업
@@ -474,6 +498,22 @@ export default function OrdersTab() {
                   ) : (
                     // Admin row - full info
                     <>
+                      <td className="px-4 py-3">
+                        <div className="text-sm text-gray-900 max-w-[160px] truncate" title={
+                          (order.order_items as { design_title?: string | null }[] | undefined)
+                            ?.map(i => i.design_title)
+                            .filter(Boolean)
+                            .join(', ') || ''
+                        }>
+                          {(() => {
+                            const titles = (order.order_items as { design_title?: string | null }[] | undefined)
+                              ?.map(i => i.design_title)
+                              .filter(Boolean) as string[] | undefined;
+                            if (!titles || titles.length === 0) return <span className="text-gray-400">-</span>;
+                            return titles.join(', ');
+                          })()}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm font-mono text-blue-600">{order.id}</div>
                       </td>
@@ -529,6 +569,18 @@ export default function OrdersTab() {
                         ) : (
                           <span className="text-xs text-gray-400">-</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(() => {
+                          const ps = getPurchaseOrderSummary(order);
+                          return ps.label !== '-' ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${ps.color}`}>
+                              {ps.label}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
@@ -626,6 +678,12 @@ export default function OrdersTab() {
                     <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
                     <span className="font-medium text-gray-700">{order.total_amount.toLocaleString()}원</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{order.payment_status}</span>
+                    {(() => {
+                      const ps = getPurchaseOrderSummary(order);
+                      return ps.label !== '-' ? (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ps.color}`}>{ps.label}</span>
+                      ) : null;
+                    })()}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.created_at)}</span>

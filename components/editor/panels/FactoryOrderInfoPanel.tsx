@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, Clock, CreditCard, MessageSquare, Paperclip, Download } from 'lucide-react';
+import { Package, Clock, CreditCard, MessageSquare } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import type { Order, OrderItem } from '@/types/types';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
+import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 
 interface FactoryOrderInfoPanelProps {
   orderId: string;
@@ -23,6 +24,7 @@ export default function FactoryOrderInfoPanel({
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [localAttachmentUrls, setLocalAttachmentUrls] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -40,7 +42,10 @@ export default function FactoryOrderInfoPanel({
         const ordersPayload = await ordersRes.json();
         const orders: Order[] = ordersPayload?.data || [];
         const found = orders.find((o) => o.id === orderId);
-        if (found) setOrder(found);
+        if (found) {
+          setOrder(found);
+          setLocalAttachmentUrls(found.attachment_urls || []);
+        }
       }
 
       if (itemsRes.ok) {
@@ -186,7 +191,7 @@ export default function FactoryOrderInfoPanel({
       )}
 
       {/* Customer Note & Attachments */}
-      {order && (order.customer_note || (order.attachment_urls && order.attachment_urls.length > 0)) && (
+      {order && (
         <div className="p-3 border-b">
           {order.customer_note && (
             <div className="mb-2">
@@ -197,32 +202,12 @@ export default function FactoryOrderInfoPanel({
               <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
             </div>
           )}
-          {order.attachment_urls && order.attachment_urls.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Paperclip className="w-3.5 h-3.5 text-gray-500" />
-                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">첨부파일 ({order.attachment_urls.length})</h3>
-              </div>
-              <div className="space-y-1">
-                {order.attachment_urls.map((url, index) => {
-                  const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
-                  return (
-                    <a
-                      key={index}
-                      href={url}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-colors"
-                    >
-                      <Download className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{decodeURIComponent(filename)}</span>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <OrderAttachmentSection
+            orderId={orderId}
+            attachmentUrls={localAttachmentUrls}
+            onUrlsUpdated={setLocalAttachmentUrls}
+            compact
+          />
         </div>
       )}
 

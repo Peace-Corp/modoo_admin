@@ -42,7 +42,7 @@ export async function GET() {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('manufacturers')
-      .select('id, name, email, phone_number, is_active, created_at, updated_at')
+      .select('id, name, email, phone_number, address, is_active, created_at, updated_at')
       .order('name', { ascending: true });
 
     if (error) {
@@ -65,6 +65,7 @@ export async function POST(request: Request) {
     const name = payload?.name;
     const email = payload?.email ?? null;
     const phoneNumber = payload?.phone_number ?? null;
+    const address = payload?.address ?? null;
     const isActive = payload?.is_active ?? true;
 
     if (!name || typeof name !== 'string') {
@@ -90,11 +91,12 @@ export async function POST(request: Request) {
         name: name.trim(),
         email,
         phone_number: phoneNumber,
+        address,
         is_active: isActive,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .select('id, name, email, phone_number, is_active, created_at, updated_at')
+      .select('id, name, email, phone_number, address, is_active, created_at, updated_at')
       .single();
 
     if (error) {
@@ -142,6 +144,10 @@ export async function PATCH(request: Request) {
       updateData.phone_number = payload.phone_number ?? null;
     }
 
+    if (payload?.address !== undefined) {
+      updateData.address = payload.address ?? null;
+    }
+
     if (payload?.is_active !== undefined) {
       if (typeof payload.is_active !== 'boolean') {
         return NextResponse.json({ error: '활성 상태 형식이 올바르지 않습니다.' }, { status: 400 });
@@ -158,7 +164,7 @@ export async function PATCH(request: Request) {
       .from('manufacturers')
       .update(updateData)
       .eq('id', factoryId)
-      .select('id, name, email, phone_number, is_active, created_at, updated_at')
+      .select('id, name, email, phone_number, address, is_active, created_at, updated_at')
       .single();
 
     if (error) {

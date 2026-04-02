@@ -274,6 +274,10 @@ export interface OrderItem {
   // Retouch request flag
   retouch_requested?: boolean;
 
+  // Purchase order tracking
+  purchase_order_status: 'pending' | 'ordered' | 'received' | 'cancelled';
+  purchase_ordered_at: string | null;
+
   // Joined from products table
   products?: { product_code: string | null } | null;
 
@@ -363,6 +367,7 @@ export interface Factory {
   name: string;
   email: string | null;
   phone_number: string | null;
+  address: string | null;
   is_active: boolean | null;
   created_at: string;
   updated_at: string;

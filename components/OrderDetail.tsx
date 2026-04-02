@@ -3,9 +3,10 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, Paperclip, User, Receipt, Truck } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
+import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -65,6 +66,7 @@ export default function OrderDetail({
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [factoryAccordionOpen, setFactoryAccordionOpen] = useState(false);
   const [chatItemId, setChatItemId] = useState<string | null>(null);
+  const [localAttachmentUrls, setLocalAttachmentUrls] = useState<string[]>(order.attachment_urls || []);
 
   // Share link state
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -655,46 +657,23 @@ export default function OrderDetail({
           )}
 
           {/* Customer Note & Attachments */}
-          {(order.customer_note || (order.attachment_urls && order.attachment_urls.length > 0)) && (
-            <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-amber-50/50">
-                <MessageSquare className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-semibold text-gray-900">고객 요청사항</h3>
-              </div>
-              <div className="p-4 space-y-3">
-                {order.customer_note && (
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
-                )}
-                {order.attachment_urls && order.attachment_urls.length > 0 && (
-                  <div>
-                    {order.customer_note && <div className="border-t border-gray-100 pt-3" />}
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Paperclip className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-xs text-gray-500">첨부파일 ({order.attachment_urls.length})</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {order.attachment_urls.map((url, index) => {
-                        const filename = url.split('/').pop() || `첨부파일 ${index + 1}`;
-                        return (
-                          <a
-                            key={index}
-                            href={url}
-                            download
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-md hover:bg-blue-100 transition-colors"
-                          >
-                            <Download className="w-4 h-4 shrink-0" />
-                            <span className="truncate">{decodeURIComponent(filename)}</span>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+          <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-amber-50/50">
+              <MessageSquare className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-semibold text-gray-900">고객 요청사항 / 첨부파일</h3>
             </div>
-          )}
+            <div className="p-4 space-y-3">
+              {order.customer_note && (
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
+              )}
+              {order.customer_note && <div className="border-t border-gray-100 pt-3" />}
+              <OrderAttachmentSection
+                orderId={order.id}
+                attachmentUrls={localAttachmentUrls}
+                onUrlsUpdated={setLocalAttachmentUrls}
+              />
+            </div>
+          </div>
 
           {/* CoBuy participant information - hidden for factory users (contains personal info) */}
           {order.order_category === 'cobuy' && !isFactoryUser && (
