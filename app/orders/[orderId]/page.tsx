@@ -108,6 +108,7 @@ export default function OrderDetailPage() {
               name: user.manufacturer_name || user.email || 'Factory',
               email: user.email || null,
               phone_number: user.phone || null,
+              address: null,
               is_active: true,
               created_at: user.created_at || new Date().toISOString(),
               updated_at: user.created_at || new Date().toISOString(),
