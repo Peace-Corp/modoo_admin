@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendFactoryAssignmentEmail } from '@/lib/gmail';
+import { randomBytes } from 'crypto';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -102,6 +103,41 @@ export async function PATCH(request: NextRequest) {
           .eq('order_id', orderId)
           .order('created_at', { ascending: true });
 
+        let finalShareToken = data?.share_token ?? existingOrder?.share_token ?? null;
+        if (!finalShareToken) {
+          finalShareToken = randomBytes(16).toString('hex');
+          await adminClient.from('orders').update({ share_token: finalShareToken }).eq('id', orderId);
+        }
+
+        const emailItems = await Promise.all(
+          (items || []).map(async (item) => {
+            let publicUrl = item.thumbnail_url;
+            if (publicUrl && publicUrl.startsWith('data:')) {
+              try {
+                const res = await fetch(publicUrl);
+                const blob = await res.blob();
+                const ext = blob.type.split('/')[1] || 'png';
+                const fileName = `email-thumbnails/${orderId}/${item.id}.${ext}`;
+                const { error: upErr } = await adminClient.storage
+                  .from('user-designs')
+                  .upload(fileName, blob, { contentType: blob.type, upsert: true });
+                if (!upErr) {
+                  const { data: urlData } = adminClient.storage.from('user-designs').getPublicUrl(fileName);
+                  publicUrl = urlData.publicUrl;
+                }
+              } catch { /* keep null */ }
+            }
+            return {
+              id: item.id,
+              productId: item.product_id,
+              productTitle: item.product_title,
+              designTitle: item.design_title,
+              quantity: item.quantity,
+              thumbnailUrl: publicUrl,
+            };
+          })
+        );
+
         const reqOrigin = new URL(request.url).origin;
         const emailAppUrl = process.env.NEXT_PUBLIC_APP_URL || reqOrigin;
 
@@ -112,16 +148,9 @@ export async function PATCH(request: NextRequest) {
           deadline: deadline ?? null,
           factoryAmount: factory_amount ?? null,
           customerNote: existingOrder?.customer_note ?? null,
-          shareToken: data?.share_token ?? existingOrder?.share_token ?? null,
+          shareToken: finalShareToken,
           appUrl: emailAppUrl,
-          orderItems: (items || []).map((item) => ({
-            id: item.id,
-            productId: item.product_id,
-            productTitle: item.product_title,
-            designTitle: item.design_title,
-            quantity: item.quantity,
-            thumbnailUrl: item.thumbnail_url,
-          })),
+          orderItems: emailItems,
         }).catch((err) => console.error('Factory assignment email failed:', err));
       }
     }

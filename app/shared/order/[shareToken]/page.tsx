@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Package, Calendar, Clock, CreditCard, ArrowLeft, Download } from 'lucide-react';
 import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
 import EditorCanvas from '@/components/editor/EditorCanvas';
@@ -335,7 +335,9 @@ function SharedItemView({
 
 export default function SharedOrderPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const shareToken = params?.shareToken as string;
+  const initialItemId = searchParams?.get('item') || null;
 
   const [order, setOrder] = useState<PublicOrder | null>(null);
   const [items, setItems] = useState<PublicOrderItem[]>([]);
@@ -344,12 +346,21 @@ export default function SharedOrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deepLinkApplied, setDeepLinkApplied] = useState(false);
 
   useEffect(() => {
     if (!shareToken) return;
     fetchOrderData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareToken]);
+
+  useEffect(() => {
+    if (!deepLinkApplied && initialItemId && items.length > 0) {
+      const found = items.find((i) => i.id === initialItemId);
+      if (found) setSelectedItemId(found.id);
+      setDeepLinkApplied(true);
+    }
+  }, [initialItemId, items, deepLinkApplied]);
 
   const fetchOrderData = async () => {
     setLoading(true);

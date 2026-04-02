@@ -28,7 +28,7 @@ export interface FactoryAssignmentEmailParams {
   deadline: string | null;
   factoryAmount: number | null;
   customerNote: string | null;
-  shareToken: string | null;
+  shareToken: string;
   orderItems: OrderItemForEmail[];
   appUrl: string;
 }
@@ -97,8 +97,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
     : null;
   const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  const orderDetailLink = appUrl ? `${appUrl}/orders/${orderId}` : null;
-  const sharedOrderLink = shareToken && appUrl ? `${appUrl}/shared/order/${shareToken}` : null;
+  const sharedPageUrl = `${appUrl}/shared/order/${shareToken}`;
 
   const subject = `[모두의 유니폼] 작업지시서 전달 드립니다 (${shortOrderId})`;
 
@@ -121,8 +120,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
     '',
     customerNote ? `고객 메모: ${customerNote}` : null,
     '',
-    orderDetailLink ? `주문 상세: ${orderDetailLink}` : null,
-    sharedOrderLink ? `공유 링크: ${sharedOrderLink}` : null,
+    `주문 상세: ${sharedPageUrl}`,
     '',
     '감사합니다.',
     '모두의 유니폼',
@@ -130,7 +128,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
 
   const orderItemsHtml = orderItems.map((item) => {
     const name = item.designTitle || item.productTitle;
-    const editorLink = appUrl ? `${appUrl}/orders/${orderId}/items/${item.id}` : null;
+    const itemLink = `${sharedPageUrl}?item=${item.id}`;
     const isUsableUrl = item.thumbnailUrl && !item.thumbnailUrl.startsWith('data:');
     const thumbnailHtml = isUsableUrl
       ? `<img src="${item.thumbnailUrl}" alt="${name}" style="width: 72px; height: 72px; object-fit: contain; border-radius: 6px; border: 1px solid #e5e7eb; background: #f9fafb;" />`
@@ -145,7 +143,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
           <p style="margin: 0 0 4px; color: #111827; font-size: 14px; font-weight: 600;">${name}</p>
           ${item.designTitle && item.designTitle !== item.productTitle ? `<p style="margin: 0 0 4px; color: #6b7280; font-size: 12px;">${item.productTitle}</p>` : ''}
           <p style="margin: 0 0 8px; color: #374151; font-size: 13px;">수량: <strong>${item.quantity}개</strong></p>
-          ${editorLink ? `<a href="${editorLink}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 6px 14px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 500; border: 1px solid #e5e7eb;">디자인 상세 보기</a>` : ''}
+          <a href="${itemLink}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 6px 14px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 500; border: 1px solid #e5e7eb;">디자인 상세 보기</a>
         </td>
       </tr>`;
   }).join('');
@@ -192,8 +190,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
         </table>` : ''}
 
         <div style="text-align: center; margin: 24px 0;">
-          ${orderDetailLink ? `<a href="${orderDetailLink}" style="display: inline-block; background: #2563eb; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 600; margin: 0 6px 8px;">주문 내역 보기</a>` : ''}
-          ${sharedOrderLink ? `<a href="${sharedOrderLink}" style="display: inline-block; background: #fff; color: #2563eb; padding: 11px 28px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 600; border: 1px solid #2563eb; margin: 0 6px 8px;">공유 링크 열기</a>` : ''}
+          <a href="${sharedPageUrl}" style="display: inline-block; background: #2563eb; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 600;">주문 내역 보기</a>
         </div>
 
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
