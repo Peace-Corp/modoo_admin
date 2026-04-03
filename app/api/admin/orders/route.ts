@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
     // Select only fields needed for the list view, include order_items count/status
     const selectFields = isFactoryUser
-      ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(count)`
+      ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(id, design_title, thumbnail_url)`
       : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(id, purchase_order_status, design_title)`;
 
     let query = adminClient.from('orders').select(selectFields as string);
@@ -135,12 +135,20 @@ export async function PATCH(request: Request) {
 
     const adminClient = createAdminClient();
 
-    // Factory users can only update factory_status on their own orders
+    // Factory users can update factory_status and factory_amount on their own orders
     if (isFactoryUser) {
       const factoryStatusInput = payload?.factoryStatus;
-      const validFactoryStatuses = ['assigned', 'in_progress', 'completed', 'shipped'];
-      if (!factoryStatusInput || !validFactoryStatuses.includes(factoryStatusInput)) {
-        return NextResponse.json({ error: '유효하지 않은 공장 배정 상태입니다.' }, { status: 400 });
+      const factoryAmountInput = payload?.factoryAmount;
+
+      if (!factoryStatusInput && factoryAmountInput === undefined) {
+        return NextResponse.json({ error: '변경할 항목이 없습니다.' }, { status: 400 });
+      }
+
+      if (factoryStatusInput) {
+        const validFactoryStatuses = ['assigned', 'in_progress', 'completed', 'shipped'];
+        if (!validFactoryStatuses.includes(factoryStatusInput)) {
+          return NextResponse.json({ error: '유효하지 않은 공장 배정 상태입니다.' }, { status: 400 });
+        }
       }
 
       // Verify order belongs to this factory
@@ -158,18 +166,22 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '이 주문에 대한 권한이 없습니다.' }, { status: 403 });
       }
 
-      // Auto-set order_status based on factory_status
-      // shipped → order_status = shipping
-      // assigned, in_progress, completed → order_status = in_production
-      const orderStatus = factoryStatusInput === 'shipped' ? 'shipping' : 'in_production';
+      const updateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (factoryStatusInput) {
+        updateData.factory_status = factoryStatusInput;
+        updateData.order_status = factoryStatusInput === 'shipped' ? 'shipping' : 'in_production';
+      }
+
+      if (factoryAmountInput !== undefined) {
+        updateData.factory_amount = factoryAmountInput;
+      }
 
       const { data, error } = await adminClient
         .from('orders')
-        .update({
-          factory_status: factoryStatusInput,
-          order_status: orderStatus,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', orderId)
         .select()
         .single();

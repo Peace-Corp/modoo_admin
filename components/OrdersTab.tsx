@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { Factory, Order } from '@/types/types';
-import { Package, Calendar, Clock, Plus, Factory as FactoryIcon, RotateCcw, Search, X } from 'lucide-react';
+import { Package, Calendar, Clock, Plus, Factory as FactoryIcon, RotateCcw, Search, X, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
@@ -12,7 +12,7 @@ import RefundModal from '@/components/orders/RefundModal';
 
 // Extended order type with item count/purchase status from API
 type OrderWithItemCount = Order & {
-  order_items?: { count: number }[] | { id: string; purchase_order_status: string; design_title?: string | null }[];
+  order_items?: { count: number }[] | { id: string; purchase_order_status?: string; design_title?: string | null; thumbnail_url?: string | null }[];
 };
 
 export default function OrdersTab() {
@@ -156,6 +156,40 @@ export default function OrdersTab() {
   };
 
   const [updatingFactoryStatusId, setUpdatingFactoryStatusId] = useState<string | null>(null);
+  const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
+  const [editingAmountValue, setEditingAmountValue] = useState<string>('');
+  const [savingAmountId, setSavingAmountId] = useState<string | null>(null);
+
+  const handleFactoryAmountSave = useCallback(async (orderId: string) => {
+    const numValue = editingAmountValue.trim() === '' ? null : Number(editingAmountValue.replace(/,/g, ''));
+    if (numValue !== null && isNaN(numValue)) {
+      setErrorMessage('유효한 금액을 입력해주세요.');
+      return;
+    }
+    setSavingAmountId(orderId);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, factoryAmount: numValue }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '금액 저장에 실패했습니다.');
+      }
+      const { data } = await response.json();
+      mutateOrders(
+        orders.map((o) => (o.id === orderId ? { ...o, factory_amount: data.factory_amount } : o)),
+        { revalidate: false }
+      );
+      setEditingAmountId(null);
+    } catch (error) {
+      console.error('Error updating factory amount:', error);
+      setErrorMessage(error instanceof Error ? error.message : '금액 저장에 실패했습니다.');
+    } finally {
+      setSavingAmountId(null);
+    }
+  }, [editingAmountValue, orders, mutateOrders]);
 
   const handleFactoryStatusChange = useCallback(async (orderId: string, newStatus: string) => {
     setUpdatingFactoryStatusId(orderId);
@@ -197,6 +231,61 @@ export default function OrdersTab() {
     });
   }, []);
 
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = useCallback((key: string) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return key;
+      }
+      setSortDir('asc');
+      return key;
+    });
+  }, []);
+
+  const getSortValue = useCallback((order: OrderWithItemCount, key: string): string | number | null => {
+    switch (key) {
+      case 'design':
+        return getDesignTitles(order).toLowerCase() || null;
+      case 'id':
+        return order.id;
+      case 'order_category':
+        return order.order_category || '';
+      case 'item_count': {
+        const c = getOrderItemCount(order);
+        return typeof c === 'number' ? c : 0;
+      }
+      case 'factory_status':
+        return order.factory_status || '';
+      case 'deadline':
+        return order.deadline ? new Date(order.deadline).getTime() : null;
+      case 'factory_amount':
+        return order.factory_amount ?? null;
+      case 'factory_payment_date':
+        return order.factory_payment_date ? new Date(order.factory_payment_date).getTime() : null;
+      case 'factory_payment_status':
+        return order.factory_payment_status || '';
+      case 'customer_name':
+        return order.customer_name?.toLowerCase() || '';
+      case 'created_at':
+        return new Date(order.created_at).getTime();
+      case 'total_amount':
+        return order.total_amount ?? 0;
+      case 'order_status':
+        return order.order_status || '';
+      case 'factory':
+        return getFactoryLabel(order.assigned_manufacturer_id);
+      case 'design_title': {
+        const items = order.order_items as { design_title?: string | null }[] | undefined;
+        return items?.map(i => i.design_title).filter(Boolean).join(', ').toLowerCase() || '';
+      }
+      default:
+        return null;
+    }
+  }, [factoryMap]);
+
   const filteredOrders = useMemo(() => {
     let result = orders;
 
@@ -219,8 +308,28 @@ export default function OrdersTab() {
       );
     }
 
+    // Sorting
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        const aVal = getSortValue(a, sortKey);
+        const bVal = getSortValue(b, sortKey);
+        const nullA = aVal === null || aVal === '';
+        const nullB = bVal === null || bVal === '';
+        if (nullA && nullB) return 0;
+        if (nullA) return 1;
+        if (nullB) return -1;
+        let cmp = 0;
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          cmp = aVal - bVal;
+        } else {
+          cmp = String(aVal).localeCompare(String(bVal), 'ko');
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+
     return result;
-  }, [orders, selectedStatuses, searchQuery, isFactoryUser]);
+  }, [orders, selectedStatuses, searchQuery, isFactoryUser, sortKey, sortDir, getSortValue]);
 
   // Get order item count from the API response
   const getOrderItemCount = (order: OrderWithItemCount) => {
@@ -228,6 +337,22 @@ export default function OrdersTab() {
     if (!items || items.length === 0) return '-';
     if ('count' in items[0]) return items[0].count;
     return items.length;
+  };
+
+  const getFirstThumbnail = (order: OrderWithItemCount): string | null => {
+    const items = order.order_items;
+    if (!items || items.length === 0) return null;
+    if ('count' in (items[0] || {})) return null;
+    const typed = items as { thumbnail_url?: string | null }[];
+    return typed.find(i => i.thumbnail_url)?.thumbnail_url || null;
+  };
+
+  const getDesignTitles = (order: OrderWithItemCount): string => {
+    const items = order.order_items;
+    if (!items || items.length === 0) return '';
+    if ('count' in (items[0] || {})) return '';
+    const typed = items as { design_title?: string | null }[];
+    return typed.map(i => i.design_title).filter(Boolean).join(', ');
   };
 
   // Get purchase order status summary for admin view
@@ -373,60 +498,63 @@ export default function OrdersTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               {isFactoryUser ? (
-                // Factory user table headers - limited info, no personal data
+                // Factory user table headers
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 ID
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 구분
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    수량
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    공장 배정 상태
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    마감일
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    금액
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    결제 예정일
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    결제 상태
-                  </th>
+                  {([
+                    { key: 'design', label: '디자인' },
+                    { key: 'id', label: '주문 ID' },
+                    { key: 'order_category', label: '주문 구분' },
+                    { key: 'item_count', label: '수량' },
+                    { key: 'factory_status', label: '공장 배정 상태' },
+                    { key: 'deadline', label: '마감일' },
+                    { key: 'factory_amount', label: '공장배정금액' },
+                    { key: 'factory_payment_date', label: '결제 예정일' },
+                    { key: 'factory_payment_status', label: '결제 상태' },
+                  ] as const).map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {sortKey === col.key ? (
+                          sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-30" />
+                        )}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               ) : (
-                // Admin table headers - full info
+                // Admin table headers
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    디자인 제목
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 ID
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    고객 정보
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 일시
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    금액
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    주문 상태
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    공장 배정
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    배정 상태
-                  </th>
+                  {([
+                    { key: 'design_title', label: '디자인 제목' },
+                    { key: 'id', label: '주문 ID' },
+                    { key: 'customer_name', label: '고객 정보' },
+                    { key: 'created_at', label: '주문 일시' },
+                    { key: 'total_amount', label: '금액' },
+                    { key: 'order_status', label: '주문 상태' },
+                    { key: 'factory', label: '공장 배정' },
+                    { key: 'factory_status', label: '배정 상태' },
+                  ] as const).map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {sortKey === col.key ? (
+                          sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-30" />
+                        )}
+                      </span>
+                    </th>
+                  ))}
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     발주
                   </th>
@@ -446,6 +574,23 @@ export default function OrdersTab() {
                   {isFactoryUser ? (
                     // Factory user row - limited info, no personal data
                     <>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const thumb = getFirstThumbnail(order);
+                            return thumb ? (
+                              <img src={thumb} alt="" className="w-10 h-10 rounded object-cover shrink-0 border border-gray-200" />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            );
+                          })()}
+                          <div className="text-sm text-gray-900 max-w-[140px] truncate" title={getDesignTitles(order)}>
+                            {getDesignTitles(order) || <span className="text-gray-400">-</span>}
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm font-mono text-blue-600">{order.id}</div>
                       </td>
@@ -476,10 +621,46 @@ export default function OrdersTab() {
                           {formatDateShort(order.deadline)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-sm font-semibold text-gray-900">
-                          {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
-                        </span>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {editingAmountId === order.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={editingAmountValue}
+                              onChange={(e) => setEditingAmountValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleFactoryAmountSave(order.id);
+                                if (e.key === 'Escape') setEditingAmountId(null);
+                              }}
+                              autoFocus
+                              className="w-24 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="금액 입력"
+                            />
+                            <button
+                              onClick={() => handleFactoryAmountSave(order.id)}
+                              disabled={savingAmountId === order.id}
+                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {savingAmountId === order.id ? '...' : '저장'}
+                            </button>
+                            <button
+                              onClick={() => setEditingAmountId(null)}
+                              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingAmountId(order.id);
+                              setEditingAmountValue(order.factory_amount ? String(order.factory_amount) : '');
+                            }}
+                            className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors"
+                          >
+                            {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '금액 입력'}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm text-gray-900">
@@ -622,26 +803,79 @@ export default function OrdersTab() {
               {isFactoryUser ? (
                 /* Factory user mobile card */
                 <>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-xs font-mono text-blue-600 truncate">{order.id}</div>
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={order.factory_status || 'assigned'}
-                        onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                        disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
-                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
-                      >
-                        <option value="assigned">배정완료</option>
-                        <option value="in_progress">작업중</option>
-                        <option value="completed">작업완료</option>
-                        <option value="shipped">출고완료</option>
-                      </select>
+                  <div className="flex items-start gap-3">
+                    {(() => {
+                      const thumb = getFirstThumbnail(order);
+                      return thumb ? (
+                        <img src={thumb} alt="" className="w-12 h-12 rounded object-cover shrink-0 border border-gray-200" />
+                      ) : (
+                        <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                          <Package className="w-6 h-6 text-gray-400" />
+                        </div>
+                      );
+                    })()}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-gray-900 truncate" title={getDesignTitles(order)}>
+                            {getDesignTitles(order) || '-'}
+                          </div>
+                          <div className="text-[11px] font-mono text-blue-600 truncate">{order.id}</div>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={order.factory_status || 'assigned'}
+                            onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                            disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
+                            className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
+                          >
+                            <option value="assigned">배정완료</option>
+                            <option value="in_progress">작업중</option>
+                            <option value="completed">작업완료</option>
+                            <option value="shipped">출고완료</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                     <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
                     <span>수량: {getOrderItemCount(order)}</span>
-                    <span className="font-medium text-gray-700">{order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}</span>
+                    <span onClick={(e) => e.stopPropagation()}>
+                      {editingAmountId === order.id ? (
+                        <span className="inline-flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editingAmountValue}
+                            onChange={(e) => setEditingAmountValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleFactoryAmountSave(order.id);
+                              if (e.key === 'Escape') setEditingAmountId(null);
+                            }}
+                            autoFocus
+                            className="w-20 px-1.5 py-0.5 text-[11px] border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="금액"
+                          />
+                          <button
+                            onClick={() => handleFactoryAmountSave(order.id)}
+                            disabled={savingAmountId === order.id}
+                            className="px-1.5 py-0.5 text-[10px] bg-blue-600 text-white rounded disabled:opacity-50"
+                          >
+                            {savingAmountId === order.id ? '...' : '저장'}
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingAmountId(order.id);
+                            setEditingAmountValue(order.factory_amount ? String(order.factory_amount) : '');
+                          }}
+                          className="font-medium text-gray-700 hover:text-blue-600 hover:underline"
+                        >
+                          {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '금액 입력'}
+                        </button>
+                      )}
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />마감: {formatDateShort(order.deadline)}</span>
