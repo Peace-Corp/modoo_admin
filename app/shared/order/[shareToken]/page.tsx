@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { Package, Calendar, Clock, CreditCard, ArrowLeft, Download } from 'lucide-react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { Package, Calendar, Clock, CreditCard, ArrowLeft, Download, LayoutList, MessageSquare, Paperclip } from 'lucide-react';
+import { createClient } from '@/lib/supabase-client';
+import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 import EditorRightPanel from '@/components/editor/EditorRightPanel';
@@ -42,6 +44,8 @@ interface PublicOrder {
   factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
   factory_status: string | null;
   created_at: string;
+  customer_note: string | null;
+  attachment_urls: string[];
 }
 
 interface PublicOrderItem {
@@ -97,10 +101,12 @@ function SharedItemView({
   item,
   productColors,
   onBack,
+  publicOrder,
 }: {
   item: PublicOrderItem;
   productColors: ProductColor[];
   onBack: () => void;
+  publicOrder: PublicOrder;
 }) {
   const { setActiveSide } = useCanvasStore();
   const [isDownloading, setIsDownloading] = useState(false);
@@ -127,6 +133,15 @@ function SharedItemView({
 
   // Build OrderItem-like from PublicOrderItem
   const orderItem = useMemo<OrderItem>(() => item as unknown as OrderItem, [item]);
+
+  const publicOrderData = useMemo(
+    () => ({
+      orderId: publicOrder.id,
+      customerNote: publicOrder.customer_note ?? null,
+      attachmentUrls: Array.isArray(publicOrder.attachment_urls) ? publicOrder.attachment_urls : [],
+    }),
+    [publicOrder.id, publicOrder.customer_note, publicOrder.attachment_urls]
+  );
 
   const sides = product?.configuration || [];
 
@@ -324,6 +339,7 @@ function SharedItemView({
                 product={product}
                 orderItem={orderItem}
                 productColors={productColors}
+                publicOrderData={publicOrderData}
               />
             </EditorRightPanel>
           </div>
@@ -336,6 +352,7 @@ function SharedItemView({
 export default function SharedOrderPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const shareToken = params?.shareToken as string;
   const initialItemId = searchParams?.get('item') || null;
 
@@ -375,7 +392,12 @@ export default function SharedOrderPage() {
       }
 
       const { data } = await response.json();
-      setOrder(data.order);
+      const rawOrder = data.order;
+      setOrder({
+        ...rawOrder,
+        customer_note: rawOrder.customer_note ?? null,
+        attachment_urls: Array.isArray(rawOrder.attachment_urls) ? rawOrder.attachment_urls : [],
+      });
       setItems(data.items || []);
       setProductColorsMap(data.productColors || {});
     } catch (err) {
@@ -418,6 +440,20 @@ export default function SharedOrderPage() {
     });
   };
 
+  const handleAdminOrdersClick = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push('/orders');
+      } else {
+        router.push(`/login?redirect=${encodeURIComponent('/orders')}`);
+      }
+    } catch {
+      router.push(`/login?redirect=${encodeURIComponent('/orders')}`);
+    }
+  };
+
   const selectedItem = useMemo(() => {
     if (!selectedItemId) return null;
     return items.find((item) => item.id === selectedItemId) || null;
@@ -449,12 +485,13 @@ export default function SharedOrderPage() {
   }
 
   // Show full-screen editor-like view when an item is selected
-  if (selectedItem) {
+  if (selectedItem && order) {
     return (
       <SharedItemView
         item={selectedItem}
         productColors={(productColorsMap[selectedItem.product_id] || []) as ProductColor[]}
         onBack={() => setSelectedItemId(null)}
+        publicOrder={order}
       />
     );
   }
@@ -469,7 +506,15 @@ export default function SharedOrderPage() {
               <h1 className="text-lg font-semibold text-gray-900">주문 상세 정보</h1>
               <p className="text-sm text-gray-500">주문 ID: {order.id}</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              <button
+                type="button"
+                onClick={() => void handleAdminOrdersClick()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <LayoutList className="w-4 h-4 shrink-0" />
+                관리자 주문 목록
+              </button>
               <span className={`px-3 py-1 text-sm font-medium rounded-full ${
                 order.order_status === 'delivered' ? 'bg-green-100 text-green-800' :
                 order.order_status === 'in_production' ? 'bg-yellow-100 text-yellow-800' :
@@ -649,6 +694,29 @@ export default function SharedOrderPage() {
                 </div>
               </div>
             </div>
+
+            {/* Customer Note & Attachments */}
+            {(order.customer_note || order.attachment_urls.length > 0) && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                {order.customer_note && (
+                  <div className={order.attachment_urls.length > 0 ? 'mb-4' : ''}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="w-4 h-4 text-gray-500" />
+                      <h2 className="text-sm font-semibold text-gray-900">고객 요청사항</h2>
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
+                  </div>
+                )}
+                {order.attachment_urls.length > 0 && (
+                  <OrderAttachmentSection
+                    orderId={order.id}
+                    attachmentUrls={order.attachment_urls}
+                    onUrlsUpdated={() => {}}
+                    readonly
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </main>

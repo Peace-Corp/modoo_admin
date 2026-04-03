@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 
-export default function LoginPage() {
+/** Same-origin path only; blocks open redirects. */
+function getSafeInternalRedirect(raw: string | null): string {
+  if (!raw || typeof raw !== 'string') return '/';
+  try {
+    const path = decodeURIComponent(raw.trim());
+    if (!path.startsWith('/') || path.startsWith('//')) return '/';
+    if (path.includes('://') || path.includes('\\')) return '/';
+    return path;
+  } catch {
+    return '/';
+  }
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +45,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/');
+    const next = getSafeInternalRedirect(searchParams.get('redirect'));
+    router.push(next);
   };
 
   return (
@@ -99,5 +114,19 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

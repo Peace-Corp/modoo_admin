@@ -42,7 +42,9 @@ export async function GET(
         factory_payment_date,
         factory_payment_status,
         factory_status,
-        created_at
+        created_at,
+        customer_note,
+        attachment_urls
       `)
       .eq('share_token', shareToken)
       .single();

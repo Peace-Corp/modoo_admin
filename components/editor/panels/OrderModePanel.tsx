@@ -48,11 +48,19 @@ const printMethodColorClass = (method?: string | null): string => {
   return (method && colorMap[method]) || 'bg-gray-100 text-gray-600';
 };
 
+export type PublicOrderPanelData = {
+  orderId: string;
+  customerNote: string | null;
+  attachmentUrls: string[];
+};
+
 interface OrderModePanelProps {
   product: Product;
   orderItem: OrderItem;
   productColors: ProductColor[];
   orderId?: string;
+  /** 공유 링크 등 비로그인 컨텍스트: 관리자 API 대신 이 값으로 메모·첨부 표시 */
+  publicOrderData?: PublicOrderPanelData;
 }
 
 export default function OrderModePanel({
@@ -60,6 +68,7 @@ export default function OrderModePanel({
   orderItem,
   productColors,
   orderId,
+  publicOrderData,
 }: OrderModePanelProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const { canvasMap, canvasVersion } = useCanvasStore();
@@ -68,6 +77,11 @@ export default function OrderModePanel({
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
 
   useEffect(() => {
+    if (publicOrderData) {
+      setCustomerNote(publicOrderData.customerNote ?? null);
+      setAttachmentUrls(Array.isArray(publicOrderData.attachmentUrls) ? publicOrderData.attachmentUrls : []);
+      return;
+    }
     if (!orderId) return;
     (async () => {
       try {
@@ -81,7 +95,7 @@ export default function OrderModePanel({
         }
       } catch { /* ignore */ }
     })();
-  }, [orderId]);
+  }, [orderId, publicOrderData]);
 
   const imageUrlsBySide = useMemo(() => coerceImageUrlsBySide(orderItem.image_urls), [orderItem.image_urls]);
   const customFonts = useMemo(() => coerceCustomFonts(orderItem.custom_fonts), [orderItem.custom_fonts]);
@@ -457,12 +471,13 @@ export default function OrderModePanel({
             <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{customerNote}</p>
           </div>
         )}
-        {orderId && (
+        {(orderId || publicOrderData) && (
           <OrderAttachmentSection
-            orderId={orderId}
+            orderId={publicOrderData?.orderId ?? orderId ?? ''}
             attachmentUrls={attachmentUrls}
             onUrlsUpdated={setAttachmentUrls}
             compact
+            readonly={!!publicOrderData}
           />
         )}
       </div>
