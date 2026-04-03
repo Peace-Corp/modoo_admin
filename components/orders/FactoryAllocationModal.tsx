@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Factory, Order } from '@/types/types';
-import { X, Factory as FactoryIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Factory, Order, OrderItem } from '@/types/types';
+import { X, Factory as FactoryIcon, Package } from 'lucide-react';
 
 interface FactoryAllocationModalProps {
   order: Order;
@@ -19,6 +19,8 @@ export default function FactoryAllocationModal({
 }: FactoryAllocationModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(true);
 
   const [formData, setFormData] = useState({
     assigned_manufacturer_id: order.assigned_manufacturer_id || '',
@@ -27,6 +29,23 @@ export default function FactoryAllocationModal({
     factory_payment_date: order.factory_payment_date || '',
     factory_payment_status: order.factory_payment_status || 'pending',
   });
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const res = await fetch(`/api/admin/orders/items?orderId=${order.id}`);
+        if (res.ok) {
+          const payload = await res.json();
+          setOrderItems(payload?.data || []);
+        }
+      } catch {
+        // Non-critical — modal still works without items
+      } finally {
+        setLoadingItems(false);
+      }
+    };
+    fetchItems();
+  }, [order.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,10 +103,56 @@ export default function FactoryAllocationModal({
 
           {/* Order Info */}
           <div className="mb-6 p-4 bg-gray-50 rounded-md">
-            <div className="text-sm text-gray-600 mb-1">주문 ID</div>
-            <div className="font-mono text-sm text-blue-600">{order.id}</div>
-            <div className="text-sm text-gray-600 mt-2">고객명</div>
-            <div className="text-sm font-medium">{order.customer_name}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-600 mb-1">주문 ID</div>
+                <div className="font-mono text-sm text-blue-600">{order.id}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600 mb-1">고객명</div>
+                <div className="text-sm font-medium">{order.customer_name}</div>
+              </div>
+            </div>
+
+            {/* Order Items */}
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Package className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  주문 상품 ({loadingItems ? '...' : orderItems.length})
+                </span>
+              </div>
+              {loadingItems ? (
+                <div className="flex items-center justify-center py-3">
+                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : orderItems.length === 0 ? (
+                <p className="text-xs text-gray-400">상품 정보가 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {orderItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 p-2 bg-white rounded border border-gray-200">
+                      <div className="w-10 h-10 bg-gray-100 rounded shrink-0 overflow-hidden">
+                        {item.thumbnail_url ? (
+                          <img src={item.thumbnail_url} alt={item.product_title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-gray-900 truncate">{item.product_title}</div>
+                        {item.design_title && (
+                          <div className="text-[11px] text-gray-500 truncate">{item.design_title}</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 shrink-0">x{item.quantity}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-4">

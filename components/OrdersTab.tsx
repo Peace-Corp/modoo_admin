@@ -339,12 +339,19 @@ export default function OrdersTab() {
     return items.length;
   };
 
-  const getFirstThumbnail = (order: OrderWithItemCount): string | null => {
+  const getThumbnails = (order: OrderWithItemCount): string[] => {
     const items = order.order_items;
-    if (!items || items.length === 0) return null;
-    if ('count' in (items[0] || {})) return null;
+    if (!items || items.length === 0) return [];
+    if ('count' in (items[0] || {})) return [];
     const typed = items as { thumbnail_url?: string | null }[];
-    return typed.find(i => i.thumbnail_url)?.thumbnail_url || null;
+    return typed.map(i => i.thumbnail_url).filter((url): url is string => !!url);
+  };
+
+  const getItemCount = (order: OrderWithItemCount): number => {
+    const items = order.order_items;
+    if (!items || items.length === 0) return 0;
+    if ('count' in (items[0] || {})) return (items[0] as { count: number }).count;
+    return items.length;
   };
 
   const getDesignTitles = (order: OrderWithItemCount): string => {
@@ -577,12 +584,31 @@ export default function OrdersTab() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {(() => {
-                            const thumb = getFirstThumbnail(order);
-                            return thumb ? (
-                              <img src={thumb} alt="" className="w-10 h-10 rounded object-cover shrink-0 border border-gray-200" />
-                            ) : (
-                              <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                                <Package className="w-5 h-5 text-gray-400" />
+                            const thumbs = getThumbnails(order);
+                            const count = getItemCount(order);
+                            if (thumbs.length === 0) {
+                              return (
+                                <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                                  <Package className="w-5 h-5 text-gray-400" />
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="relative shrink-0" style={{ width: thumbs.length > 1 ? 48 : 40, height: 40 }}>
+                                {thumbs.slice(0, 2).map((thumb, i) => (
+                                  <img
+                                    key={i}
+                                    src={thumb}
+                                    alt=""
+                                    className="w-10 h-10 rounded object-cover border border-gray-200 absolute top-0"
+                                    style={{ left: i * 8, zIndex: thumbs.length - i }}
+                                  />
+                                ))}
+                                {count > 1 && (
+                                  <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center leading-none px-1 min-w-[18px] z-10">
+                                    {count}
+                                  </span>
+                                )}
                               </div>
                             );
                           })()}
@@ -805,12 +831,31 @@ export default function OrdersTab() {
                 <>
                   <div className="flex items-start gap-3">
                     {(() => {
-                      const thumb = getFirstThumbnail(order);
-                      return thumb ? (
-                        <img src={thumb} alt="" className="w-12 h-12 rounded object-cover shrink-0 border border-gray-200" />
-                      ) : (
-                        <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                          <Package className="w-6 h-6 text-gray-400" />
+                      const thumbs = getThumbnails(order);
+                      const count = getItemCount(order);
+                      if (thumbs.length === 0) {
+                        return (
+                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                            <Package className="w-6 h-6 text-gray-400" />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="relative shrink-0" style={{ width: thumbs.length > 1 ? 56 : 48, height: 48 }}>
+                          {thumbs.slice(0, 2).map((thumb, i) => (
+                            <img
+                              key={i}
+                              src={thumb}
+                              alt=""
+                              className="w-12 h-12 rounded object-cover border border-gray-200 absolute top-0"
+                              style={{ left: i * 8, zIndex: thumbs.length - i }}
+                            />
+                          ))}
+                          {count > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none px-1 min-w-[18px] z-10">
+                              {count}
+                            </span>
+                          )}
                         </div>
                       );
                     })()}
