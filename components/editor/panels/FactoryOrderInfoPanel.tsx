@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import type { Order, OrderItem } from '@/types/types';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
+import { extractVariants } from '@/lib/orderUtils';
 
 interface FactoryOrderInfoPanelProps {
   orderId: string;
@@ -207,6 +208,7 @@ export default function FactoryOrderInfoPanel({
             attachmentUrls={localAttachmentUrls}
             onUrlsUpdated={setLocalAttachmentUrls}
             compact
+            isAdmin={user?.role === 'admin'}
           />
         </div>
       )}
@@ -268,7 +270,24 @@ export default function FactoryOrderInfoPanel({
                       )}
                     </div>
                     <div className="text-[10px] text-gray-400">
-                      수량: {item.quantity}
+                      {(() => {
+                        const variants = extractVariants(item);
+                        if (variants.length > 1) {
+                          return (
+                            <span>
+                              {variants.filter(v => (v.quantity ?? 0) > 0).map((v, vi) => (
+                                <span key={vi}>
+                                  {vi > 0 && ', '}
+                                  {v.size_name || v.color_name}{' '}x{v.quantity}
+                                </span>
+                              ))}
+                              {' '}(총 {item.quantity})
+                            </span>
+                          );
+                        }
+                        const v = variants[0];
+                        return <span>수량: {v?.size_name ? `${v.size_name} ` : ''}{item.quantity}</span>;
+                      })()}
                       {item.products?.product_code && ` · ${item.products.product_code}`}
                     </div>
                   </div>

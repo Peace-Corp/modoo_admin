@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { Package, Calendar, Clock, CreditCard, ArrowLeft, Download, LayoutList, MessageSquare, Paperclip } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
+import { extractVariantsFromOptions } from '@/lib/orderUtils';
 import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 import EditorRightPanel from '@/components/editor/EditorRightPanel';
@@ -592,20 +593,26 @@ export default function SharedOrderPage() {
                             상품코드: {item.products.product_code}
                           </p>
                         )}
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                          <span>수량: {item.quantity}</span>
-                          {item.item_options?.color_name && (
-                            <span className="flex items-center gap-1">
-                              색상: {item.item_options.color_name}
-                              {item.item_options.color_hex && (
-                                <span
-                                  className="w-4 h-4 rounded border border-gray-300"
-                                  style={{ backgroundColor: item.item_options.color_hex }}
-                                />
+                        {(() => {
+                          const variants = extractVariantsFromOptions(item.item_options, item.quantity);
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {variants.filter(v => (v.quantity ?? 0) > 0).map((v, vi) => (
+                                <span key={vi} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                  {v.color_hex && <span className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0" style={{ backgroundColor: v.color_hex }} />}
+                                  {v.color_name && <span>{v.color_name}</span>}
+                                  {v.size_name && <span>{v.size_name}</span>}
+                                  <span className="font-medium">x{v.quantity}</span>
+                                </span>
+                              ))}
+                              {variants.length > 1 && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 bg-blue-50 rounded text-xs font-semibold text-blue-700">
+                                  합계: {item.quantity}
+                                </span>
                               )}
-                            </span>
-                          )}
-                        </div>
+                            </div>
+                          );
+                        })()}
                         <p className="text-xs text-blue-600 mt-2">
                           클릭하여 디자인 보기
                         </p>

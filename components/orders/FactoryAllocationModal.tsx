@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Factory, Order, OrderItem } from '@/types/types';
 import { X, Factory as FactoryIcon, Package } from 'lucide-react';
+import { extractVariants } from '@/lib/orderUtils';
 
 interface FactoryAllocationModalProps {
   order: Order;
@@ -147,7 +148,26 @@ export default function FactoryAllocationModal({
                           <div className="text-[11px] text-gray-500 truncate">{item.design_title}</div>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 shrink-0">x{item.quantity}</div>
+                      <div className="flex flex-wrap items-center gap-1 shrink-0">
+                        {(() => {
+                          const variants = extractVariants(item);
+                          if (variants.length > 1) {
+                            return (
+                              <>
+                                {variants.filter(v => (v.quantity ?? 0) > 0).map((v, vi) => (
+                                  <span key={vi} className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-gray-100 rounded text-[10px] text-gray-600">
+                                    {v.size_name && <span>{v.size_name}</span>}
+                                    <span className="font-medium">x{v.quantity}</span>
+                                  </span>
+                                ))}
+                                <span className="text-[10px] font-semibold text-blue-600">({item.quantity})</span>
+                              </>
+                            );
+                          }
+                          const v = variants[0];
+                          return <span className="text-xs text-gray-500">{v?.size_name ? `${v.size_name} ` : ''}x{item.quantity}</span>;
+                        })()}
+                      </div>
                     </div>
                   ))}
                 </div>

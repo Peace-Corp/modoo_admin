@@ -43,29 +43,7 @@ const getStatusLabel = (status: string) => {
   return STATUS_OPTIONS.find((s) => s.value === status)?.label || status;
 };
 
-interface VariantInfo {
-  size_name?: string;
-  color_name?: string;
-  color_hex?: string;
-  color_code?: string;
-  quantity?: number;
-}
-
-function extractVariants(item: OrderItem): VariantInfo[] {
-  const opts = item.item_options;
-  if (opts?.variants && Array.isArray(opts.variants) && opts.variants.length > 0) {
-    return opts.variants as VariantInfo[];
-  }
-  return [
-    {
-      size_name: opts?.size_name as string | undefined,
-      color_name: opts?.color_name as string | undefined,
-      color_hex: opts?.color_hex as string | undefined,
-      color_code: opts?.color_code as string | undefined,
-      quantity: item.quantity,
-    },
-  ];
-}
+import { extractVariants, type VariantInfo } from '@/lib/orderUtils';
 
 function ColorDot({ hex }: { hex?: string }) {
   if (!hex) return null;

@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, 
 import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
+import { extractVariants } from '@/lib/orderUtils';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -614,8 +615,34 @@ export default function OrderDetail({
                             상품코드: {item.products.product_code}
                           </p>
                         )}
+                        {/* Size/Variant breakdown */}
+                        {(() => {
+                          const variants = extractVariants(item);
+                          return variants.length > 1 ? (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {variants.filter(v => (v.quantity ?? 0) > 0).map((v, vi) => (
+                                <span key={vi} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                  {v.color_hex && <span className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0" style={{ backgroundColor: v.color_hex }} />}
+                                  {v.size_name && <span>{v.size_name}</span>}
+                                  <span className="font-medium">x{v.quantity}</span>
+                                </span>
+                              ))}
+                              <span className="inline-flex items-center px-1.5 py-0.5 bg-blue-50 rounded text-xs font-semibold text-blue-700">
+                                합계: {item.quantity}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
                         <div className="flex justify-between items-center mt-2">
-                          <span className="text-sm text-gray-600">수량: {item.quantity}</span>
+                          {(() => {
+                            const variants = extractVariants(item);
+                            if (variants.length <= 1) {
+                              const v = variants[0];
+                              const label = v?.size_name;
+                              return <span className="text-sm text-gray-600">수량: {label ? `${label} ` : ''}{item.quantity}</span>;
+                            }
+                            return <span className="text-sm text-gray-600">총 수량: {item.quantity}</span>;
+                          })()}
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {
@@ -671,6 +698,7 @@ export default function OrderDetail({
                 orderId={order.id}
                 attachmentUrls={localAttachmentUrls}
                 onUrlsUpdated={setLocalAttachmentUrls}
+                isAdmin={!isFactoryUser}
               />
             </div>
           </div>

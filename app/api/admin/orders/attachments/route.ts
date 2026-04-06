@@ -2,35 +2,111 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
-export async function POST(request: Request) {
+async function getAuthenticatedProfile(requiredRole?: 'admin' | 'admin_or_factory') {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: NextResponse.json({ error: authError?.message ?? '로그인이 필요합니다.' }, { status: 401 }) };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, manufacturer_id')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return { error: NextResponse.json({ error: profileError?.message ?? '프로필을 찾을 수 없습니다.' }, { status: 403 }) };
+  }
+
+  if (requiredRole === 'admin' && profile.role !== 'admin') {
+    return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
+  }
+
+  if (requiredRole === 'admin_or_factory' && profile.role !== 'admin' && profile.role !== 'factory') {
+    return { error: NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 }) };
+  }
+
+  return { profile };
+}
+
+export async function DELETE(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { error, profile } = await getAuthenticatedProfile('admin');
+    if (error || !profile) return error;
 
-    if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 401 });
+    const payload = await request.json().catch(() => null);
+    const orderId = payload?.orderId;
+    const urlToDelete = payload?.url;
+
+    if (!orderId || typeof orderId !== 'string') {
+      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
     }
 
-    if (!user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    if (!urlToDelete || typeof urlToDelete !== 'string') {
+      return NextResponse.json({ error: '삭제할 파일 URL이 필요합니다.' }, { status: 400 });
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role, manufacturer_id')
-      .eq('id', user.id)
+    const adminClient = createAdminClient();
+
+    const { data: existing, error: fetchError } = await adminClient
+      .from('orders')
+      .select('attachment_urls')
+      .eq('id', orderId)
       .single();
 
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 403 });
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
-      return NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 });
+    const currentUrls: string[] = existing.attachment_urls || [];
+    const updatedUrls = currentUrls.filter((u) => u !== urlToDelete);
+
+    if (updatedUrls.length === currentUrls.length) {
+      return NextResponse.json({ error: '해당 첨부파일을 찾을 수 없습니다.' }, { status: 404 });
     }
+
+    const { data, error: updateError } = await adminClient
+      .from('orders')
+      .update({
+        attachment_urls: updatedUrls,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .select('attachment_urls')
+      .single();
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    try {
+      const bucketName = 'order-attachments';
+      const bucketUrl = `/storage/v1/object/public/${bucketName}/`;
+      const bucketIndex = urlToDelete.indexOf(bucketUrl);
+      if (bucketIndex !== -1) {
+        const storagePath = urlToDelete.substring(bucketIndex + bucketUrl.length);
+        await adminClient.storage.from(bucketName).remove([decodeURIComponent(storagePath)]);
+      }
+    } catch {
+      // Storage 삭제 실패해도 DB 업데이트는 유지
+    }
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '첨부파일 삭제에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { error, profile } = await getAuthenticatedProfile('admin_or_factory');
+    if (error || !profile) return error;
 
     const payload = await request.json().catch(() => null);
     const orderId = payload?.orderId;
@@ -65,7 +141,7 @@ export async function POST(request: Request) {
     const currentUrls: string[] = existing.attachment_urls || [];
     const merged = [...currentUrls, ...newUrls];
 
-    const { data, error } = await adminClient
+    const { data, error: updateError } = await adminClient
       .from('orders')
       .update({
         attachment_urls: merged,
@@ -75,8 +151,8 @@ export async function POST(request: Request) {
       .select('attachment_urls')
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
     return NextResponse.json({ data });

@@ -13,6 +13,7 @@ import {
   CustomFont,
 } from '@/types/types';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import {
   parseCanvasState,
@@ -72,6 +73,7 @@ export default function OrderModePanel({
 }: OrderModePanelProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const { canvasMap, canvasVersion } = useCanvasStore();
+  const user = useAuthStore((s) => s.user);
 
   const [customerNote, setCustomerNote] = useState<string | null>(null);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
@@ -478,6 +480,7 @@ export default function OrderModePanel({
             onUrlsUpdated={setAttachmentUrls}
             compact
             readonly={!!publicOrderData}
+            isAdmin={user?.role === 'admin'}
           />
         )}
       </div>
