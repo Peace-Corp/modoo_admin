@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     // Select only fields needed for the list view, include order_items count/status
     const selectFields = isFactoryUser
       ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(id, design_title, thumbnail_url)`
-      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, order_items(id, purchase_order_status, design_title)`;
+      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, original_amount, custom_unit_price, admin_discount, admin_surcharge, coupon_discount, applied_coupon_id, pricing_note, payment_link_token, share_token, order_items(id, purchase_order_status, design_title)`;
 
     let query = adminClient.from('orders').select(selectFields as string);
 
@@ -250,11 +250,88 @@ export async function PATCH(request: Request) {
     const previousManufacturerId = existingOrder?.assigned_manufacturer_id ?? null;
     const isNewFactoryAssignment = manufacturerId !== null && manufacturerId !== previousManufacturerId;
 
+    // Handle payment_status update (manual payment confirmation)
+    const paymentStatusInput = payload?.payment_status ?? null;
+    if (paymentStatusInput !== null) {
+      const validOrderPaymentStatuses = ['pending', 'completed', 'failed', 'refunded'];
+      if (!validOrderPaymentStatuses.includes(paymentStatusInput)) {
+        return NextResponse.json({ error: '유효하지 않은 결제 상태입니다.' }, { status: 400 });
+      }
+    }
+
+    // Handle price adjustment
+    const priceAdjustment = payload?.priceAdjustment ?? null;
+
     // Build update object
     const updateData: Record<string, unknown> = {
       assigned_manufacturer_id: manufacturerId,
       updated_at: new Date().toISOString(),
     };
+
+    if (paymentStatusInput !== null) {
+      updateData.payment_status = paymentStatusInput;
+    }
+
+    if (priceAdjustment !== null && typeof priceAdjustment === 'object') {
+      const { mode, value, note } = priceAdjustment as { mode: string; value: number; note?: string };
+      if (typeof value !== 'number' || value < 0) {
+        return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
+      }
+
+      const { data: currentOrder } = await adminClient
+        .from('orders')
+        .select('total_amount, original_amount')
+        .eq('id', orderId)
+        .single();
+
+      if (!currentOrder) {
+        return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      const baseAmount = currentOrder.original_amount ?? currentOrder.total_amount;
+
+      switch (mode) {
+        case 'set_total':
+          updateData.total_amount = value;
+          if (!currentOrder.original_amount) {
+            updateData.original_amount = currentOrder.total_amount;
+          }
+          updateData.admin_discount = Math.max(0, baseAmount - value);
+          updateData.admin_surcharge = 0;
+          break;
+        case 'discount_fixed':
+          updateData.total_amount = Math.max(0, baseAmount - value);
+          if (!currentOrder.original_amount) {
+            updateData.original_amount = currentOrder.total_amount;
+          }
+          updateData.admin_discount = value;
+          updateData.admin_surcharge = 0;
+          break;
+        case 'discount_rate': {
+          const discountAmount = Math.floor(baseAmount * (value / 100));
+          updateData.total_amount = Math.max(0, baseAmount - discountAmount);
+          if (!currentOrder.original_amount) {
+            updateData.original_amount = currentOrder.total_amount;
+          }
+          updateData.admin_discount = discountAmount;
+          updateData.admin_surcharge = 0;
+          break;
+        }
+        case 'surcharge':
+          updateData.total_amount = baseAmount + value;
+          if (!currentOrder.original_amount) {
+            updateData.original_amount = currentOrder.total_amount;
+          }
+          updateData.admin_surcharge = value;
+          break;
+        default:
+          return NextResponse.json({ error: '유효하지 않은 조정 모드입니다.' }, { status: 400 });
+      }
+
+      if (note) {
+        updateData.pricing_note = note;
+      }
+    }
 
     // Add factory-specific fields if provided
     if (deadlineInput !== undefined) {

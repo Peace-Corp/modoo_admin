@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck, Link2, Pencil, X, Loader2 } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
@@ -1005,6 +1005,12 @@ export default function OrderDetail({
                       ? '토스페이'
                       : order.payment_method === 'paypal'
                       ? 'PayPal'
+                      : order.payment_method === 'admin'
+                      ? '관리자 처리'
+                      : order.payment_method === 'bank_transfer'
+                      ? '무통장입금'
+                      : order.payment_method === 'free'
+                      ? '무료'
                       : '카드'}
                   </p>
                 </div>
@@ -1018,11 +1024,66 @@ export default function OrderDetail({
                   <p className="text-xs text-gray-500">주문 일시</p>
                   <p className="text-sm font-medium text-gray-900">{formatDate(order.created_at)}</p>
                 </div>
+                {/* Pricing adjustments info */}
+                {(order.original_amount != null && order.original_amount !== order.total_amount) && (
+                  <div className="pt-2 border-t border-gray-100 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">원래 금액</span>
+                      <span className="text-gray-700">{order.original_amount.toLocaleString()}원</span>
+                    </div>
+                    {order.coupon_discount > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-green-600">쿠폰 할인</span>
+                        <span className="text-green-600">-{order.coupon_discount.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {order.admin_discount > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-orange-600">임의 할인</span>
+                        <span className="text-orange-600">-{order.admin_discount.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {order.admin_surcharge > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-purple-600">추가 금액</span>
+                        <span className="text-purple-600">+{order.admin_surcharge.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {order.pricing_note && (
+                      <div className="text-xs text-gray-500 italic mt-1">메모: {order.pricing_note}</div>
+                    )}
+                  </div>
+                )}
                 {order.refund_reason && (
                   <div>
                     <p className="text-xs text-gray-500">환불 사유</p>
                     <p className="text-sm font-medium text-red-600">{order.refund_reason}</p>
                   </div>
+                )}
+                {/* Manual payment confirmation for pending orders */}
+                {order.payment_status === 'pending' && (order.payment_method === 'bank_transfer' || order.payment_method === 'toss') && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm('이 주문의 결제를 완료 처리하시겠습니까?')) return;
+                      try {
+                        const res = await fetch('/api/admin/orders', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ orderId: order.id, payment_status: 'completed' }),
+                        });
+                        if (res.ok) {
+                          onOrderUpdate({ ...order, payment_status: 'completed' });
+                          onUpdate();
+                        }
+                      } catch (e) {
+                        console.error('Failed to update payment status:', e);
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors mt-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    결제 완료 처리
+                  </button>
                 )}
                 {order.payment_status === 'completed' && (
                   <button
@@ -1035,6 +1096,22 @@ export default function OrderDetail({
                 )}
               </div>
             </div>
+          )}
+
+          {/* Payment Link - shown when payment_link_token exists */}
+          {!isFactoryUser && order.payment_link_token && (
+            <PaymentLinkCard token={order.payment_link_token} />
+          )}
+
+          {/* Price Adjustment - shown for admin users */}
+          {!isFactoryUser && (
+            <PriceAdjustmentCard
+              order={order}
+              onUpdate={() => {
+                onUpdate();
+              }}
+              onOrderUpdate={onOrderUpdate}
+            />
           )}
 
           {/* Factory Order Info - shown only for factory users */}
@@ -1133,6 +1210,256 @@ export default function OrderDetail({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// --- Sub-components ---
+
+function PaymentLinkCard({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+  const paymentUrl = `https://modoouniform.com/order/custom/${token}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(paymentUrl);
+    } catch {
+      const input = document.createElement('input');
+      input.value = paymentUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-white border border-blue-200 rounded-md shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-blue-100 bg-blue-50/50">
+        <Link2 className="w-4 h-4 text-blue-600" />
+        <h3 className="text-sm font-semibold text-blue-900">고객 결제 링크</h3>
+      </div>
+      <div className="p-4">
+        <p className="text-xs text-gray-500 mb-2">아래 링크를 고객에게 공유하면 결제할 수 있습니다.</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            readOnly
+            value={paymentUrl}
+            className="flex-1 p-2 text-xs border border-gray-200 rounded bg-gray-50 text-gray-600 truncate"
+          />
+          <button
+            onClick={handleCopy}
+            className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1 text-xs whitespace-nowrap shrink-0"
+          >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? '복사됨' : '복사'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AdjustMode = 'set_total' | 'discount_fixed' | 'discount_rate' | 'surcharge';
+
+function PriceAdjustmentCard({
+  order,
+  onUpdate,
+  onOrderUpdate,
+}: {
+  order: Order;
+  onUpdate: () => void;
+  onOrderUpdate: (order: Order) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [mode, setMode] = useState<AdjustMode>('set_total');
+  const [value, setValue] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const baseAmount = order.original_amount ?? order.total_amount;
+
+  const preview = useMemo(() => {
+    const v = parseFloat(value) || 0;
+    if (v <= 0) return null;
+    switch (mode) {
+      case 'set_total':
+        return v;
+      case 'discount_fixed':
+        return Math.max(0, baseAmount - v);
+      case 'discount_rate':
+        return Math.max(0, baseAmount - Math.floor(baseAmount * (v / 100)));
+      case 'surcharge':
+        return baseAmount + v;
+      default:
+        return null;
+    }
+  }, [mode, value, baseAmount]);
+
+  const handleSave = async () => {
+    const v = parseFloat(value);
+    if (!v || v <= 0) {
+      setError('금액을 입력해주세요.');
+      return;
+    }
+    if (mode === 'discount_rate' && v > 100) {
+      setError('할인율은 100% 이하여야 합니다.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          priceAdjustment: { mode, value: v, note: note.trim() || undefined },
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || '금액 변경에 실패했습니다.');
+        return;
+      }
+
+      onOrderUpdate(data.data as Order);
+      onUpdate();
+      setIsEditing(false);
+      setValue('');
+      setNote('');
+    } catch {
+      setError('금액 변경 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-gray-500" />
+          <h3 className="text-sm font-semibold text-gray-900">금액 관리</h3>
+        </div>
+        {!isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+          >
+            <Pencil className="w-3 h-3" />
+            금액 변경
+          </button>
+        )}
+      </div>
+      <div className="p-4">
+        {/* Current amount summary */}
+        <div className="space-y-1 mb-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">현재 결제 금액</span>
+            <span className="font-bold text-gray-900">{order.total_amount.toLocaleString()}원</span>
+          </div>
+          {order.original_amount != null && order.original_amount !== order.total_amount && (
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>원래 금액</span>
+              <span className="line-through">{order.original_amount.toLocaleString()}원</span>
+            </div>
+          )}
+        </div>
+
+        {isEditing && (
+          <div className="pt-3 border-t border-gray-100 space-y-3">
+            {/* Mode selection */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: 'set_total' as const, label: '금액 지정' },
+                { key: 'discount_fixed' as const, label: '금액 할인' },
+                { key: 'discount_rate' as const, label: '할인율(%)' },
+                { key: 'surcharge' as const, label: '금액 추가' },
+              ]).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setMode(opt.key); setValue(''); setError(null); }}
+                  className={`px-3 py-2 text-xs rounded-md border font-medium transition-colors ${
+                    mode === opt.key
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Value input */}
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                value={value}
+                onChange={(e) => { setValue(e.target.value); setError(null); }}
+                placeholder={
+                  mode === 'set_total' ? '최종 결제 금액'
+                  : mode === 'discount_fixed' ? '할인할 금액'
+                  : mode === 'discount_rate' ? '할인 비율'
+                  : '추가할 금액'
+                }
+                className="w-full p-2.5 pr-10 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                {mode === 'discount_rate' ? '%' : '원'}
+              </span>
+            </div>
+
+            {/* Preview */}
+            {preview !== null && (
+              <div className="flex justify-between items-center p-2 bg-blue-50 rounded-md">
+                <span className="text-xs text-blue-700">변경 후 결제 금액</span>
+                <span className="text-sm font-bold text-blue-800">{preview.toLocaleString()}원</span>
+              </div>
+            )}
+
+            {/* Note */}
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="변경 사유 (선택)"
+              className="w-full p-2.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            {error && (
+              <p className="text-xs text-red-500">{error}</p>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setIsEditing(false); setValue(''); setNote(''); setError(null); }}
+                className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-md text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !value}
+                className="flex-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                적용
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

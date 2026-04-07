@@ -203,13 +203,25 @@ export interface Order {
   address_line_2: string | null;
   delivery_fee: number;
 
-  payment_method: 'toss' | 'paypal' | 'card';
+  payment_method: 'toss' | 'paypal' | 'card' | 'admin' | 'bank_transfer' | 'free';
   payment_key: string | null;
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
   order_status: 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
   assigned_manufacturer_id: string | null;
   total_amount: number;
+
+  // Pricing adjustment fields (admin custom orders)
+  original_amount: number | null;
+  custom_unit_price: number | null;
+  admin_discount: number;
+  admin_surcharge: number;
+  coupon_discount: number;
+  applied_coupon_id: string | null;
+  pricing_note: string | null;
+
+  // Customer payment link token (for customer online payment)
+  payment_link_token: string | null;
 
   // Factory-specific fields (set by admin)
   factory_status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
