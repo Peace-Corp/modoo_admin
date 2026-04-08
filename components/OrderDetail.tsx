@@ -418,7 +418,7 @@ export default function OrderDetail({
 
   const paymentStatusLabel = (status: string) => {
     const map: Record<string, string> = {
-      pending: '대기', completed: '완료', failed: '실패', refunded: '환불',
+      pending: '입금대기', completed: '완료', failed: '실패', refunded: '환불',
     };
     return map[status] || status;
   };
@@ -1097,6 +1097,39 @@ export default function OrderDetail({
               </div>
             </div>
           )}
+
+          {/* Bank Transfer Invoice Request Info */}
+          {!isFactoryUser && order.payment_method === 'bank_transfer' && order.customer_note?.includes('[계좌이체 정보]') && (() => {
+            try {
+              const match = order.customer_note!.match(/\[계좌이체 정보\]\s*({.*})/);
+              if (!match) return null;
+              const info = JSON.parse(match[1]);
+              if (!info.invoice_requested) return null;
+              return (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
+                    <h3 className="text-sm font-semibold text-amber-900">계산서 발행 요청</h3>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    {info.invoice_email && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">수신 이메일</span>
+                        <a href={`mailto:${info.invoice_email}`} className="text-blue-600 hover:underline font-medium">{info.invoice_email}</a>
+                      </div>
+                    )}
+                    {info.biz_registration_url && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">사업자등록증</span>
+                        <a href={info.biz_registration_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">파일 보기</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            } catch {
+              return null;
+            }
+          })()}
 
           {/* Payment Link - shown when payment_link_token exists */}
           {!isFactoryUser && order.payment_link_token && (

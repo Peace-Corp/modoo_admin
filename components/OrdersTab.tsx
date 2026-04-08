@@ -957,7 +957,7 @@ export default function OrdersTab() {
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                     <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
                     <span className="font-medium text-gray-700">{order.total_amount.toLocaleString()}원</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{order.payment_status}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{{pending:'입금대기',completed:'결제완료',failed:'결제실패',refunded:'환불'}[order.payment_status] || order.payment_status}</span>
                     {(() => {
                       const ps = getPurchaseOrderSummary(order);
                       return ps.label !== '-' ? (
