@@ -356,15 +356,19 @@ export default function NewInvoicePage() {
         <section className="bg-white border border-gray-200 rounded-lg p-5">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">금액 요약</h2>
           <div className="space-y-2 max-w-xs ml-auto">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">공급가액</span>
-              <span className="text-gray-900">{formatNumber(subtotal)}원</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">세액 (VAT)</span>
-              <span className="text-gray-900">{formatNumber(vatAmount)}원</span>
-            </div>
-            <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-200">
+            {includeVat && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">공급가액</span>
+                  <span className="text-gray-900">{formatNumber(subtotal)}원</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">세액 (VAT)</span>
+                  <span className="text-gray-900">{formatNumber(vatAmount)}원</span>
+                </div>
+              </>
+            )}
+            <div className={`flex justify-between text-base font-bold ${includeVat ? 'pt-2 border-t border-gray-200' : ''}`}>
               <span className="text-gray-900">합계금액</span>
               <span className="text-blue-700">{formatNumber(totalAmount)}원</span>
             </div>

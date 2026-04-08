@@ -71,12 +71,13 @@ export function generateInvoiceEmailHtml(params: InvoiceEmailParams): string {
       </tr>
     </table>
 
+    ${includeVat ? `
     <!-- VAT Badge -->
     <div style="margin-bottom: 20px;">
-      <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${includeVat ? '#dbeafe' : '#f3f4f6'}; color: ${includeVat ? '#1d4ed8' : '#6b7280'};">
-        ${includeVat ? 'VAT 포함' : 'VAT 미포함'}
+      <span style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #dbeafe; color: #1d4ed8;">
+        VAT 포함
       </span>
-    </div>
+    </div>` : ''}
 
     <!-- Items Table -->
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
@@ -96,6 +97,7 @@ export function generateInvoiceEmailHtml(params: InvoiceEmailParams): string {
 
     <!-- Summary -->
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+      ${includeVat ? `
       <tr>
         <td style="padding: 8px 12px; text-align: right; color: #6b7280; font-size: 14px;">공급가액</td>
         <td style="padding: 8px 12px; text-align: right; color: #111827; font-size: 14px; width: 140px;">${formatCurrency(subtotal)}원</td>
@@ -103,7 +105,7 @@ export function generateInvoiceEmailHtml(params: InvoiceEmailParams): string {
       <tr>
         <td style="padding: 8px 12px; text-align: right; color: #6b7280; font-size: 14px;">세액 (VAT)</td>
         <td style="padding: 8px 12px; text-align: right; color: #111827; font-size: 14px;">${formatCurrency(vatAmount)}원</td>
-      </tr>
+      </tr>` : ''}
       <tr style="border-top: 2px solid #1e3a5f;">
         <td style="padding: 12px; text-align: right; color: #1e3a5f; font-size: 16px; font-weight: 700;">합계금액</td>
         <td style="padding: 12px; text-align: right; color: #1e3a5f; font-size: 16px; font-weight: 700;">${formatCurrency(totalAmount)}원</td>
@@ -156,16 +158,19 @@ export function generateInvoiceEmailText(params: InvoiceEmailParams): string {
     '[받으시는 분]',
     recipientLines || '-',
     '',
-    `[${includeVat ? 'VAT 포함' : 'VAT 미포함'}]`,
-    '',
+    ...(includeVat ? ['[VAT 포함]', ''] : []),
     '[항목]',
     ...items.map(
       (item, i) =>
         `${i + 1}. ${item.name} | 수량: ${item.quantity} | 단가: ${formatCurrency(item.unit_price)}원 | 금액: ${formatCurrency(item.amount)}원`
     ),
     '',
-    `공급가액: ${formatCurrency(subtotal)}원`,
-    `세액(VAT): ${formatCurrency(vatAmount)}원`,
+    ...(includeVat
+      ? [
+          `공급가액: ${formatCurrency(subtotal)}원`,
+          `세액(VAT): ${formatCurrency(vatAmount)}원`,
+        ]
+      : []),
     `합계금액: ${formatCurrency(totalAmount)}원`,
   ];
 
