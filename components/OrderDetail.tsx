@@ -690,10 +690,18 @@ export default function OrderDetail({
               <h3 className="text-sm font-semibold text-gray-900">고객 요청사항 / 첨부파일</h3>
             </div>
             <div className="p-4 space-y-3">
-              {order.customer_note && (
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.customer_note}</p>
-              )}
-              {order.customer_note && <div className="border-t border-gray-100 pt-3" />}
+              {order.customer_note && (() => {
+                const cleaned = order.customer_note
+                  .replace(/\n?---\n?\[계좌이체 정보\]\s*\{.*\}/, '')
+                  .replace(/^\[계좌이체 정보\]\s*\{.*\}/, '')
+                  .trim();
+                return cleaned ? (
+                  <>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{cleaned}</p>
+                    <div className="border-t border-gray-100 pt-3" />
+                  </>
+                ) : <div />;
+              })()}
               <OrderAttachmentSection
                 orderId={order.id}
                 attachmentUrls={localAttachmentUrls}
