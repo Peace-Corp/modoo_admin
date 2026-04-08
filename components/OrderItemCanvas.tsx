@@ -332,19 +332,28 @@ export default function OrderItemCanvas({ orderItem, onBack }: OrderItemCanvasPr
   };
 
   const getAppliedProductColorHex = useCallback(() => {
-    const canvasStates = Object.values(orderItem.canvas_state || {});
-    for (const canvasStateRaw of canvasStates) {
-      const canvasState = parseCanvasState(canvasStateRaw);
-      if (typeof canvasState?.productColor === 'string' && canvasState.productColor.startsWith('#')) {
-        return canvasState.productColor;
-      }
+    // Order data (color_selections / variants) takes priority over canvas_state
+    // because a previous admin save may have persisted a stale default into canvas_state.
+    const colorSelections = orderItem.color_selections as { productColor?: string } | undefined;
+    if (typeof colorSelections?.productColor === 'string' && colorSelections.productColor.startsWith('#')) {
+      return colorSelections.productColor;
     }
     const variants = orderItem.item_options?.variants;
     if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
       return variants[0].color_hex;
     }
-    return orderItem.item_options?.color_hex || '#FFFFFF';
-  }, [orderItem.canvas_state, orderItem.item_options]);
+    if (orderItem.item_options?.color_hex) {
+      return orderItem.item_options.color_hex;
+    }
+    // Last resort: check canvas_state
+    for (const canvasStateRaw of Object.values(orderItem.canvas_state || {})) {
+      const canvasState = parseCanvasState(canvasStateRaw);
+      if (typeof canvasState?.productColor === 'string' && canvasState.productColor.startsWith('#')) {
+        return canvasState.productColor;
+      }
+    }
+    return '#FFFFFF';
+  }, [orderItem.color_selections, orderItem.canvas_state, orderItem.item_options]);
 
   // Store canvas refs for zoom control and serialization
   const handleCanvasRef = useCallback((canvas: FabricCanvas, sideId: string) => {
