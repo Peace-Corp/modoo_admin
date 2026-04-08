@@ -168,24 +168,28 @@ export function useEditorData({
           setCanvasStates(item.canvas_state || {});
           setCustomFonts(coerceCustomFonts(item.custom_fonts));
 
-          // Extract product color: canvas state takes priority, then item options
+          // Extract product color: order data (color_selections / variants) takes
+          // priority over canvas_state because a previous admin save may have
+          // persisted a stale default (#FFFFFF) into canvas_state.productColor.
           let extractedColor = '#FFFFFF';
-          let foundInCanvasState = false;
-          const states = Object.values(item.canvas_state || {});
-          for (const stateRaw of states) {
-            const state = parseCanvasState(stateRaw);
-            if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
-              extractedColor = state.productColor;
-              foundInCanvasState = true;
-              break;
-            }
-          }
-          if (!foundInCanvasState) {
+          const colorSelections = item.color_selections as { productColor?: string } | undefined;
+          if (typeof colorSelections?.productColor === 'string' && colorSelections.productColor.startsWith('#')) {
+            extractedColor = colorSelections.productColor;
+          } else {
             const variants = item.item_options?.variants;
             if (Array.isArray(variants) && variants.length > 0 && variants[0]?.color_hex) {
               extractedColor = variants[0].color_hex;
             } else if (item.item_options?.color_hex) {
               extractedColor = item.item_options.color_hex;
+            } else {
+              // Last resort: check canvas_state
+              for (const stateRaw of Object.values(item.canvas_state || {})) {
+                const state = parseCanvasState(stateRaw);
+                if (typeof state?.productColor === 'string' && state.productColor.startsWith('#')) {
+                  extractedColor = state.productColor;
+                  break;
+                }
+              }
             }
           }
           setProductColor(extractedColor);

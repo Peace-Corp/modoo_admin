@@ -259,6 +259,14 @@ export default function UnifiedEditor({
     return () => setEditMode(false);
   }, [isEditing, setEditMode]);
 
+  // Sync loaded product color to global store so saveOrderMode and
+  // handleToggleEdit snapshot capture the correct value instead of default #FFFFFF
+  useEffect(() => {
+    if ((mode === 'order' || mode === 'design') && editorData.productColor && !editorData.loading) {
+      setStoreProductColor(editorData.productColor);
+    }
+  }, [mode, editorData.productColor, editorData.loading, setStoreProductColor]);
+
   // Reset color filter states when leaving the editor
   useEffect(() => {
     return () => {
