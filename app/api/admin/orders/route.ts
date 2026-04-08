@@ -304,8 +304,13 @@ export async function PATCH(request: Request) {
           if (!currentOrder.original_amount) {
             updateData.original_amount = currentOrder.total_amount;
           }
-          updateData.admin_discount = Math.max(0, baseAmount - value);
-          updateData.admin_surcharge = 0;
+          if (value >= baseAmount) {
+            updateData.admin_surcharge = value - baseAmount;
+            updateData.admin_discount = 0;
+          } else {
+            updateData.admin_discount = baseAmount - value;
+            updateData.admin_surcharge = 0;
+          }
           break;
         case 'discount_fixed':
           updateData.total_amount = Math.max(0, baseAmount - value);

@@ -801,6 +801,39 @@ export default function OrderDetail({
                     {(order.delivery_fee ?? 0).toLocaleString()}원
                   </span>
                 </div>
+                {order.coupon_discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>쿠폰 할인</span>
+                    <span>-{order.coupon_discount.toLocaleString()}원</span>
+                  </div>
+                )}
+                {order.admin_discount > 0 && (
+                  <div className="flex justify-between text-sm text-orange-600">
+                    <span>할인</span>
+                    <span>-{order.admin_discount.toLocaleString()}원</span>
+                  </div>
+                )}
+                {order.admin_surcharge > 0 && (
+                  <div className="flex justify-between text-sm text-purple-600">
+                    <span>추가 금액</span>
+                    <span>+{order.admin_surcharge.toLocaleString()}원</span>
+                  </div>
+                )}
+                {(() => {
+                  const computedTotal = subtotal
+                    + (order.delivery_fee ?? 0)
+                    - (order.coupon_discount ?? 0)
+                    - (order.admin_discount ?? 0)
+                    + (order.admin_surcharge ?? 0);
+                  const diff = (order.total_amount ?? 0) - computedTotal;
+                  if (diff === 0) return null;
+                  return (
+                    <div className={`flex justify-between text-sm ${diff > 0 ? 'text-indigo-600' : 'text-green-600'}`}>
+                      <span>작업비용</span>
+                      <span>{diff > 0 ? '+' : ''}{diff.toLocaleString()}원</span>
+                    </div>
+                  );
+                })()}
                 <div className="border-t pt-3 flex justify-between">
                   <span className="text-sm font-semibold text-gray-900">총 금액</span>
                   <span className="text-base font-bold text-blue-600">

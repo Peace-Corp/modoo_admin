@@ -193,11 +193,16 @@ export async function POST(request: Request) {
     let totalAmount: number;
 
     if (pricingMode === 'custom_total' && payload.customTotalPrice != null && payload.customTotalPrice > 0) {
-      // Direct total amount mode - no itemized adjustments
       const designPrice = toNumber(design.price_per_item);
       unitPrice = designPrice > 0 ? designPrice : toNumber(product.base_price);
       originalAmount = unitPrice * totalQuantity;
       totalAmount = payload.customTotalPrice;
+      const diff = totalAmount - originalAmount;
+      if (diff > 0) {
+        adminSurcharge = diff;
+      } else if (diff < 0) {
+        adminDiscount = Math.abs(diff);
+      }
     } else {
       if (pricingMode === 'custom_unit_price' && payload.customUnitPrice != null && payload.customUnitPrice > 0) {
         unitPrice = payload.customUnitPrice;
