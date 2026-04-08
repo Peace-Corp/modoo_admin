@@ -209,7 +209,7 @@ export async function PATCH(request: Request) {
     }
 
     // Validate order status
-    const validOrderStatuses = ['payment_completed', 'in_production', 'shipping', 'delivered', 'cancelled', 'partially_cancelled'];
+    const validOrderStatuses = ['payment_pending', 'payment_completed', 'in_production', 'shipping', 'delivered', 'cancelled', 'partially_cancelled'];
     if (orderStatusInput !== null && !validOrderStatuses.includes(orderStatusInput)) {
       return NextResponse.json({ error: '유효하지 않은 주문 상태입니다.' }, { status: 400 });
     }

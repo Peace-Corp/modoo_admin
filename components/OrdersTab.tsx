@@ -70,6 +70,7 @@ export default function OrdersTab() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
+      payment_pending: 'bg-amber-100 text-amber-800',
       payment_completed: 'bg-blue-100 text-blue-800',
       in_production: 'bg-yellow-100 text-yellow-800',
       shipping: 'bg-indigo-100 text-indigo-800',
@@ -465,6 +466,7 @@ export default function OrdersTab() {
             { value: 'completed', label: '작업완료' },
             { value: 'shipped', label: '출고완료' },
           ] : [
+            { value: 'payment_pending', label: '결제대기' },
             { value: 'payment_completed', label: '결제완료' },
             { value: 'in_production', label: '제작중' },
             { value: 'shipping', label: '배송중' },
@@ -746,6 +748,7 @@ export default function OrdersTab() {
                           disabled={updatingStatusId === order.id}
                           className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(order.order_status)}`}
                         >
+                          <option value="payment_pending">결제대기</option>
                           <option value="payment_completed">결제완료</option>
                           <option value="in_production">제작중</option>
                           <option value="shipping">배송중</option>
@@ -945,6 +948,7 @@ export default function OrdersTab() {
                         disabled={updatingStatusId === order.id}
                         className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getStatusColor(order.order_status)}`}
                       >
+                        <option value="payment_pending">결제대기</option>
                         <option value="payment_completed">결제완료</option>
                         <option value="in_production">제작중</option>
                         <option value="shipping">배송중</option>

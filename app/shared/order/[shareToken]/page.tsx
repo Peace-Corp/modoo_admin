@@ -73,6 +73,7 @@ interface PublicOrderItem {
 }
 
 const orderStatusLabels: Record<string, string> = {
+  payment_pending: '결제대기',
   payment_completed: '결제완료',
   in_production: '제작중',
   shipping: '배송중',
@@ -517,6 +518,7 @@ export default function SharedOrderPage() {
                 관리자 주문 목록
               </button>
               <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                order.order_status === 'payment_pending' ? 'bg-amber-100 text-amber-800' :
                 order.order_status === 'delivered' ? 'bg-green-100 text-green-800' :
                 order.order_status === 'in_production' ? 'bg-yellow-100 text-yellow-800' :
                 order.order_status === 'shipping' ? 'bg-indigo-100 text-indigo-800' :

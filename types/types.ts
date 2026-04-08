@@ -207,7 +207,7 @@ export interface Order {
   payment_key: string | null;
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
-  order_status: 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
+  order_status: 'payment_pending' | 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
   assigned_manufacturer_id: string | null;
   total_amount: number;
 

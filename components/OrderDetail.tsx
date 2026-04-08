@@ -398,7 +398,7 @@ export default function OrderDetail({
 
   const orderStatusLabel = (status: string) => {
     const map: Record<string, string> = {
-      payment_completed: '결제완료', in_production: '생산중', shipping: '배송중',
+      payment_pending: '결제대기', payment_completed: '결제완료', in_production: '생산중', shipping: '배송중',
       delivered: '배송완료', cancelled: '취소', partially_cancelled: '부분취소',
     };
     return map[status] || status;
@@ -406,6 +406,7 @@ export default function OrderDetail({
 
   const orderStatusColor = (status: string) => {
     const map: Record<string, string> = {
+      payment_pending: 'bg-amber-100 text-amber-800',
       payment_completed: 'bg-green-100 text-green-800',
       in_production: 'bg-yellow-100 text-yellow-800',
       shipping: 'bg-blue-100 text-blue-800',
@@ -1077,10 +1078,14 @@ export default function OrderDetail({
                         const res = await fetch('/api/admin/orders', {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ orderId: order.id, payment_status: 'completed' }),
+                          body: JSON.stringify({
+                            orderId: order.id,
+                            payment_status: 'completed',
+                            orderStatus: 'payment_completed',
+                          }),
                         });
                         if (res.ok) {
-                          onOrderUpdate({ ...order, payment_status: 'completed' });
+                          onOrderUpdate({ ...order, payment_status: 'completed', order_status: 'payment_completed' });
                           onUpdate();
                         }
                       } catch (e) {

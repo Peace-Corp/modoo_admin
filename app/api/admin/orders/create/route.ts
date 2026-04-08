@@ -257,7 +257,7 @@ export async function POST(request: Request) {
       case 'bank_transfer':
         paymentMethod = 'bank_transfer';
         paymentStatus = 'pending';
-        orderStatus = 'payment_completed';
+        orderStatus = 'payment_pending';
         break;
       case 'customer_payment':
         paymentMethod = 'toss';
