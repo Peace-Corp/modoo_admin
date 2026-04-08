@@ -1085,10 +1085,13 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           useCanvasStore.getState().setLayerColor(side.id, layerId, color as string);
         }
       });
-    } else if (!hasLayers && parsed.productColor && isEdit) {
+    } else if (!hasLayers && parsed.productColor && isEdit && !productColor) {
+      // Only sync canvasState.productColor to store when no prop is provided.
+      // When productColor prop exists (order/design mode), it is the authoritative
+      // source and has already been synced to the store by UnifiedEditor.
       useCanvasStore.getState().setProductColor(parsed.productColor);
     }
-  }, [canvasState, side.id, side.layers, isEdit]);
+  }, [canvasState, side.id, side.layers, isEdit, productColor]);
 
   // Effect to apply color filter when productColor changes (legacy single-image mode)
   // Only applies in edit mode - preview canvases use their initial color and don't react to store changes
@@ -1258,17 +1261,18 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           canvas.requestRenderAll();
         });
       }
-      // Re-apply color filter from canvasState to handle the timing issue where
-      // the main useEffect ran before canvasState was available, causing the
-      // initial filter to use a stale/default productColor value.
-      if (!hasLayers && parsedState?.productColor) {
+      // Re-apply color filter after object restoration. The productColor prop
+      // (from order/design data) takes priority over canvasState.productColor
+      // which may contain a stale default (#FFFFFF) from a previous buggy save.
+      const reapplyColor = productColor || (parsedState?.productColor as string) || null;
+      if (!hasLayers && reapplyColor) {
         canvas.getObjects().forEach((obj) => {
           const objData = obj as { data?: { id?: string } };
           if (objData.data?.id === 'background-product-image' && obj.type === 'image') {
             const imgObj = obj as fabric.FabricImage;
             imgObj.filters = [];
             const colorFilter = new fabric.filters.BlendColor({
-              color: parsedState.productColor as string,
+              color: reapplyColor,
               mode: 'multiply',
               alpha: 1,
             });
