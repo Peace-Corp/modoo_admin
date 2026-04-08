@@ -91,6 +91,7 @@ export async function POST(request: Request) {
       recipient_name,
       recipient_email,
       memo,
+      attach_invoice,
       attach_business_registration,
       attach_bank_account,
     } = payload as {
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
       recipient_name?: string;
       recipient_email: string;
       memo?: string;
+      attach_invoice?: boolean;
       attach_business_registration?: boolean;
       attach_bank_account?: boolean;
     };
@@ -161,8 +163,42 @@ export async function POST(request: Request) {
       memo: memo?.trim() || null,
     };
 
-    const html = generateInvoiceEmailHtml(emailParams);
-    const text = generateInvoiceEmailText(emailParams);
+    const includeInvoiceBody = attach_invoice !== false;
+
+    let html: string;
+    let text: string;
+
+    if (includeInvoiceBody) {
+      html = generateInvoiceEmailHtml(emailParams);
+      text = generateInvoiceEmailText(emailParams);
+    } else {
+      const recipientDisplay = [recipient_org?.trim(), recipient_name?.trim()].filter(Boolean).join(' ');
+      html = `
+<div style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <div style="background: #1e3a5f; color: #fff; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+    <h2 style="margin: 0; font-size: 18px;">모두의 유니폼</h2>
+  </div>
+  <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+    <p style="margin: 0 0 16px; color: #374151;">안녕하세요${recipientDisplay ? `, <strong>${recipientDisplay}</strong>님` : ''}.</p>
+    <p style="margin: 0 0 16px; color: #374151;">요청하신 서류를 첨부하여 보내드립니다. 첨부 파일을 확인해 주세요.</p>
+    <p style="margin: 0 0 4px; color: #6b7280; font-size: 13px;">상호: 피스코프</p>
+    <p style="margin: 0 0 20px; color: #6b7280; font-size: 13px;">사업자등록번호: 118-08-15095</p>
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+    <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">본 메일은 모두의 유니폼에서 발송되었습니다.</p>
+  </div>
+</div>`;
+      text = [
+        '안녕하세요.',
+        '',
+        '요청하신 서류를 첨부하여 보내드립니다.',
+        '',
+        '상호: 피스코프',
+        '사업자등록번호: 118-08-15095',
+        '',
+        '---',
+        '본 메일은 모두의 유니폼에서 발송되었습니다.',
+      ].join('\n');
+    }
 
     const attachments: GmailAttachment[] = [];
     const docTypesToAttach: string[] = [];
@@ -196,7 +232,9 @@ export async function POST(request: Request) {
 
     const emailSent = await sendGmailEmail({
       to: [{ email: recipient_email.trim(), name: recipient_name?.trim() }],
-      subject: `[모두의 유니폼] 거래명세서 (${invoiceNumber})`,
+      subject: includeInvoiceBody
+        ? `[모두의 유니폼] 거래명세서 (${invoiceNumber})`
+        : `[모두의 유니폼] 서류 전달 (${invoiceNumber})`,
       html,
       text,
       attachments: attachments.length > 0 ? attachments : undefined,

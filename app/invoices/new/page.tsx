@@ -38,6 +38,7 @@ export default function NewInvoicePage() {
   const [sending, setSending] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [documents, setDocuments] = useState<AdminDocument[]>([]);
+  const [attachInvoice, setAttachInvoice] = useState(true);
   const [attachBusinessReg, setAttachBusinessReg] = useState(false);
   const [attachBankAccount, setAttachBankAccount] = useState(false);
 
@@ -119,6 +120,10 @@ export default function NewInvoicePage() {
       alert('이메일 주소를 입력해주세요.');
       return;
     }
+    if (!attachInvoice && !attachBusinessReg && !attachBankAccount) {
+      alert('최소 1개 이상의 발송 항목을 선택해주세요.');
+      return;
+    }
 
     if (!confirm('거래명세서를 발송하시겠습니까?')) return;
 
@@ -134,6 +139,7 @@ export default function NewInvoicePage() {
           recipient_name: recipientName.trim() || undefined,
           recipient_email: recipientEmail.trim(),
           memo: memo.trim() || undefined,
+          attach_invoice: attachInvoice,
           attach_business_registration: attachBusinessReg,
           attach_bank_account: attachBankAccount,
         }),
@@ -388,49 +394,59 @@ export default function NewInvoicePage() {
         </section>
 
         {/* Attachments */}
-        {documents.length > 0 && (
-          <section className="bg-white border border-gray-200 rounded-lg p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Paperclip className="w-4 h-4 text-gray-400" />
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">첨부 문서</h2>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">체크하면 거래명세서 이메일에 파일이 함께 첨부됩니다.</p>
-            <div className="space-y-2">
-              {hasDoc('business_registration') && (
-                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={attachBusinessReg}
-                    onChange={(e) => setAttachBusinessReg(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">{DOC_LABELS.business_registration}</span>
-                    <span className="text-xs text-gray-400 ml-2">
-                      {documents.find((d) => d.doc_type === 'business_registration')?.file_name}
-                    </span>
-                  </div>
-                </label>
-              )}
-              {hasDoc('bank_account') && (
-                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={attachBankAccount}
-                    onChange={(e) => setAttachBankAccount(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">{DOC_LABELS.bank_account}</span>
-                    <span className="text-xs text-gray-400 ml-2">
-                      {documents.find((d) => d.doc_type === 'bank_account')?.file_name}
-                    </span>
-                  </div>
-                </label>
-              )}
-            </div>
-          </section>
-        )}
+        <section className="bg-white border border-gray-200 rounded-lg p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Paperclip className="w-4 h-4 text-gray-400" />
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">발송 항목 선택</h2>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">이메일에 포함할 항목을 선택하세요.</p>
+          <div className="space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={attachInvoice}
+                onChange={(e) => setAttachInvoice(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded border-gray-300"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">거래명세서</span>
+                <span className="text-xs text-gray-400 ml-2">이메일 본문에 명세서 내용 포함</span>
+              </div>
+            </label>
+            {hasDoc('business_registration') && (
+              <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={attachBusinessReg}
+                  onChange={(e) => setAttachBusinessReg(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">{DOC_LABELS.business_registration}</span>
+                  <span className="text-xs text-gray-400 ml-2">
+                    {documents.find((d) => d.doc_type === 'business_registration')?.file_name}
+                  </span>
+                </div>
+              </label>
+            )}
+            {hasDoc('bank_account') && (
+              <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={attachBankAccount}
+                  onChange={(e) => setAttachBankAccount(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">{DOC_LABELS.bank_account}</span>
+                  <span className="text-xs text-gray-400 ml-2">
+                    {documents.find((d) => d.doc_type === 'bank_account')?.file_name}
+                  </span>
+                </div>
+              </label>
+            )}
+          </div>
+        </section>
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pb-8">
