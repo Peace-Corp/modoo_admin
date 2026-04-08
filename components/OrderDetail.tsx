@@ -1149,6 +1149,17 @@ export default function OrderDetail({
             <PaymentLinkCard token={order.payment_link_token} />
           )}
 
+          {/* Generate Payment Link - for pending orders without a link */}
+          {!isFactoryUser && !order.payment_link_token && order.payment_status === 'pending' && (
+            <GeneratePaymentLinkCard
+              orderId={order.id}
+              onGenerated={(token) => {
+                onOrderUpdate({ ...order, payment_link_token: token });
+                onUpdate();
+              }}
+            />
+          )}
+
           {/* Price Adjustment - shown for admin users */}
           {!isFactoryUser && (
             <PriceAdjustmentCard
@@ -1304,6 +1315,52 @@ function PaymentLinkCard({ token }: { token: string }) {
             {copied ? '복사됨' : '복사'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GeneratePaymentLinkCard({ orderId, onGenerated }: { orderId: string; onGenerated: (token: string) => void }) {
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!confirm('이 주문에 대한 결제 링크를 생성하시겠습니까?\n고객이 이 링크를 통해 카드 결제할 수 있습니다.')) return;
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, generate_payment_link: true }),
+      });
+      if (res.ok) {
+        const { data } = await res.json();
+        onGenerated(data.payment_link_token);
+      } else {
+        alert('결제 링크 생성에 실패했습니다.');
+      }
+    } catch {
+      alert('결제 링크 생성에 실패했습니다.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <Link2 className="w-4 h-4 text-gray-600" />
+        <h3 className="text-sm font-semibold text-gray-900">결제 링크</h3>
+      </div>
+      <div className="p-4">
+        <p className="text-xs text-gray-500 mb-3">결제 링크를 생성하여 고객에게 카드 결제를 안내할 수 있습니다.</p>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          <Link2 className="w-4 h-4" />
+          {generating ? '생성 중...' : '결제 링크 생성'}
+        </button>
       </div>
     </div>
   );

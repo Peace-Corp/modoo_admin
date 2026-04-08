@@ -259,6 +259,9 @@ export async function PATCH(request: Request) {
       }
     }
 
+    // Handle payment link generation for existing orders
+    const generatePaymentLink = payload?.generate_payment_link === true;
+
     // Handle price adjustment
     const priceAdjustment = payload?.priceAdjustment ?? null;
 
@@ -270,6 +273,11 @@ export async function PATCH(request: Request) {
 
     if (paymentStatusInput !== null) {
       updateData.payment_status = paymentStatusInput;
+    }
+
+    if (generatePaymentLink) {
+      const newToken = randomBytes(16).toString('hex');
+      updateData.payment_link_token = newToken;
     }
 
     if (priceAdjustment !== null && typeof priceAdjustment === 'object') {
