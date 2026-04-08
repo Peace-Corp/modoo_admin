@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
-import { AlertCircle, Calendar, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, ExternalLink, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, Calendar, Check, ChevronLeft, ChevronRight, ClipboardList, Copy, Download, ExternalLink, MapPin, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Truck, UserPlus } from 'lucide-react';
 import { CoBuyCustomField, CoBuyParticipant, CoBuySession, CoBuyStatus } from '@/types/types';
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
+import CoBuyParticipantModal, { ParticipantFormData } from './cobuy/CoBuyParticipantModal';
+import CoBuyRefundModal from './cobuy/CoBuyRefundModal';
 
 const statusLabels: Record<CoBuyStatus, string> = {
   gathering: '모집중',
@@ -41,6 +43,16 @@ const paymentStatusColors: Record<CoBuyParticipant['payment_status'], string> = 
   completed: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
   refunded: 'bg-gray-100 text-gray-800',
+};
+
+const pickupStatusLabels: Record<string, string> = {
+  pending: '미수령',
+  picked_up: '수령완료',
+};
+
+const pickupStatusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  picked_up: 'bg-green-100 text-green-800',
 };
 
 const formatDate = (dateString?: string | null) => {
@@ -96,6 +108,16 @@ export default function CoBuyTab() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [previewIndex, setPreviewIndex] = useState(0);
+
+  // Participant management state
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantPaymentFilter, setParticipantPaymentFilter] = useState<'all' | CoBuyParticipant['payment_status']>('all');
+  const [participantPickupFilter, setParticipantPickupFilter] = useState<'all' | 'pending' | 'picked_up'>('all');
+  const [showParticipantModal, setShowParticipantModal] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<CoBuyParticipant | null>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundParticipant, setRefundParticipant] = useState<CoBuyParticipant | null>(null);
+  const [updatingPickupStatus, setUpdatingPickupStatus] = useState<Set<string>>(new Set());
 
   const { data: sessions = [], isLoading: loading, error: sessionsError, mutate: mutateSessions } = useSWR<CoBuySession[]>(
     `/api/admin/cobuy/sessions?status=${filterStatus}`
@@ -232,6 +254,129 @@ export default function CoBuyTab() {
     return ordered;
   }, [participants, selectedSession?.custom_fields]);
 
+  const filteredParticipants = useMemo(() => {
+    let filtered = participants;
+    if (participantSearch.trim()) {
+      const q = participantSearch.trim().toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.email.toLowerCase().includes(q) ||
+        (p.phone && p.phone.includes(q))
+      );
+    }
+    if (participantPaymentFilter !== 'all') {
+      filtered = filtered.filter(p => p.payment_status === participantPaymentFilter);
+    }
+    if (participantPickupFilter !== 'all') {
+      filtered = filtered.filter(p => (p.pickup_status || 'pending') === participantPickupFilter);
+    }
+    return filtered;
+  }, [participants, participantSearch, participantPaymentFilter, participantPickupFilter]);
+
+  const handleTogglePickupStatus = useCallback(async (participant: CoBuyParticipant) => {
+    if (updatingPickupStatus.has(participant.id)) return;
+    const newStatus = (participant.pickup_status || 'pending') === 'picked_up' ? 'pending' : 'picked_up';
+
+    setUpdatingPickupStatus(prev => new Set(prev).add(participant.id));
+
+    try {
+      const response = await fetch('/api/admin/cobuy/participants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId: participant.id, pickupStatus: newStatus }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '수령 상태 변경에 실패했습니다.');
+      }
+      mutateParticipants();
+    } catch (error) {
+      console.error('Error toggling pickup status:', error);
+      setDetailError(error instanceof Error ? error.message : '수령 상태 변경에 실패했습니다.');
+    } finally {
+      setUpdatingPickupStatus(prev => {
+        const next = new Set(prev);
+        next.delete(participant.id);
+        return next;
+      });
+    }
+  }, [updatingPickupStatus, mutateParticipants]);
+
+  const handleAddParticipant = useCallback(async (data: ParticipantFormData) => {
+    if (!selectedSession) return;
+    const response = await fetch('/api/admin/cobuy/participants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: selectedSession.id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone || null,
+        selectedItems: data.selectedItems,
+        fieldResponses: data.fieldResponses,
+        deliveryMethod: data.deliveryMethod,
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.error || '참여자 추가에 실패했습니다.');
+    }
+    mutateParticipants();
+    mutateSessions();
+  }, [selectedSession, mutateParticipants, mutateSessions]);
+
+  const handleEditParticipant = useCallback(async (data: ParticipantFormData) => {
+    if (!editingParticipant) return;
+    const totalQuantity = data.selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+    const selectedSize = data.selectedItems.map(i => `${i.size}(${i.quantity})`).join(', ');
+
+    const response = await fetch('/api/admin/cobuy/participants', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        participantId: editingParticipant.id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone || null,
+        selectedItems: data.selectedItems,
+        totalQuantity,
+        selectedSize,
+        fieldResponses: data.fieldResponses,
+        deliveryMethod: data.deliveryMethod,
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.error || '참여자 수정에 실패했습니다.');
+    }
+    mutateParticipants();
+  }, [editingParticipant, mutateParticipants]);
+
+  const handleDeleteParticipant = useCallback(async (participant: CoBuyParticipant) => {
+    const confirmed = window.confirm(`${participant.name}님을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`);
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/admin/cobuy/participants?participantId=${participant.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || '참여자 삭제에 실패했습니다.');
+      }
+      mutateParticipants();
+      mutateSessions();
+    } catch (error) {
+      console.error('Error deleting participant:', error);
+      setDetailError(error instanceof Error ? error.message : '참여자 삭제에 실패했습니다.');
+    }
+  }, [mutateParticipants, mutateSessions]);
+
+  const sizeOptionsFromSession = useMemo(() => {
+    const sizeField = selectedSession?.custom_fields?.find(f => f.id === 'size' && f.type === 'dropdown');
+    return sizeField?.options ?? [];
+  }, [selectedSession?.custom_fields]);
+
   const handleDownloadExcel = async () => {
     if (participants.length === 0 || !selectedSession) return;
 
@@ -328,11 +473,11 @@ export default function CoBuyTab() {
                     : ' / 무제한'}
                 </div>
                 <div className="text-gray-700 flex items-center gap-2">
-                  <span className="truncate">공유 링크: {`${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`}</span>
+                  <span className="truncate">공유 링크: {`https://modoouniform.com/cobuy/${selectedSession.share_token}`}</span>
                   <button
                     type="button"
                     onClick={() => {
-                      const url = `${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`;
+                      const url = `https://modoouniform.com/cobuy/${selectedSession.share_token}`;
                       navigator.clipboard.writeText(url).then(() => alert('링크가 복사되었습니다.'));
                     }}
                     className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -341,7 +486,7 @@ export default function CoBuyTab() {
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                   <a
-                    href={`${window.location.origin.replace('admin.', '')}/cobuy/${selectedSession.share_token}`}
+                    href={`https://modoouniform.com/cobuy/${selectedSession.share_token}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -440,26 +585,73 @@ export default function CoBuyTab() {
             )}
 
             <div className="bg-white border border-gray-200/60 rounded-md p-3 sm:p-4 shadow-sm">
+              {/* Header with actions */}
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">참여자 목록</h3>
+                <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+                  참여자 목록
+                  <span className="text-xs font-normal text-gray-500 ml-1">
+                    ({filteredParticipants.length}{filteredParticipants.length !== participants.length ? ` / ${participants.length}` : ''})
+                  </span>
+                </h3>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingParticipant(null); setShowParticipantModal(true); }}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">수기 추가</span>
+                  </button>
                   <button
                     onClick={handleDownloadExcel}
                     disabled={participants.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">엑셀 다운로드</span>
+                    <span className="hidden sm:inline">엑셀</span>
                   </button>
                   <button
                     onClick={() => mutateParticipants()}
-                    className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                     disabled={detailLoading}
                   >
                     <RefreshCw className={`w-4 h-4 ${detailLoading ? 'animate-spin' : ''}`} />
-                    새로고침
+                    <span className="hidden sm:inline">새로고침</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Search & Filters */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="이름, 이메일, 전화번호 검색..."
+                    value={participantSearch}
+                    onChange={(e) => setParticipantSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <select
+                  value={participantPaymentFilter}
+                  onChange={(e) => setParticipantPaymentFilter(e.target.value as typeof participantPaymentFilter)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-xs"
+                >
+                  <option value="all">결제: 전체</option>
+                  <option value="pending">결제: 대기</option>
+                  <option value="completed">결제: 완료</option>
+                  <option value="failed">결제: 실패</option>
+                  <option value="refunded">결제: 환불</option>
+                </select>
+                <select
+                  value={participantPickupFilter}
+                  onChange={(e) => setParticipantPickupFilter(e.target.value as typeof participantPickupFilter)}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-xs"
+                >
+                  <option value="all">수령: 전체</option>
+                  <option value="pending">수령: 미수령</option>
+                  <option value="picked_up">수령: 완료</option>
+                </select>
               </div>
 
               {detailLoading ? (
@@ -468,99 +660,216 @@ export default function CoBuyTab() {
                 </div>
               ) : (
                 <>
+                  {/* Desktop table */}
                   <div className="overflow-x-auto hidden md:block">
                     <table className="w-full">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            참여자
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            연락처
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            사이즈
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            결제 상태
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            결제 금액
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            응답
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            참여일
-                          </th>
+                          <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">참여자</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주문 내역</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수령 방법</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">결제</th>
+                          <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">수령 상태</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">참여일</th>
+                          <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">액션</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {participants.map((participant) => (
-                          <tr key={participant.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                              <div className="text-xs text-gray-500">{participant.email}</div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                              {participant.phone || '-'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                              {participant.selected_size}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[participant.payment_status]}`}
-                              >
-                                {paymentStatusLabels[participant.payment_status]}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                              {formatCurrency(participant.payment_amount ?? undefined)}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">
-                              {renderFieldResponses(participant.field_responses, selectedSession?.custom_fields)}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                              {formatDate(participant.joined_at)}
-                            </td>
-                          </tr>
-                        ))}
+                        {filteredParticipants.map((participant) => {
+                          const pickupStatus = participant.pickup_status || 'pending';
+                          const isPickedUp = pickupStatus === 'picked_up';
+                          const isUpdatingPickup = updatingPickupStatus.has(participant.id);
+                          return (
+                            <tr key={participant.id} className="hover:bg-gray-50 transition-colors align-top">
+                              <td className="px-3 py-3">
+                                <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                                <div className="text-xs text-gray-500">{participant.email}</div>
+                                {participant.phone && <div className="text-xs text-gray-400">{participant.phone}</div>}
+                              </td>
+                              <td className="px-3 py-3">
+                                {participant.selected_items?.length ? (
+                                  <div className="space-y-0.5">
+                                    {participant.selected_items.map((item, idx) => (
+                                      <div key={idx} className="flex items-center gap-1.5 text-xs">
+                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded font-medium">{item.size}</span>
+                                        <span className="text-gray-400">x</span>
+                                        <span className="font-medium">{item.quantity}</span>
+                                      </div>
+                                    ))}
+                                    <div className="text-[11px] text-gray-500 pt-0.5 border-t border-gray-100 mt-1">
+                                      총 {participant.total_quantity || participant.selected_items.reduce((s, i) => s + i.quantity, 0)}벌
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-700">{participant.selected_size || '-'}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-3">
+                                {participant.delivery_method ? (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    {participant.delivery_method === 'delivery' ? (
+                                      <><Truck className="w-3.5 h-3.5 text-blue-600" /><span>배송</span></>
+                                    ) : (
+                                      <><MapPin className="w-3.5 h-3.5 text-green-600" /><span>직접 수령</span></>
+                                    )}
+                                    {participant.delivery_fee > 0 && (
+                                      <span className="text-gray-400 text-[11px]">(+{participant.delivery_fee.toLocaleString()})</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400">-</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${paymentStatusColors[participant.payment_status]}`}>
+                                  {paymentStatusLabels[participant.payment_status]}
+                                </span>
+                                <div className="text-xs text-gray-600 mt-0.5">
+                                  {formatCurrency(participant.payment_amount ?? undefined)}
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <button
+                                  onClick={() => handleTogglePickupStatus(participant)}
+                                  disabled={isUpdatingPickup}
+                                  title={isPickedUp ? '수령 완료 → 미수령' : '미수령 → 수령 완료'}
+                                  className={`w-7 h-7 rounded-full inline-flex items-center justify-center transition-colors ${
+                                    isPickedUp
+                                      ? 'bg-green-500 text-white hover:bg-green-600'
+                                      : 'bg-gray-200 text-gray-400 hover:bg-gray-300'
+                                  } ${isUpdatingPickup ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                >
+                                  {isUpdatingPickup ? (
+                                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                  )}
+                                </button>
+                                <div className={`text-[10px] mt-0.5 font-medium ${pickupStatusColors[pickupStatus]?.replace('bg-', 'text-').replace('100', '700') || 'text-gray-500'}`}>
+                                  {pickupStatusLabels[pickupStatus] || pickupStatus}
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
+                                {new Date(participant.joined_at).toLocaleDateString('ko-KR')}
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => { setEditingParticipant(participant); setShowParticipantModal(true); }}
+                                    title="수정"
+                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  {participant.payment_status === 'completed' && (
+                                    <button
+                                      onClick={() => { setRefundParticipant(participant); setShowRefundModal(true); }}
+                                      title="환불"
+                                      className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteParticipant(participant)}
+                                    title="삭제"
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
+                  {/* Mobile cards */}
                   <div className="md:hidden divide-y divide-gray-200">
-                    {participants.map((participant) => (
-                      <div key={participant.id} className="p-3 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-xs font-medium text-gray-900">{participant.name}</div>
-                            <div className="text-[11px] text-gray-500">{participant.email}</div>
+                    {filteredParticipants.map((participant) => {
+                      const pickupStatus = participant.pickup_status || 'pending';
+                      const isPickedUp = pickupStatus === 'picked_up';
+                      const isUpdatingPickup = updatingPickupStatus.has(participant.id);
+                      return (
+                        <div key={participant.id} className="p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-gray-900">{participant.name}</div>
+                              <div className="text-[11px] text-gray-500">{participant.email}</div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${paymentStatusColors[participant.payment_status]}`}>
+                                {paymentStatusLabels[participant.payment_status]}
+                              </span>
+                              <button
+                                onClick={() => handleTogglePickupStatus(participant)}
+                                disabled={isUpdatingPickup}
+                                className={`w-6 h-6 rounded-full inline-flex items-center justify-center ${
+                                  isPickedUp ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'
+                                } ${isUpdatingPickup ? 'opacity-50' : ''}`}
+                              >
+                                <Check className="w-3 h-3" strokeWidth={3} />
+                              </button>
+                            </div>
                           </div>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${paymentStatusColors[participant.payment_status]}`}>
-                            {paymentStatusLabels[participant.payment_status]}
-                          </span>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                            {participant.selected_items?.length ? (
+                              participant.selected_items.map((item, idx) => (
+                                <span key={idx}>{item.size} x{item.quantity}</span>
+                              ))
+                            ) : (
+                              <span>{participant.selected_size}</span>
+                            )}
+                            <span className="font-medium text-gray-700">{formatCurrency(participant.payment_amount ?? undefined)}</span>
+                            {participant.delivery_method && (
+                              <span>{participant.delivery_method === 'delivery' ? '배송' : '직접 수령'}</span>
+                            )}
+                            <span className={`font-medium ${isPickedUp ? 'text-green-600' : 'text-yellow-600'}`}>
+                              {pickupStatusLabels[pickupStatus]}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-gray-400">
+                              {new Date(participant.joined_at).toLocaleDateString('ko-KR')}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => { setEditingParticipant(participant); setShowParticipantModal(true); }}
+                                className="p-1 text-gray-400 hover:text-blue-600"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              {participant.payment_status === 'completed' && (
+                                <button
+                                  onClick={() => { setRefundParticipant(participant); setShowRefundModal(true); }}
+                                  className="p-1 text-gray-400 hover:text-orange-600"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteParticipant(participant)}
+                                className="p-1 text-gray-400 hover:text-red-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                          <span>{participant.phone || '-'}</span>
-                          <span>사이즈: {participant.selected_size}</span>
-                          <span className="font-medium text-gray-700">{formatCurrency(participant.payment_amount ?? undefined)}</span>
-                        </div>
-                        <div className="text-[11px] text-gray-400">{formatDate(participant.joined_at)}</div>
-                        {participant.field_responses && Object.keys(participant.field_responses).length > 0 && (
-                          <div className="text-[11px]">{renderFieldResponses(participant.field_responses, selectedSession?.custom_fields)}</div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
 
-              {!detailLoading && participants.length === 0 && (
+              {!detailLoading && filteredParticipants.length === 0 && (
                 <div className="text-center py-10">
                   <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">참여자가 없습니다.</p>
+                  <p className="text-gray-500">
+                    {participants.length === 0 ? '참여자가 없습니다.' : '검색 결과가 없습니다.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -646,6 +955,24 @@ export default function CoBuyTab() {
             </div>
           </div>
         </div>
+
+        {/* Participant Add/Edit Modal */}
+        <CoBuyParticipantModal
+          isOpen={showParticipantModal}
+          onClose={() => { setShowParticipantModal(false); setEditingParticipant(null); }}
+          onSave={editingParticipant ? handleEditParticipant : handleAddParticipant}
+          participant={editingParticipant}
+          customFields={selectedSession.custom_fields}
+          sizeOptions={sizeOptionsFromSession}
+        />
+
+        {/* Refund Modal */}
+        <CoBuyRefundModal
+          isOpen={showRefundModal}
+          onClose={() => { setShowRefundModal(false); setRefundParticipant(null); }}
+          participant={refundParticipant}
+          onRefunded={() => { mutateParticipants(); mutateSessions(); }}
+        />
       </div>
     );
   }

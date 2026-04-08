@@ -508,6 +508,24 @@ export interface CoBuySession {
   } | null;
 }
 
+export interface CoBuySelectedItem {
+  size: string;
+  quantity: number;
+}
+
+export type CoBuyDeliveryMethod = 'pickup' | 'delivery';
+
+export type CoBuyPickupStatus = 'pending' | 'picked_up';
+
+export interface CoBuyDeliveryInfo {
+  recipientName: string;
+  phone: string;
+  postalCode: string;
+  address: string;
+  addressDetail: string;
+  memo?: string;
+}
+
 export interface CoBuyParticipant {
   id: string;
   cobuy_session_id: string;
@@ -515,8 +533,14 @@ export interface CoBuyParticipant {
   email: string;
   phone: string | null;
   field_responses: Record<string, string>;
-  selected_size: string; // Display label (e.g., "S", "M", "L")
-  selected_size_code: string | null; // Internal size code for admin/factory tracking
+  selected_size: string;
+  selected_size_code: string | null;
+  selected_items: CoBuySelectedItem[];
+  total_quantity: number;
+  delivery_method: CoBuyDeliveryMethod | null;
+  delivery_info: CoBuyDeliveryInfo | null;
+  delivery_fee: number;
+  pickup_status: CoBuyPickupStatus;
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
   payment_key: string | null;
   payment_amount: number | null;
