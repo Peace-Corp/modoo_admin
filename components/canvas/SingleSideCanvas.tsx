@@ -631,10 +631,10 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
           return canvasState;
         })();
 
-        // Apply initial color filter - check canvasState first, then prop, then default white
-        // Note: we do NOT fall back to the global store here because preview canvases
-        // can pollute it (e.g. a black product color leaking to all subsequent canvases)
-        const initialProductColor = parsedCanvasState?.productColor || productColor || '#FFFFFF';
+        // Apply initial color filter - prop (from order/design data) takes priority
+        // over canvasState because a previous admin save may have persisted a stale
+        // default (#FFFFFF) into canvasState.productColor.
+        const initialProductColor = productColor || parsedCanvasState?.productColor || '#FFFFFF';
         // Only sync to global store in edit mode to allow user color changes
         if (isEdit) {
           useCanvasStore.getState().setProductColor(initialProductColor);
