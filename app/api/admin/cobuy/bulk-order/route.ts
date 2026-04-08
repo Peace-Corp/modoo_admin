@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const adminClient = createAdminClient();
     const { data: session, error: sessionError } = await adminClient
       .from('cobuy_sessions')
-      .select('id, user_id, saved_design_id, title, status, bulk_order_id')
+      .select('id, user_id, saved_design_screenshot_id, title, status, bulk_order_id, cobuy_image_urls')
       .eq('id', sessionId)
       .single();
 
@@ -102,28 +102,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '모집완료 상태의 세션만 주문을 생성할 수 있습니다.' }, { status: 400 });
     }
 
+    // Fetch participants (all statuses - free cobuys may stay 'pending')
     const { data: participants, error: participantError } = await adminClient
       .from('cobuy_participants')
-      .select('id, name, email, phone, selected_size, payment_status, payment_amount')
-      .eq('cobuy_session_id', sessionId)
-      .eq('payment_status', 'completed');
+      .select('id, name, email, phone, selected_size, selected_items, total_quantity, payment_status, payment_amount')
+      .eq('cobuy_session_id', sessionId);
 
     if (participantError) {
       return NextResponse.json({ error: participantError.message }, { status: 500 });
     }
 
     if (!participants || participants.length === 0) {
-      return NextResponse.json({ error: '결제 완료된 참여자가 없습니다.' }, { status: 400 });
+      return NextResponse.json({ error: '참여자가 없습니다.' }, { status: 400 });
     }
 
+    // Fetch design data from saved_design_screenshots (not saved_designs)
     const { data: design, error: designError } = await adminClient
-      .from('saved_designs')
-      .select('id, product_id, title, canvas_state, color_selections, preview_url, price_per_item')
-      .eq('id', session.saved_design_id)
+      .from('saved_design_screenshots')
+      .select('id, product_id, title, canvas_state, color_selections, preview_url, price_per_item, image_urls, text_svg_exports, custom_fonts')
+      .eq('id', session.saved_design_screenshot_id)
       .single();
 
     if (designError || !design) {
       return NextResponse.json({ error: designError?.message || '디자인 정보를 찾을 수 없습니다.' }, { status: 500 });
+    }
+
+    // Image-only cobuys have no product_id - cannot create order_items (product_id is NOT NULL)
+    if (!design.product_id) {
+      return NextResponse.json({
+        error: '이미지 전용 공동구매는 일괄 주문 생성을 지원하지 않습니다. 주문 관리에서 직접 생성해주세요.',
+      }, { status: 400 });
     }
 
     const { data: product, error: productError } = await adminClient
@@ -142,52 +150,52 @@ export async function POST(request: Request) {
       .eq('id', session.user_id)
       .single();
 
-    const totalQuantity = participants.length;
-    const totalPaid = participants.reduce((sum, participant) => {
-      return sum + toNumber(participant.payment_amount);
-    }, 0);
-
-    const designPrice = toNumber(design.price_per_item);
-    const basePrice = designPrice > 0 ? designPrice : toNumber(product.base_price);
-    const totalAmount = totalPaid > 0 ? totalPaid : basePrice * totalQuantity;
-    const pricePerItem = totalQuantity > 0 ? Number((totalAmount / totalQuantity).toFixed(2)) : basePrice;
-
-    // SizeOption is now an object with label and size_code
-    interface SizeOptionObj {
-      label: string;
-      size_code: string;
-    }
-    const rawSizeOptions = normalizeJson<(string | SizeOptionObj)[]>(
-      product.size_options ?? null,
-      []
-    );
-    // Normalize to ensure all are objects
+    // Build size variant map from selected_items (supports multi-size per participant)
+    interface SizeOptionObj { label: string; size_code: string; }
+    const rawSizeOptions = normalizeJson<(string | SizeOptionObj)[]>(product.size_options ?? null, []);
     const sizeOptions: SizeOptionObj[] = rawSizeOptions.map((opt) =>
       typeof opt === 'string' ? { label: opt, size_code: opt } : opt
     );
 
     const variantMap = new Map<string, { size_id: string; size_name: string; quantity: number }>();
 
-    participants.forEach((participant) => {
-      const selectedSize = participant.selected_size || 'unknown';
-      // Find matching size option by label (what the user selected)
-      const matchedSizeOpt = sizeOptions.find((opt) => opt.label === selectedSize);
+    for (const participant of participants) {
+      const items = normalizeJson<{ size: string; quantity: number }[]>(participant.selected_items, []);
 
-      const sizeId = matchedSizeOpt?.size_code || selectedSize;
-      const sizeName = matchedSizeOpt?.label || selectedSize;
+      if (items.length > 0) {
+        for (const item of items) {
+          const sizeName = item.size || 'unknown';
+          const matched = sizeOptions.find((opt) => opt.label === sizeName);
+          const sizeId = matched?.size_code || sizeName;
 
-      const existing = variantMap.get(sizeId);
-      if (existing) {
-        existing.quantity += 1;
+          const existing = variantMap.get(sizeId);
+          if (existing) {
+            existing.quantity += item.quantity;
+          } else {
+            variantMap.set(sizeId, { size_id: sizeId, size_name: matched?.label || sizeName, quantity: item.quantity });
+          }
+        }
       } else {
-        // size_id is the size_code (for admin/factory), size_name is the label (for display)
-        variantMap.set(sizeId, {
-          size_id: sizeId,
-          size_name: sizeName,
-          quantity: 1,
-        });
+        const sizeName = participant.selected_size || 'unknown';
+        const matched = sizeOptions.find((opt) => opt.label === sizeName);
+        const sizeId = matched?.size_code || sizeName;
+
+        const existing = variantMap.get(sizeId);
+        if (existing) {
+          existing.quantity += 1;
+        } else {
+          variantMap.set(sizeId, { size_id: sizeId, size_name: matched?.label || sizeName, quantity: 1 });
+        }
       }
-    });
+    }
+
+    const totalQuantity = participants.reduce((sum, p) => sum + (toNumber(p.total_quantity) || 1), 0);
+    const totalPaid = participants.reduce((sum, p) => sum + toNumber(p.payment_amount), 0);
+
+    const designPrice = toNumber(design.price_per_item);
+    const basePrice = designPrice > 0 ? designPrice : toNumber(product.base_price);
+    const totalAmount = totalPaid > 0 ? totalPaid : basePrice * totalQuantity;
+    const pricePerItem = totalQuantity > 0 ? Number((totalAmount / totalQuantity).toFixed(2)) : basePrice;
 
     const colorSelections = normalizeJson<Record<string, any>>(design.color_selections ?? null, {});
     const canvasState = normalizeJson<Record<string, any>>(design.canvas_state ?? null, {});
@@ -226,7 +234,7 @@ export async function POST(request: Request) {
       address_line_1: null,
       address_line_2: null,
       delivery_fee: 0,
-      payment_method: 'toss',
+      payment_method: 'admin',
       payment_key: null,
       payment_status: 'completed',
       order_status: 'payment_completed',
@@ -244,7 +252,7 @@ export async function POST(request: Request) {
     const orderItemPayload = {
       order_id: orderId,
       product_id: design.product_id,
-      design_id: design.id,
+      design_id: null,
       product_title: product.title || 'CoBuy Product',
       quantity: totalQuantity,
       price_per_item: pricePerItem,
@@ -252,6 +260,9 @@ export async function POST(request: Request) {
       color_selections: colorSelections,
       item_options: itemOptions,
       thumbnail_url: design.preview_url || null,
+      image_urls: design.image_urls || null,
+      text_svg_exports: design.text_svg_exports || null,
+      custom_fonts: design.custom_fonts || null,
     };
 
     const { error: orderItemError } = await adminClient

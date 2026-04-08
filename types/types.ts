@@ -483,7 +483,7 @@ export interface CoBuyCustomField {
 export interface CoBuySession {
   id: string;
   user_id: string;
-  saved_design_id: string;
+  saved_design_screenshot_id: string;
   title: string;
   description: string | null;
   status: CoBuyStatus;
@@ -493,7 +493,7 @@ export interface CoBuySession {
   max_participants: number | null;
   current_participant_count: number;
   custom_fields: CoBuyCustomField[];
-  cobuy_image_urls: string[] | null; // When set, indicates image-only CoBuy (no canvas design)
+  cobuy_image_urls: string[] | null;
   bulk_order_id: string | null;
   created_at: string;
   updated_at: string;
@@ -502,7 +502,6 @@ export interface CoBuySession {
     phone_number?: string | null;
   } | null;
   cancellation_requested_at?: string | null;
-  saved_design_screenshot_id?: string | null;
   saved_design_screenshots?: {
     preview_url: string | null;
   } | null;
