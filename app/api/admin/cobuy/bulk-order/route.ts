@@ -98,8 +98,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '이미 주문이 생성된 세션입니다.' }, { status: 409 });
     }
 
-    if (session.status !== 'finalized') {
-      return NextResponse.json({ error: '확정된 세션만 주문을 생성할 수 있습니다.' }, { status: 400 });
+    if (session.status !== 'gather_complete') {
+      return NextResponse.json({ error: '모집완료 상태의 세션만 주문을 생성할 수 있습니다.' }, { status: 400 });
     }
 
     const { data: participants, error: participantError } = await adminClient

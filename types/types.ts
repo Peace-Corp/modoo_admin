@@ -447,7 +447,7 @@ export interface InquiryReply {
   updated_at: string;
 }
 
-export type CoBuyStatus = 'open' | 'closed' | 'cancelled' | 'finalized' | 'gathering' | 'gather_complete' | 'order_complete' | 'manufacturing' | 'manufacture_complete' | 'delivering' | 'delivery_complete';
+export type CoBuyStatus = 'gathering' | 'gather_complete' | 'order_complete' | 'manufacturing' | 'manufacture_complete' | 'delivering' | 'delivery_complete' | 'cancelled';
 
 // Pricing tier for quantity-based discounts
 export interface CoBuyPricingTier {

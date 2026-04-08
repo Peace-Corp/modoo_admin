@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
-const allowedStatuses = new Set(['open', 'closed', 'cancelled', 'finalized']);
+const allowedStatuses = new Set([
+  'gathering',
+  'gather_complete',
+  'order_complete',
+  'manufacturing',
+  'manufacture_complete',
+  'delivering',
+  'delivery_complete',
+  'cancelled',
+]);
 
 const requireAdmin = async () => {
   const supabase = await createClient();

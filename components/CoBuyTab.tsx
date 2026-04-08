@@ -8,10 +8,6 @@ import { CoBuyCustomField, CoBuyParticipant, CoBuySession, CoBuyStatus } from '@
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 
 const statusLabels: Record<CoBuyStatus, string> = {
-  open: '진행중',
-  closed: '마감',
-  finalized: '확정',
-  cancelled: '취소',
   gathering: '모집중',
   gather_complete: '모집완료',
   order_complete: '주문완료',
@@ -19,13 +15,10 @@ const statusLabels: Record<CoBuyStatus, string> = {
   manufacture_complete: '제작완료',
   delivering: '배송중',
   delivery_complete: '배송완료',
+  cancelled: '취소',
 };
 
 const statusColors: Record<CoBuyStatus, string> = {
-  open: 'bg-green-100 text-green-800',
-  closed: 'bg-yellow-100 text-yellow-800',
-  finalized: 'bg-blue-100 text-blue-800',
-  cancelled: 'bg-red-100 text-red-800',
   gathering: 'bg-green-100 text-green-800',
   gather_complete: 'bg-teal-100 text-teal-800',
   order_complete: 'bg-indigo-100 text-indigo-800',
@@ -33,6 +26,7 @@ const statusColors: Record<CoBuyStatus, string> = {
   manufacture_complete: 'bg-violet-100 text-violet-800',
   delivering: 'bg-orange-100 text-orange-800',
   delivery_complete: 'bg-emerald-100 text-emerald-800',
+  cancelled: 'bg-red-100 text-red-800',
 };
 
 const paymentStatusLabels: Record<CoBuyParticipant['payment_status'], string> = {
@@ -97,7 +91,7 @@ export default function CoBuyTab() {
 
   const [filterStatus, setFilterStatus] = useState<'all' | CoBuyStatus>('all');
   const [selectedSession, setSelectedSession] = useState<CoBuySession | null>(null);
-  const [statusUpdate, setStatusUpdate] = useState<CoBuyStatus>('open');
+  const [statusUpdate, setStatusUpdate] = useState<CoBuyStatus>('gathering');
   const [actionLoading, setActionLoading] = useState<'status' | 'bulk' | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [showCreator, setShowCreator] = useState(!!resumeProductId && !!resumeDesignId);
@@ -636,7 +630,7 @@ export default function CoBuyTab() {
                 <label className="text-xs sm:text-sm text-gray-600">일괄 주문 생성</label>
                 <button
                   onClick={handleCreateBulkOrder}
-                  disabled={actionLoading === 'bulk' || !!selectedSession.bulk_order_id || selectedSession.status !== 'finalized'}
+                  disabled={actionLoading === 'bulk' || !!selectedSession.bulk_order_id || selectedSession.status !== 'gather_complete'}
                   className="w-full px-3 py-2 bg-gray-900 text-white text-xs sm:text-sm rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {selectedSession.bulk_order_id
@@ -646,7 +640,7 @@ export default function CoBuyTab() {
                     : '주문 생성하기'}
                 </button>
                 <p className="text-xs text-gray-500">
-                  확정된 세션에서만 주문을 생성할 수 있습니다.
+                  모집완료 상태의 세션에서만 주문을 생성할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -720,9 +714,11 @@ export default function CoBuyTab() {
         <div className="flex gap-2 flex-wrap">
           {[
             { value: 'all', label: '전체' },
-            { value: 'open', label: '진행중' },
-            { value: 'closed', label: '마감' },
-            { value: 'finalized', label: '확정' },
+            { value: 'gathering', label: '모집중' },
+            { value: 'gather_complete', label: '모집완료' },
+            { value: 'order_complete', label: '주문완료' },
+            { value: 'manufacturing', label: '제작중' },
+            { value: 'delivering', label: '배송중' },
             { value: 'cancelled', label: '취소' },
           ].map((filter) => (
             <button
