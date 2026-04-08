@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck, Link2, Pencil, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck, Link2, Pencil, X, Loader2, Send } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
@@ -75,6 +75,34 @@ export default function OrderDetail({
   const [shareError, setShareError] = useState<string | null>(null);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
   const [updatingFactoryStatus, setUpdatingFactoryStatus] = useState(false);
+  const [sendingDesignItemId, setSendingDesignItemId] = useState<string | null>(null);
+
+  const handleSendDesign = useCallback(async (itemId: string) => {
+    if (!confirm('고객에게 시안 확인 이메일을 발송하시겠습니까?')) return;
+    setSendingDesignItemId(itemId);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/items/${itemId}/send-design`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        setOrderItems((prev) =>
+          prev.map((item) =>
+            item.id === itemId
+              ? { ...item, design_status: 'design_shared', design_shared_at: new Date().toISOString() }
+              : item
+          )
+        );
+        alert('시안 확인 이메일이 발송되었습니다.');
+      } else {
+        const data = await res.json();
+        alert(data.error || '발송에 실패했습니다.');
+      }
+    } catch {
+      alert('발송 중 오류가 발생했습니다.');
+    } finally {
+      setSendingDesignItemId(null);
+    }
+  }, [order.id]);
 
   useEffect(() => {
     fetchOrderItems();
@@ -610,6 +638,20 @@ export default function OrderDetail({
                               리터치 요청
                             </span>
                           )}
+                          {item.design_status && item.design_status !== 'pending' && (
+                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                              item.design_status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                              item.design_status === 'design_shared' ? 'bg-purple-100 text-purple-700' :
+                              item.design_status === 'revision_requested' ? 'bg-amber-100 text-amber-700' :
+                              item.design_status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {item.design_status === 'confirmed' ? '시안확정' :
+                               item.design_status === 'design_shared' ? '시안발송' :
+                               item.design_status === 'revision_requested' ? '수정요청' :
+                               item.design_status === 'in_progress' ? '작업중' : item.design_status}
+                            </span>
+                          )}
                         </div>
                         {item.products?.product_code && (
                           <p className="text-xs text-gray-500 mt-0.5">
@@ -645,6 +687,23 @@ export default function OrderDetail({
                             return <span className="text-sm text-gray-600">총 수량: {item.quantity}</span>;
                           })()}
                           <div className="flex items-center gap-2">
+                            {!isFactoryUser && item.design_status !== 'confirmed' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendDesign(item.id);
+                                }}
+                                disabled={sendingDesignItemId === item.id}
+                                className="p-1.5 rounded transition-colors hover:bg-purple-100 text-gray-400 hover:text-purple-600 disabled:opacity-50"
+                                title={item.design_status === 'design_shared' ? '시안 재발송' : '시안 발송'}
+                              >
+                                {sendingDesignItemId === item.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Send className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1026,6 +1085,35 @@ export default function OrderDetail({
                     <p className="text-sm font-medium text-gray-900">
                       {[order.state, order.city].filter(Boolean).join(' ')}
                     </p>
+                  </div>
+                )}
+                {/* Tracking Number */}
+                {order.shipping_method !== 'pickup' && (
+                  <div className="border-t border-gray-100 pt-3 mt-3">
+                    <p className="text-xs text-gray-500 mb-1.5">운송장 번호</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="운송장 번호 입력"
+                        defaultValue={order.tracking_number || ''}
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim();
+                          if (val === (order.tracking_number || '')) return;
+                          const res = await fetch('/api/admin/orders', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ orderId: order.id, trackingNumber: val || null }),
+                          });
+                          if (res.ok) {
+                            onOrderUpdate({ ...order, tracking_number: val || null } as Order);
+                          }
+                        }}
+                        className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    {order.tracking_number && (
+                      <p className="text-xs text-green-600 mt-1">등록됨: {order.tracking_number}</p>
+                    )}
                   </div>
                 )}
               </div>

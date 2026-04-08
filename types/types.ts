@@ -237,6 +237,10 @@ export interface Order {
   customer_note: string | null;
   attachment_urls: string[];
 
+  // Shipping tracking
+  tracking_number: string | null;
+  tracking_carrier: string | null;
+
   // Shareable link token (generated on demand)
   share_token: string | null;
 
@@ -285,6 +289,12 @@ export interface OrderItem {
 
   // Retouch request flag
   retouch_requested?: boolean;
+
+  // Design proof status
+  design_status: 'pending' | 'in_progress' | 'design_shared' | 'revision_requested' | 'confirmed';
+  design_shared_at: string | null;
+  design_confirmed_at: string | null;
+  design_revision_note: string | null;
 
   // Purchase order tracking
   purchase_order_status: 'pending' | 'ordered' | 'received' | 'cancelled';

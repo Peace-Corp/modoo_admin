@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendFactoryAssignmentEmail } from '@/lib/gmail';
+import { sendOrderStatusNotification, type OrderStatus } from '@/lib/notifications/order-status';
 import { randomBytes } from 'crypto';
 
 export async function GET(request: Request) {
@@ -154,7 +155,7 @@ export async function PATCH(request: Request) {
       // Verify order belongs to this factory
       const { data: existingOrder, error: orderCheckError } = await adminClient
         .from('orders')
-        .select('id, assigned_manufacturer_id')
+        .select('id, assigned_manufacturer_id, order_status, customer_name, customer_email')
         .eq('id', orderId)
         .single();
 
@@ -188,6 +189,18 @@ export async function PATCH(request: Request) {
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // Notify customer when factory changes status (e.g. shipped -> shipping)
+      const newOrderStatus = updateData.order_status as string | undefined;
+      if (newOrderStatus && newOrderStatus !== existingOrder.order_status && existingOrder.customer_email) {
+        sendOrderStatusNotification({
+          orderId,
+          customerName: existingOrder.customer_name || '고객',
+          customerEmail: existingOrder.customer_email,
+          newStatus: newOrderStatus as any,
+          previousStatus: existingOrder.order_status,
+        }).catch((err) => console.error('Order status notification (factory) failed:', err));
       }
 
       return NextResponse.json({ data });
@@ -243,7 +256,7 @@ export async function PATCH(request: Request) {
 
     const { data: existingOrder } = await adminClient
       .from('orders')
-      .select('assigned_manufacturer_id, customer_note, share_token')
+      .select('assigned_manufacturer_id, customer_note, share_token, order_status, payment_status, customer_name, customer_email')
       .eq('id', orderId)
       .single();
 
@@ -265,11 +278,22 @@ export async function PATCH(request: Request) {
     // Handle price adjustment
     const priceAdjustment = payload?.priceAdjustment ?? null;
 
+    // Handle tracking number
+    const trackingNumberInput = payload?.trackingNumber ?? null;
+    const trackingCarrierInput = payload?.trackingCarrier ?? null;
+
     // Build update object
     const updateData: Record<string, unknown> = {
       assigned_manufacturer_id: manufacturerId,
       updated_at: new Date().toISOString(),
     };
+
+    if (trackingNumberInput !== null) {
+      updateData.tracking_number = trackingNumberInput;
+    }
+    if (trackingCarrierInput !== null) {
+      updateData.tracking_carrier = trackingCarrierInput;
+    }
 
     if (paymentStatusInput !== null) {
       updateData.payment_status = paymentStatusInput;
@@ -452,6 +476,35 @@ export async function PATCH(request: Request) {
         appUrl: emailAppUrl,
         orderItems: emailItems,
       }).catch((err) => console.error('Factory assignment email failed:', err));
+    }
+
+    // Send order status change notification to customer
+    const resolvedOrderStatus = (updateData.order_status as string) ?? existingOrder?.order_status;
+    const previousOrderStatus = existingOrder?.order_status;
+    const previousPaymentStatus = existingOrder?.payment_status;
+
+    if (resolvedOrderStatus && resolvedOrderStatus !== previousOrderStatus && existingOrder?.customer_email) {
+      const trackingNumber = payload?.trackingNumber ?? null;
+      sendOrderStatusNotification({
+        orderId,
+        customerName: existingOrder.customer_name || '고객',
+        customerEmail: existingOrder.customer_email,
+        newStatus: resolvedOrderStatus as OrderStatus,
+        previousStatus: previousOrderStatus,
+        trackingNumber,
+      }).catch((err) => console.error('Order status notification failed:', err));
+    }
+
+    // Payment confirmation notification (bank transfer)
+    if (paymentStatusInput === 'completed' && previousPaymentStatus !== 'completed' && existingOrder?.customer_email) {
+      const effectiveOrderStatus = ((updateData.order_status as string) ?? 'payment_completed') as OrderStatus;
+      sendOrderStatusNotification({
+        orderId,
+        customerName: existingOrder.customer_name || '고객',
+        customerEmail: existingOrder.customer_email,
+        newStatus: effectiveOrderStatus,
+        previousStatus: previousOrderStatus,
+      }).catch((err) => console.error('Payment confirmation notification failed:', err));
     }
 
     return NextResponse.json({ data });
