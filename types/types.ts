@@ -741,6 +741,37 @@ export interface PartnerMallPreset {
   updated_at: string;
 }
 
+// ============================================================================
+// Invoice Types (거래명세서)
+// ============================================================================
+
+export interface InvoiceItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  include_vat: boolean;
+  items: InvoiceItem[];
+  subtotal: number;
+  vat_amount: number;
+  total_amount: number;
+  recipient_org: string | null;
+  recipient_name: string | null;
+  recipient_email: string;
+  memo: string | null;
+  sent_at: string;
+  created_at: string;
+}
+
+// ============================================================================
+// Editor Chat Types
+// ============================================================================
+
 export interface EditorChatMessageSender {
   name: string | null;
   role: 'admin' | 'customer' | 'factory';

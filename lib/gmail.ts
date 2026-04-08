@@ -5,11 +5,18 @@ interface GmailRecipient {
   name?: string;
 }
 
+export interface GmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendGmailParams {
   to: GmailRecipient[];
   subject: string;
   text: string;
   html: string;
+  attachments?: GmailAttachment[];
 }
 
 export interface OrderItemForEmail {
@@ -54,7 +61,7 @@ function getTransporter(): nodemailer.Transporter | null {
   return transporter;
 }
 
-export async function sendGmailEmail({ to, subject, text, html }: SendGmailParams): Promise<boolean> {
+export async function sendGmailEmail({ to, subject, text, html, attachments }: SendGmailParams): Promise<boolean> {
   const t = getTransporter();
   if (!t) return false;
 
@@ -68,6 +75,11 @@ export async function sendGmailEmail({ to, subject, text, html }: SendGmailParam
       subject,
       text,
       html,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     return true;
   } catch (error) {
