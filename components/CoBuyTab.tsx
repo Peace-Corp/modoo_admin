@@ -138,14 +138,6 @@ export default function CoBuyTab() {
     selectedSession ? `/api/admin/cobuy/participants?sessionId=${selectedSession.id}` : null
   );
 
-  const {
-    data: organizerLinkPayload,
-    error: organizerLinkError,
-    isLoading: organizerLinkLoading,
-  } = useSWR<{ url: string }>(
-    selectedSession ? `/api/admin/cobuy/organizer-link?sessionId=${selectedSession.id}` : null
-  );
-
   const handleSelectSession = (session: CoBuySession) => {
     setSelectedSession(session);
     setStatusUpdate(session.status);
@@ -532,54 +524,40 @@ export default function CoBuyTab() {
                   </div>
 
                   <div className="border-t border-gray-200 pt-3 space-y-1">
-                    <p className="text-[11px] font-medium text-gray-600">주최자용 (비밀 링크 · 로그인 없이 관리·수령)</p>
-                    {organizerLinkLoading && (
-                      <p className="text-[10px] text-gray-500">주최자 링크 생성 중…</p>
-                    )}
-                    {organizerLinkError && (
-                      <p className="text-[10px] text-amber-700">
-                        주최자 링크를 만들 수 없습니다. 고객 앱과 어드민에 동일한{' '}
-                        <span className="font-mono">COBUY_ORGANIZER_LINK_SECRET</span>(32자 이상)을 설정하세요.
-                      </p>
-                    )}
-                    {!organizerLinkLoading && organizerLinkPayload?.url && (
-                      <>
-                        <div className="flex items-center gap-2 text-gray-800">
-                          <code className="flex-1 min-w-0 truncate text-[11px] sm:text-xs bg-white border border-gray-200 rounded px-2 py-1.5">
-                            {organizerLinkPayload.url}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(organizerLinkPayload.url).then(() =>
-                                alert(
-                                  '주최자 관리 링크가 복사되었습니다. 링크가 있으면 누구나 관리 화면을 열 수 있으니 유출에 주의하세요.'
-                                )
-                              );
-                            }}
-                            className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
-                            title="주최자 링크 복사"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <a
-                            href={organizerLinkPayload.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
-                            title="새 탭에서 열기"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                        <p className="text-[10px] text-gray-500 leading-relaxed">
-                          경로: <span className="font-mono">/cobuy/host/[token]</span> — HMAC 서명 토큰입니다. 세션 소유자 계정 로그인 없이
-                          동일한 화면을 사용할 수 있습니다. 마이페이지 경로(
-                          <span className="font-mono">/home/my-page/cobuy/[sessionId]</span>)는 로그인한 주최자용으로 그대로 사용할 수
-                          있습니다.
-                        </p>
-                      </>
-                    )}
+                    <p className="text-[11px] font-medium text-gray-600">주최자용 (참가 링크와 같은 share_token · 로그인 필요)</p>
+                    <div className="flex items-center gap-2 text-gray-800">
+                      <code className="flex-1 min-w-0 truncate text-[11px] sm:text-xs bg-white border border-gray-200 rounded px-2 py-1.5">
+                        {`${getCustomerSiteOrigin()}/cobuy/host/${selectedSession.share_token}`}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${getCustomerSiteOrigin()}/cobuy/host/${selectedSession.share_token}`;
+                          navigator.clipboard.writeText(url).then(() =>
+                            alert('주최자 관리 링크가 복사되었습니다. 주최자 계정으로 로그인한 뒤 열 수 있습니다.')
+                          );
+                        }}
+                        className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                        title="주최자 링크 복사"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <a
+                        href={`${getCustomerSiteOrigin()}/cobuy/host/${selectedSession.share_token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                        title="새 탭"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      경로: <span className="font-mono">/cobuy/host/[share_token]</span> — 참가 링크와 동일한 토큰을 쓰며,{' '}
+                      <span className="font-mono">/cobuy/[share_token]</span>은 참여자용, <span className="font-mono">/cobuy/host/…</span>
+                      은 주최자 관리용입니다. 세션 소유자만 로그인 후 이용할 수 있습니다. 마이페이지:{' '}
+                      <span className="font-mono">/home/my-page/cobuy/[sessionId]</span>.
+                    </p>
                   </div>
                 </div>
                 <div className="text-gray-700">
