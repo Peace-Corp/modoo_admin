@@ -22,6 +22,8 @@ export interface ParticipantFormData {
   selectedItems: CoBuySelectedItem[];
   fieldResponses: Record<string, string>;
   deliveryMethod: 'pickup' | 'delivery' | null;
+  paymentAmount: number | null;
+  paymentStatus: CoBuyParticipant['payment_status'];
 }
 
 export default function CoBuyParticipantModal({
@@ -44,6 +46,8 @@ export default function CoBuyParticipantModal({
   const [selectedItems, setSelectedItems] = useState<CoBuySelectedItem[]>([{ size: '', quantity: 1 }]);
   const [fieldResponses, setFieldResponses] = useState<Record<string, string>>({});
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'delivery' | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [paymentStatus, setPaymentStatus] = useState<CoBuyParticipant['payment_status']>('pending');
 
   useEffect(() => {
     if (isOpen) {
@@ -58,6 +62,8 @@ export default function CoBuyParticipantModal({
         );
         setFieldResponses(participant.field_responses || {});
         setDeliveryMethod(participant.delivery_method || null);
+        setPaymentAmount(participant.payment_amount != null ? String(participant.payment_amount) : '');
+        setPaymentStatus(participant.payment_status);
       } else {
         setName('');
         setEmail('');
@@ -65,6 +71,8 @@ export default function CoBuyParticipantModal({
         setSelectedItems([{ size: sizeOptions[0] || '', quantity: 1 }]);
         setFieldResponses({});
         setDeliveryMethod(null);
+        setPaymentAmount('');
+        setPaymentStatus('pending');
       }
       setError(null);
     }
@@ -104,6 +112,7 @@ export default function CoBuyParticipantModal({
     setError(null);
 
     try {
+      const parsedAmount = paymentAmount.trim() !== '' ? Number(paymentAmount) : null;
       await onSave({
         name: name.trim(),
         email: email.trim(),
@@ -111,6 +120,8 @@ export default function CoBuyParticipantModal({
         selectedItems,
         fieldResponses,
         deliveryMethod,
+        paymentAmount: parsedAmount != null && !isNaN(parsedAmount) ? parsedAmount : null,
+        paymentStatus,
       });
       onClose();
     } catch (err) {
@@ -272,6 +283,35 @@ export default function CoBuyParticipantModal({
                 <span className="text-sm font-semibold text-gray-900">₩{estimatedTotal.toLocaleString()}</span>
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">결제 금액</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₩</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder={estimatedTotal != null ? estimatedTotal.toLocaleString() : '0'}
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">결제 상태</label>
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value as CoBuyParticipant['payment_status'])}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="pending">대기</option>
+                <option value="completed">완료</option>
+                <option value="not_required">불필요 (설문)</option>
+              </select>
+            </div>
           </div>
 
           <div>

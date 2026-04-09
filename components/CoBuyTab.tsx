@@ -331,6 +331,8 @@ export default function CoBuyTab() {
         selectedItems: data.selectedItems,
         fieldResponses: data.fieldResponses,
         deliveryMethod: data.deliveryMethod,
+        paymentAmount: data.paymentAmount,
+        paymentStatus: data.paymentStatus,
       }),
     });
     if (!response.ok) {
@@ -359,6 +361,8 @@ export default function CoBuyTab() {
         selectedSize,
         fieldResponses: data.fieldResponses,
         deliveryMethod: data.deliveryMethod,
+        paymentAmount: data.paymentAmount,
+        paymentStatus: data.paymentStatus,
       }),
     });
     if (!response.ok) {
@@ -392,6 +396,12 @@ export default function CoBuyTab() {
     const sizeField = selectedSession?.custom_fields?.find(f => f.id === 'size' && f.type === 'dropdown');
     return sizeField?.options ?? [];
   }, [selectedSession?.custom_fields]);
+
+  const getItemUnitPrice = useCallback((size: string): number | null => {
+    if (selectedSession?.size_prices && size && selectedSession.size_prices[size] != null) return selectedSession.size_prices[size];
+    const bp = selectedSession?.saved_design_screenshots?.price_per_item;
+    return typeof bp === 'number' ? bp : null;
+  }, [selectedSession?.size_prices, selectedSession?.saved_design_screenshots?.price_per_item]);
 
   const handleDownloadExcel = async () => {
     if (participants.length === 0 || !selectedSession) return;
@@ -753,15 +763,24 @@ export default function CoBuyTab() {
                               <td className="px-3 py-3">
                                 {participant.selected_items?.length ? (
                                   <div className="space-y-0.5">
-                                    {participant.selected_items.map((item, idx) => (
-                                      <div key={idx} className="flex items-center gap-1.5 text-xs">
-                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded font-medium">{item.size}</span>
-                                        <span className="text-gray-400">x</span>
-                                        <span className="font-medium">{item.quantity}</span>
-                                      </div>
-                                    ))}
-                                    <div className="text-[11px] text-gray-500 pt-0.5 border-t border-gray-100 mt-1">
-                                      총 {participant.total_quantity || participant.selected_items.reduce((s, i) => s + i.quantity, 0)}벌
+                                    {participant.selected_items.map((item, idx) => {
+                                      const unitPrice = getItemUnitPrice(item.size);
+                                      return (
+                                        <div key={idx} className="flex items-center gap-1.5 text-xs flex-wrap">
+                                          <span className="bg-gray-100 px-1.5 py-0.5 rounded font-medium">{item.size}</span>
+                                          <span className="text-gray-400">x</span>
+                                          <span className="font-medium">{item.quantity}</span>
+                                          {unitPrice != null && (
+                                            <span className="text-[11px] text-gray-400">(₩{(unitPrice * item.quantity).toLocaleString()})</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    <div className="text-[11px] text-gray-500 pt-0.5 border-t border-gray-100 mt-1 flex justify-between">
+                                      <span>총 {participant.total_quantity || participant.selected_items.reduce((s, i) => s + i.quantity, 0)}벌</span>
+                                      {participant.payment_amount != null && participant.payment_amount > 0 && (
+                                        <span className="font-medium text-gray-700">₩{participant.payment_amount.toLocaleString()}</span>
+                                      )}
                                     </div>
                                   </div>
                                 ) : (
@@ -880,9 +899,15 @@ export default function CoBuyTab() {
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                             {participant.selected_items?.length ? (
-                              participant.selected_items.map((item, idx) => (
-                                <span key={idx}>{item.size} x{item.quantity}</span>
-                              ))
+                              participant.selected_items.map((item, idx) => {
+                                const unitPrice = getItemUnitPrice(item.size);
+                                return (
+                                  <span key={idx}>
+                                    {item.size} x{item.quantity}
+                                    {unitPrice != null && <span className="text-gray-400"> (₩{(unitPrice * item.quantity).toLocaleString()})</span>}
+                                  </span>
+                                );
+                              })
                             ) : (
                               <span>{participant.selected_size}</span>
                             )}

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '요청 데이터가 필요합니다.' }, { status: 400 });
     }
 
-    const { sessionId, name, email, phone, selectedItems, fieldResponses, deliveryMethod, deliveryInfo, deliveryFee } = payload;
+    const { sessionId, name, email, phone, selectedItems, fieldResponses, deliveryMethod, deliveryInfo, deliveryFee, paymentAmount, paymentStatus } = payload;
 
     if (!sessionId || !name || !email || !selectedItems || !Array.isArray(selectedItems) || selectedItems.length === 0) {
       return NextResponse.json({ error: '필수 필드가 누락되었습니다. (sessionId, name, email, selectedItems)' }, { status: 400 });
@@ -95,6 +95,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 });
     }
 
+    const resolvedPaymentStatus = paymentStatus || 'pending';
+    const resolvedPaymentAmount = typeof paymentAmount === 'number' ? paymentAmount : 0;
+
     const { data: participant, error: insertError } = await adminClient
       .from('cobuy_participants')
       .insert({
@@ -111,7 +114,8 @@ export async function POST(request: Request) {
         delivery_info: deliveryInfo || null,
         delivery_fee: deliveryFee || 0,
         pickup_status: 'pending',
-        payment_status: 'pending',
+        payment_status: resolvedPaymentStatus,
+        payment_amount: resolvedPaymentAmount,
       })
       .select()
       .single();
@@ -156,6 +160,7 @@ export async function PATCH(request: Request) {
       deliveryFee: 'delivery_fee',
       pickupStatus: 'pickup_status',
       paymentStatus: 'payment_status',
+      paymentAmount: 'payment_amount',
     };
 
     const updateData: Record<string, unknown> = {};
