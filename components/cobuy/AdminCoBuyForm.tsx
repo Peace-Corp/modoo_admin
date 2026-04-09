@@ -60,6 +60,10 @@ export default function AdminCoBuyForm({
   // Pricing tiers
   const [pricingTiers, setPricingTiers] = useState<CoBuyPricingTier[]>([]);
 
+  // Payment mode
+  const [paymentMode, setPaymentMode] = useState<'individual' | 'survey'>('individual');
+  const [sizePrices, setSizePrices] = useState<Record<string, string>>({});
+
   // Custom fields
   const [customFields, setCustomFields] = useState<CoBuyCustomField[]>([]);
 
@@ -279,6 +283,17 @@ export default function AdminCoBuyForm({
         pricingTiers,
         customFields,
       };
+
+      payload.paymentMode = paymentMode;
+
+      const parsedSizePrices: Record<string, number> = {};
+      for (const [size, price] of Object.entries(sizePrices)) {
+        const n = parseInt(price);
+        if (n > 0) parsedSizePrices[size] = n;
+      }
+      if (Object.keys(parsedSizePrices).length > 0) {
+        payload.sizePrices = parsedSizePrices;
+      }
 
       if (isImageMode) {
         payload.cobuyImageUrls = cobuyImageUrls;
@@ -636,6 +651,78 @@ export default function AdminCoBuyForm({
             가격 구간 추가
           </button>
         </section>
+
+        {/* Payment Mode */}
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">결제 방식</h3>
+          <div className="flex gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="paymentMode"
+                value="individual"
+                checked={paymentMode === 'individual'}
+                onChange={() => setPaymentMode('individual')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="text-sm text-gray-700">각각 결제</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="paymentMode"
+                value="survey"
+                checked={paymentMode === 'survey'}
+                onChange={() => setPaymentMode('survey')}
+                className="w-4 h-4 text-blue-600"
+              />
+              <span className="text-sm text-gray-700">수요조사 후 대표자 일괄결제</span>
+            </label>
+          </div>
+          {paymentMode === 'survey' && (
+            <p className="text-xs text-gray-500">
+              참여자는 결제 없이 수량/사이즈만 선택하고, 모집 완료 후 대표자가 일괄 결제합니다.
+            </p>
+          )}
+        </section>
+
+        {/* Size-based Pricing (survey mode) */}
+        {paymentMode === 'survey' && (() => {
+          const availableSizes = isImageMode && !product
+            ? sizeOptions
+            : (product?.size_options || []).map((opt) =>
+                typeof opt === 'string' ? opt : opt.label
+              );
+          return availableSizes.length > 0 ? (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-900">사이즈별 가격 (선택)</h3>
+              <p className="text-xs text-gray-500">
+                사이즈마다 다른 가격을 설정할 수 있습니다. 비워두면 가격 구간의 기본 단가가 적용됩니다.
+              </p>
+              <div className="space-y-2">
+                {availableSizes.map((size) => (
+                  <div key={size} className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-700 w-16">{size}</span>
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={sizePrices[size] || ''}
+                        onChange={(e) =>
+                          setSizePrices((prev) => ({ ...prev, [size]: e.target.value }))
+                        }
+                        placeholder="기본 단가 사용"
+                        min={0}
+                        step={1000}
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-6"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">원</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null;
+        })()}
 
         {/* Custom Fields */}
         <section className="space-y-3">

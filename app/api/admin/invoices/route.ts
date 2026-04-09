@@ -6,6 +6,7 @@ import {
   generateInvoiceEmailHtml,
   generateInvoiceEmailText,
 } from '@/lib/invoice-email';
+import { renderInvoicePdfBuffer } from '@/lib/invoice-html-to-pdf';
 import type { InvoiceItem } from '@/types/types';
 
 async function requireAdmin() {
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
       recipient_email,
       memo,
       attach_invoice,
+      attach_pdf,
       attach_business_registration,
       attach_bank_account,
     } = payload as {
@@ -102,6 +104,7 @@ export async function POST(request: Request) {
       recipient_email: string;
       memo?: string;
       attach_invoice?: boolean;
+      attach_pdf?: boolean;
       attach_business_registration?: boolean;
       attach_bank_account?: boolean;
     };
@@ -227,6 +230,18 @@ export async function POST(request: Request) {
             console.error(`Failed to download attachment: ${doc.file_name}`);
           }
         }
+      }
+    }
+
+    const wantPdf = includeInvoiceBody && attach_pdf !== false;
+    if (wantPdf) {
+      const pdfBuf = await renderInvoicePdfBuffer(emailParams);
+      if (pdfBuf) {
+        attachments.push({
+          filename: `거래명세표-${invoiceNumber}.pdf`,
+          content: pdfBuf,
+          contentType: 'application/pdf',
+        });
       }
     }
 

@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
       maxQuantity,
       pricingTiers,
       customFields,
+      paymentMode,
+      sizePrices,
     } = body;
 
     const isImageOnly = Array.isArray(cobuyImageUrls) && cobuyImageUrls.length > 0;
@@ -163,6 +165,8 @@ export async function POST(request: NextRequest) {
       pricing_tiers: pricingTiers || [],
       custom_fields: customFields || [],
       delivery_settings: null,
+      payment_mode: paymentMode || 'individual',
+      size_prices: sizePrices || null,
       status: 'gathering',
       current_participant_count: 0,
       current_total_quantity: 0,

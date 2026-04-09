@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
+import { randomBytes } from 'crypto';
 
 const requireAdmin = async () => {
   const supabase = await createClient();
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     const adminClient = createAdminClient();
     const { data: session, error: sessionError } = await adminClient
       .from('cobuy_sessions')
-      .select('id, user_id, saved_design_screenshot_id, title, status, bulk_order_id, cobuy_image_urls')
+      .select('id, user_id, saved_design_screenshot_id, title, status, bulk_order_id, cobuy_image_urls, payment_mode')
       .eq('id', sessionId)
       .single();
 
@@ -217,8 +218,10 @@ export async function POST(request: Request) {
     }
 
     const orderId = buildOrderId();
+    const isSurveyMode = session.payment_mode === 'survey';
+    const paymentLinkToken = isSurveyMode ? randomBytes(16).toString('hex') : null;
 
-    const orderPayload = {
+    const orderPayload: Record<string, unknown> = {
       id: orderId,
       user_id: session.user_id,
       order_category: 'cobuy',
@@ -234,11 +237,12 @@ export async function POST(request: Request) {
       address_line_1: null,
       address_line_2: null,
       delivery_fee: 0,
-      payment_method: 'admin',
+      payment_method: isSurveyMode ? 'toss' : 'admin',
       payment_key: null,
-      payment_status: 'completed',
+      payment_status: isSurveyMode ? 'pending' : 'completed',
       order_status: 'payment_completed',
       total_amount: totalAmount,
+      payment_link_token: paymentLinkToken,
     };
 
     const { error: orderError } = await adminClient
@@ -286,7 +290,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: { orderId } });
+    let paymentLinkUrl: string | null = null;
+    if (paymentLinkToken) {
+      paymentLinkUrl = `https://modoouniform.com/order/custom/${paymentLinkToken}`;
+    }
+
+    return NextResponse.json({
+      data: {
+        orderId,
+        paymentLinkToken,
+        paymentLinkUrl,
+        paymentMode: session.payment_mode,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : '공동구매 주문 생성에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });

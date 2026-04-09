@@ -25,7 +25,7 @@ export async function POST(
 
     const { requestId } = await params;
     const body = await req.json();
-    const { confirmed_price, start_date, end_date, receive_by_date, pricing_tiers } = body;
+    const { confirmed_price, start_date, end_date, receive_by_date, pricing_tiers, payment_mode, size_prices } = body;
 
     if (!confirmed_price || isNaN(Number(confirmed_price))) {
       return NextResponse.json({ error: '확정 가격이 필요합니다.' }, { status: 400 });
@@ -110,6 +110,8 @@ export async function POST(
         custom_fields: request.custom_fields || [],
         delivery_settings: request.delivery_preferences || null,
         is_public: request.is_public || false,
+        payment_mode: payment_mode || 'individual',
+        size_prices: size_prices || null,
         status: 'gathering',
         current_participant_count: 0,
         current_total_quantity: 0,

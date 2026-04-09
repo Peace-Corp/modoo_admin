@@ -494,6 +494,8 @@ export interface CoBuySession {
   current_participant_count: number;
   custom_fields: CoBuyCustomField[];
   cobuy_image_urls: string[] | null;
+  payment_mode: 'individual' | 'survey';
+  size_prices: Record<string, number> | null;
   bulk_order_id: string | null;
   created_at: string;
   updated_at: string;
@@ -540,7 +542,7 @@ export interface CoBuyParticipant {
   delivery_info: CoBuyDeliveryInfo | null;
   delivery_fee: number;
   pickup_status: CoBuyPickupStatus;
-  payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+  payment_status: 'pending' | 'completed' | 'failed' | 'refunded' | 'not_required';
   payment_key: string | null;
   payment_amount: number | null;
   paid_at: string | null;
@@ -783,6 +785,14 @@ export interface InvoiceItem {
   quantity: number;
   unit_price: number;
   amount: number;
+  /** 규격 */
+  spec?: string;
+  /** 행 단위 비고 */
+  remarks?: string;
+  /** 월 (선택, 공란 가능) */
+  month?: string;
+  /** 일 (선택, 공란 가능) */
+  day?: string;
 }
 
 export interface Invoice {

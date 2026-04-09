@@ -9,6 +9,11 @@ import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 import CoBuyParticipantModal, { ParticipantFormData } from './cobuy/CoBuyParticipantModal';
 import CoBuyRefundModal from './cobuy/CoBuyRefundModal';
 
+/** 고객 앱(modoo_app) 공개 URL. 배포 도메인이 다르면 `NEXT_PUBLIC_CUSTOMER_SITE_URL` 설정 */
+function getCustomerSiteOrigin(): string {
+  return (process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'https://modoouniform.com').replace(/\/$/, '');
+}
+
 const statusLabels: Record<CoBuyStatus, string> = {
   gathering: '모집중',
   gather_complete: '모집완료',
@@ -36,6 +41,7 @@ const paymentStatusLabels: Record<CoBuyParticipant['payment_status'], string> = 
   completed: '완료',
   failed: '실패',
   refunded: '환불',
+  not_required: '불필요',
 };
 
 const paymentStatusColors: Record<CoBuyParticipant['payment_status'], string> = {
@@ -43,6 +49,7 @@ const paymentStatusColors: Record<CoBuyParticipant['payment_status'], string> = 
   completed: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
   refunded: 'bg-gray-100 text-gray-800',
+  not_required: 'bg-blue-100 text-blue-800',
 };
 
 const pickupStatusLabels: Record<string, string> = {
@@ -118,6 +125,8 @@ export default function CoBuyTab() {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundParticipant, setRefundParticipant] = useState<CoBuyParticipant | null>(null);
   const [updatingPickupStatus, setUpdatingPickupStatus] = useState<Set<string>>(new Set());
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const { data: sessions = [], isLoading: loading, error: sessionsError, mutate: mutateSessions } = useSWR<CoBuySession[]>(
     `/api/admin/cobuy/sessions?status=${filterStatus}`
@@ -129,10 +138,20 @@ export default function CoBuyTab() {
     selectedSession ? `/api/admin/cobuy/participants?sessionId=${selectedSession.id}` : null
   );
 
+  const {
+    data: organizerLinkPayload,
+    error: organizerLinkError,
+    isLoading: organizerLinkLoading,
+  } = useSWR<{ url: string }>(
+    selectedSession ? `/api/admin/cobuy/organizer-link?sessionId=${selectedSession.id}` : null
+  );
+
   const handleSelectSession = (session: CoBuySession) => {
     setSelectedSession(session);
     setStatusUpdate(session.status);
     setPreviewIndex(0);
+    setPaymentLinkUrl(null);
+    setLinkCopied(false);
   };
 
   const handleUpdateStatus = async () => {
@@ -189,9 +208,14 @@ export default function CoBuyTab() {
 
       const payload = await response.json();
       const orderId = payload?.data?.orderId as string | undefined;
+      const linkUrl = payload?.data?.paymentLinkUrl as string | undefined;
 
       if (!orderId) {
         throw new Error('주문 ID를 확인할 수 없습니다.');
+      }
+
+      if (linkUrl) {
+        setPaymentLinkUrl(linkUrl);
       }
 
       const updatedSession = {
@@ -472,28 +496,91 @@ export default function CoBuyTab() {
                     ? ` / ${selectedSession.max_participants}`
                     : ' / 무제한'}
                 </div>
-                <div className="text-gray-700 flex items-center gap-2">
-                  <span className="truncate">공유 링크: {`https://modoouniform.com/cobuy/${selectedSession.share_token}`}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = `https://modoouniform.com/cobuy/${selectedSession.share_token}`;
-                      navigator.clipboard.writeText(url).then(() => alert('링크가 복사되었습니다.'));
-                    }}
-                    className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    title="링크 복사"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
-                  <a
-                    href={`https://modoouniform.com/cobuy/${selectedSession.share_token}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    title="새 탭에서 열기"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                <div className="md:col-span-2 rounded-md border border-gray-200 bg-gray-50/80 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-800">링크 공유</p>
+
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium text-gray-600">참여자용 (공개 · 결제·참여)</p>
+                    <div className="flex items-center gap-2 text-gray-800">
+                      <code className="flex-1 min-w-0 truncate text-[11px] sm:text-xs bg-white border border-gray-200 rounded px-2 py-1.5">
+                        {`${getCustomerSiteOrigin()}/cobuy/${selectedSession.share_token}`}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${getCustomerSiteOrigin()}/cobuy/${selectedSession.share_token}`;
+                          navigator.clipboard.writeText(url).then(() => alert('참여 링크가 복사되었습니다.'));
+                        }}
+                        className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                        title="복사"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <a
+                        href={`${getCustomerSiteOrigin()}/cobuy/${selectedSession.share_token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                        title="새 탭"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      경로: <span className="font-mono">/cobuy/[share_token]</span> — share_token은 세션마다 고유합니다.
+                    </p>
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-3 space-y-1">
+                    <p className="text-[11px] font-medium text-gray-600">주최자용 (비밀 링크 · 로그인 없이 관리·수령)</p>
+                    {organizerLinkLoading && (
+                      <p className="text-[10px] text-gray-500">주최자 링크 생성 중…</p>
+                    )}
+                    {organizerLinkError && (
+                      <p className="text-[10px] text-amber-700">
+                        주최자 링크를 만들 수 없습니다. 고객 앱과 어드민에 동일한{' '}
+                        <span className="font-mono">COBUY_ORGANIZER_LINK_SECRET</span>(32자 이상)을 설정하세요.
+                      </p>
+                    )}
+                    {!organizerLinkLoading && organizerLinkPayload?.url && (
+                      <>
+                        <div className="flex items-center gap-2 text-gray-800">
+                          <code className="flex-1 min-w-0 truncate text-[11px] sm:text-xs bg-white border border-gray-200 rounded px-2 py-1.5">
+                            {organizerLinkPayload.url}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(organizerLinkPayload.url).then(() =>
+                                alert(
+                                  '주최자 관리 링크가 복사되었습니다. 링크가 있으면 누구나 관리 화면을 열 수 있으니 유출에 주의하세요.'
+                                )
+                              );
+                            }}
+                            className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                            title="주최자 링크 복사"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <a
+                            href={organizerLinkPayload.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
+                            title="새 탭에서 열기"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <p className="text-[10px] text-gray-500 leading-relaxed">
+                          경로: <span className="font-mono">/cobuy/host/[token]</span> — HMAC 서명 토큰입니다. 세션 소유자 계정 로그인 없이
+                          동일한 화면을 사용할 수 있습니다. 마이페이지 경로(
+                          <span className="font-mono">/home/my-page/cobuy/[sessionId]</span>)는 로그인한 주최자용으로 그대로 사용할 수
+                          있습니다.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div className="text-gray-700">
                   주문 ID: {selectedSession.bulk_order_id || '-'}
@@ -951,6 +1038,31 @@ export default function CoBuyTab() {
                 <p className="text-xs text-gray-500">
                   모집완료 상태의 세션에서만 주문을 생성할 수 있습니다.
                 </p>
+                {paymentLinkUrl && selectedSession.payment_mode === 'survey' && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md space-y-2">
+                    <p className="text-xs font-medium text-blue-800">결제 링크가 생성되었습니다</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={paymentLinkUrl}
+                        className="flex-1 px-2 py-1 text-xs bg-white border border-blue-200 rounded text-blue-700 truncate"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(paymentLinkUrl);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 2000);
+                        }}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                      >
+                        {linkCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        {linkCopied ? '복사됨' : '복사'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-blue-600">이 링크를 대표자에게 전달하세요. 카드 결제 또는 계좌이체가 가능합니다.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

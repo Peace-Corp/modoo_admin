@@ -330,6 +330,7 @@ export default function OrderDetail({
     completed: '완료',
     failed: '실패',
     refunded: '환불',
+    not_required: '불필요',
   };
 
   const subtotal = orderItems.reduce(

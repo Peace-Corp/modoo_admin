@@ -4,9 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Send, Eye, ArrowLeft, X, Paperclip } from 'lucide-react';
 import type { InvoiceItem } from '@/types/types';
-import {
-  generateInvoiceEmailHtml,
-} from '@/lib/invoice-email';
+import { generateInvoiceEmailHtml, INVOICE_SUPPLIER } from '@/lib/invoice-email';
 
 interface AdminDocument {
   id: string;
@@ -23,7 +21,16 @@ const DOC_LABELS: Record<string, string> = {
 const SUGGESTED_ITEMS = ['의류', '프린트', '디자인', '자수', '배송비', '시안작업', '샘플'];
 
 function emptyItem(): InvoiceItem {
-  return { name: '', quantity: 1, unit_price: 0, amount: 0 };
+  return {
+    name: '',
+    quantity: 1,
+    unit_price: 0,
+    amount: 0,
+    spec: '',
+    remarks: '',
+    month: '',
+    day: '',
+  };
 }
 
 export default function NewInvoicePage() {
@@ -39,6 +46,7 @@ export default function NewInvoicePage() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [documents, setDocuments] = useState<AdminDocument[]>([]);
   const [attachInvoice, setAttachInvoice] = useState(true);
+  const [attachPdf, setAttachPdf] = useState(true);
   const [attachBusinessReg, setAttachBusinessReg] = useState(false);
   const [attachBankAccount, setAttachBankAccount] = useState(false);
 
@@ -70,6 +78,8 @@ export default function NewInvoicePage() {
       } else if (field === 'unit_price') {
         item.unit_price = Math.max(0, Number(value) || 0);
         item.amount = item.quantity * item.unit_price;
+      } else if (field === 'spec' || field === 'remarks' || field === 'month' || field === 'day') {
+        (item as Record<string, unknown>)[field] = value as string;
       }
 
       next[index] = item;
@@ -140,6 +150,7 @@ export default function NewInvoicePage() {
           recipient_email: recipientEmail.trim(),
           memo: memo.trim() || undefined,
           attach_invoice: attachInvoice,
+          attach_pdf: attachPdf,
           attach_business_registration: attachBusinessReg,
           attach_bank_account: attachBankAccount,
         }),
@@ -184,19 +195,43 @@ export default function NewInvoicePage() {
       <div className="space-y-6">
         {/* Supplier Info */}
         <section className="bg-white border border-gray-200 rounded-lg p-5">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">공급자 정보</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">공급자 정보 (명세표에 인쇄)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <div>
-              <span className="text-gray-500">서비스명</span>
+              <span className="text-gray-500">서비스 브랜드</span>
               <p className="font-semibold text-gray-900">모두의 유니폼</p>
             </div>
             <div>
-              <span className="text-gray-500">상호</span>
-              <p className="font-semibold text-gray-900">피스코프</p>
+              <span className="text-gray-500">등록번호</span>
+              <p className="font-semibold text-gray-900">{INVOICE_SUPPLIER.registrationNo}</p>
             </div>
             <div>
-              <span className="text-gray-500">사업자등록번호</span>
-              <p className="font-semibold text-gray-900">118-08-15095</p>
+              <span className="text-gray-500">상호(법인명)</span>
+              <p className="font-semibold text-gray-900">{INVOICE_SUPPLIER.tradeName}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">성명(대표자)</span>
+              <p className="font-semibold text-gray-900">{INVOICE_SUPPLIER.representative}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <span className="text-gray-500">개업연월</span>
+              <p className="font-medium text-gray-900">{INVOICE_SUPPLIER.openingDate}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <span className="text-gray-500">사업장 주소</span>
+              <p className="font-medium text-gray-900">{INVOICE_SUPPLIER.businessAddress}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <span className="text-gray-500">사무실</span>
+              <p className="font-medium text-gray-900">{INVOICE_SUPPLIER.officeAddress}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">업태</span>
+              <p className="font-semibold text-gray-900">{INVOICE_SUPPLIER.businessType}</p>
+            </div>
+            <div>
+              <span className="text-gray-500">종목</span>
+              <p className="font-semibold text-gray-900">{INVOICE_SUPPLIER.businessItem}</p>
             </div>
           </div>
         </section>
@@ -281,80 +316,113 @@ export default function NewInvoicePage() {
             </button>
           </div>
 
-          {/* Table Header */}
-          <div className="hidden sm:grid grid-cols-[1fr_100px_140px_140px_36px] gap-2 mb-2 px-1">
-            <span className="text-xs font-medium text-gray-500">품목</span>
-            <span className="text-xs font-medium text-gray-500 text-right">수량</span>
-            <span className="text-xs font-medium text-gray-500 text-right">단가 (원)</span>
-            <span className="text-xs font-medium text-gray-500 text-right">금액 (원)</span>
-            <span />
-          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            명세표 열 순서: 월·일·품목·규격·수량·단가·공급가액·세액(VAT 포함 시)·비고. 세액은 자동 계산됩니다.
+          </p>
 
-          {/* Item Rows */}
-          <div className="space-y-2">
-            {items.map((item, index) => (
-              <div key={index} className="group">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_140px_140px_36px] gap-2 items-start">
-                  {/* Item name with suggestions */}
-                  <div className="relative">
+          <div className="overflow-x-auto rounded-md border border-gray-200">
+            <div className="min-w-[920px] p-2">
+              <div className="grid grid-cols-[36px_36px_minmax(140px,1fr)_88px_56px_88px_88px_minmax(100px,1fr)_40px] gap-1 mb-1 px-1 items-end">
+                <span className="text-[10px] font-medium text-gray-500 text-center">월</span>
+                <span className="text-[10px] font-medium text-gray-500 text-center">일</span>
+                <span className="text-[10px] font-medium text-gray-500">품목</span>
+                <span className="text-[10px] font-medium text-gray-500">규격</span>
+                <span className="text-[10px] font-medium text-gray-500 text-right">수량</span>
+                <span className="text-[10px] font-medium text-gray-500 text-right">단가</span>
+                <span className="text-[10px] font-medium text-gray-500 text-right">금액</span>
+                <span className="text-[10px] font-medium text-gray-500">행 비고</span>
+                <span />
+              </div>
+
+              <div className="space-y-2">
+                {items.map((item, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[36px_36px_minmax(140px,1fr)_88px_56px_88px_88px_minmax(100px,1fr)_40px] gap-1 items-start"
+                  >
                     <input
                       type="text"
-                      value={item.name}
-                      onChange={(e) => updateItem(index, 'name', e.target.value)}
-                      placeholder="항목명"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      inputMode="numeric"
+                      value={item.month ?? ''}
+                      onChange={(e) => updateItem(index, 'month', e.target.value)}
+                      placeholder="월"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    {!item.name && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {SUGGESTED_ITEMS.map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            onClick={() => applySuggestion(index, suggestion)}
-                            className="px-2 py-0.5 text-xs text-gray-500 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="sm:hidden text-xs text-gray-500 mb-0.5 block">수량</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={item.day ?? ''}
+                      onChange={(e) => updateItem(index, 'day', e.target.value)}
+                      placeholder="일"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <div className="relative min-w-0">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) => updateItem(index, 'name', e.target.value)}
+                        placeholder="품목"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {!item.name && (
+                        <div className="flex flex-wrap gap-0.5 mt-0.5">
+                          {SUGGESTED_ITEMS.map((suggestion) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => applySuggestion(index, suggestion)}
+                              className="px-1.5 py-0.5 text-[10px] text-gray-500 bg-gray-100 hover:bg-gray-200 rounded"
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={item.spec ?? ''}
+                      onChange={(e) => updateItem(index, 'spec', e.target.value)}
+                      placeholder="규격"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
                     <input
                       type="number"
                       min="1"
                       value={item.quantity}
                       onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                  </div>
-                  <div>
-                    <label className="sm:hidden text-xs text-gray-500 mb-0.5 block">단가 (원)</label>
                     <input
                       type="number"
                       min="0"
                       value={item.unit_price || ''}
                       onChange={(e) => updateItem(index, 'unit_price', e.target.value)}
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                  </div>
-                  <div>
-                    <label className="sm:hidden text-xs text-gray-500 mb-0.5 block">금액 (원)</label>
-                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-right font-medium text-gray-900">
+                    <div className="px-1 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs text-right font-medium text-gray-900">
                       {formatNumber(item.amount)}
                     </div>
+                    <input
+                      type="text"
+                      value={item.remarks ?? ''}
+                      onChange={(e) => updateItem(index, 'remarks', e.target.value)}
+                      placeholder="비고"
+                      className="w-full px-1 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length <= 1}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md disabled:opacity-30"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => removeItem(index)}
-                    disabled={items.length <= 1}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed self-start sm:self-center"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </section>
 
@@ -405,12 +473,30 @@ export default function NewInvoicePage() {
               <input
                 type="checkbox"
                 checked={attachInvoice}
-                onChange={(e) => setAttachInvoice(e.target.checked)}
+                onChange={(e) => {
+                  setAttachInvoice(e.target.checked);
+                  if (!e.target.checked) setAttachPdf(false);
+                }}
                 className="w-4 h-4 text-blue-600 rounded border-gray-300"
               />
               <div>
                 <span className="text-sm font-medium text-gray-700">거래명세서</span>
-                <span className="text-xs text-gray-400 ml-2">이메일 본문에 명세서 내용 포함</span>
+                <span className="text-xs text-gray-400 ml-2">이메일 본문에 격자형 명세표 포함</span>
+              </div>
+            </label>
+            <label
+              className={`flex items-center gap-3 p-2 rounded-md transition-colors ${attachInvoice ? 'cursor-pointer hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
+            >
+              <input
+                type="checkbox"
+                disabled={!attachInvoice}
+                checked={attachInvoice && attachPdf}
+                onChange={(e) => setAttachPdf(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded border-gray-300"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">PDF 첨부</span>
+                <span className="text-xs text-gray-400 ml-2">동일 양식 PDF (Chrome 필요, 실패 시 본문만 발송)</span>
               </div>
             </label>
             {hasDoc('business_registration') && (
@@ -471,7 +557,7 @@ export default function NewInvoicePage() {
       {/* Preview Modal */}
       {previewHtml && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col mx-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col mx-4">
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900">이메일 미리보기</h3>
               <button
