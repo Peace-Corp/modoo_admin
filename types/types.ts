@@ -506,6 +506,7 @@ export interface CoBuySession {
   cancellation_requested_at?: string | null;
   saved_design_screenshots?: {
     preview_url: string | null;
+    price_per_item?: number | null;
   } | null;
 }
 

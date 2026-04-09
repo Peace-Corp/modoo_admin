@@ -1054,6 +1054,8 @@ export default function CoBuyTab() {
           participant={editingParticipant}
           customFields={selectedSession.custom_fields}
           sizeOptions={sizeOptionsFromSession}
+          sizePrices={selectedSession.size_prices}
+          basePrice={selectedSession.saved_design_screenshots?.price_per_item ?? null}
         />
 
         {/* Refund Modal */}
