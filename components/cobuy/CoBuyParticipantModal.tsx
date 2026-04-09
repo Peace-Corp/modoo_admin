@@ -309,7 +309,7 @@ export default function CoBuyParticipantModal({
               >
                 <option value="pending">대기</option>
                 <option value="completed">완료</option>
-                <option value="not_required">불필요 (설문)</option>
+                <option value="not_required">대표자 일괄결제</option>
               </select>
             </div>
           </div>

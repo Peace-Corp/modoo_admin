@@ -41,7 +41,7 @@ const paymentStatusLabels: Record<CoBuyParticipant['payment_status'], string> = 
   completed: '완료',
   failed: '실패',
   refunded: '환불',
-  not_required: '불필요',
+  not_required: '대표자 일괄결제',
 };
 
 const paymentStatusColors: Record<CoBuyParticipant['payment_status'], string> = {
@@ -469,11 +469,18 @@ export default function CoBuyTab() {
                     {selectedSession.profiles?.email || 'creator@unknown'}
                   </p>
                 </div>
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[selectedSession.status]}`}
-                >
-                  {statusLabels[selectedSession.status]}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                    selectedSession.payment_mode === 'survey' ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'
+                  }`}>
+                    {selectedSession.payment_mode === 'survey' ? '대표자 일괄결제' : '개별결제'}
+                  </span>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[selectedSession.status]}`}
+                  >
+                    {statusLabels[selectedSession.status]}
+                  </span>
+                </div>
               </div>
 
               {selectedSession.status === 'cancelled' && (
@@ -1191,6 +1198,9 @@ export default function CoBuyTab() {
                   상태
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  결제방식
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   참여자
                 </th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1219,6 +1229,15 @@ export default function CoBuyTab() {
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[session.status]}`}
                     >
                       {statusLabels[session.status]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                      session.payment_mode === 'survey'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-teal-100 text-teal-800'
+                    }`}>
+                      {session.payment_mode === 'survey' ? '대표자 일괄결제' : '개별결제'}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
@@ -1252,6 +1271,11 @@ export default function CoBuyTab() {
               </div>
               <div className="text-[11px] text-gray-500">{session.profiles?.email || 'creator@unknown'}</div>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  session.payment_mode === 'survey' ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'
+                }`}>
+                  {session.payment_mode === 'survey' ? '대표자 일괄결제' : '개별결제'}
+                </span>
                 <span>참여: {session.current_participant_count || 0}{session.max_participants !== null ? ` / ${session.max_participants}` : ' / 무제한'}</span>
                 <span>{session.bulk_order_id ? `주문: ${session.bulk_order_id.slice(0,8)}...` : ''}</span>
               </div>
