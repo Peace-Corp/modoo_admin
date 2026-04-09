@@ -524,7 +524,7 @@ export default function CoBuyTab() {
                   </div>
 
                   <div className="border-t border-gray-200 pt-3 space-y-1">
-                    <p className="text-[11px] font-medium text-gray-600">주최자용 (참가 링크와 같은 share_token · 로그인 필요)</p>
+                    <p className="text-[11px] font-medium text-gray-600">주최자용 (로그인 없이 누구나 접근 가능)</p>
                     <div className="flex items-center gap-2 text-gray-800">
                       <code className="flex-1 min-w-0 truncate text-[11px] sm:text-xs bg-white border border-gray-200 rounded px-2 py-1.5">
                         {`${getCustomerSiteOrigin()}/cobuy/host/${selectedSession.share_token}`}
@@ -534,7 +534,7 @@ export default function CoBuyTab() {
                         onClick={() => {
                           const url = `${getCustomerSiteOrigin()}/cobuy/host/${selectedSession.share_token}`;
                           navigator.clipboard.writeText(url).then(() =>
-                            alert('주최자 관리 링크가 복사되었습니다. 주최자 계정으로 로그인한 뒤 열 수 있습니다.')
+                            alert('주최자 관리 링크가 복사되었습니다. 링크만 있으면 누구나 열 수 있으므로 공유 시 주의하세요.')
                           );
                         }}
                         className="shrink-0 p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded transition-colors"
@@ -553,10 +553,9 @@ export default function CoBuyTab() {
                       </a>
                     </div>
                     <p className="text-[10px] text-gray-500 leading-relaxed">
-                      경로: <span className="font-mono">/cobuy/host/[share_token]</span> — 참가 링크와 동일한 토큰을 쓰며,{' '}
+                      경로: <span className="font-mono">/cobuy/host/[share_token]</span> — 로그인 없이 누구나 접근 가능합니다.{' '}
                       <span className="font-mono">/cobuy/[share_token]</span>은 참여자용, <span className="font-mono">/cobuy/host/…</span>
-                      은 주최자 관리용입니다. 세션 소유자만 로그인 후 이용할 수 있습니다. 마이페이지:{' '}
-                      <span className="font-mono">/home/my-page/cobuy/[sessionId]</span>.
+                      은 주최자 관리용입니다. 검색엔진에 노출되지 않으나, 링크를 아는 사람은 모두 이용할 수 있으므로 주의하세요.
                     </p>
                   </div>
                 </div>
