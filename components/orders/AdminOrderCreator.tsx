@@ -36,7 +36,7 @@ export interface OrderItemDraft {
 export interface CustomerEditableFields {
   quantities?: boolean;
   customerInfo?: boolean;
-  shippingInfo?: boolean;
+  shipping?: boolean;
 }
 
 export interface OrderCreateResult {
@@ -424,16 +424,16 @@ export default function AdminOrderCreator({
                                     onClick={() => setSizeCollapsed(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
                                     className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                                   >
-                                    <span>사이즈 및 수량 ({item.variants.filter(v => v.quantity > 0).length}개 선택)</span>
+                                    <span>사이즈 및 수량 ({qty}개)</span>
                                     {sizeCollapsed[item.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => setCustomerEditableFields(prev => ({ ...prev, quantities: !prev.quantities || undefined }))}
-                                    className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
+                                    onClick={() => setCustomerEditableFields(prev => ({ ...prev, quantities: !prev.quantities }))}
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                                       customerEditableFields.quantities
-                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                                        : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                                        ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                                        : 'border-gray-300 text-gray-500 hover:border-gray-400'
                                     }`}
                                   >
                                     고객이 직접 입력

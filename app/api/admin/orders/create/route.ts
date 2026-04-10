@@ -52,7 +52,7 @@ interface CreateOrderRequest {
   customerEditableFields?: {
     quantities?: boolean;
     customerInfo?: boolean;
-    shippingInfo?: boolean;
+    shipping?: boolean;
   };
 }
 

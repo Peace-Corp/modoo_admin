@@ -29,13 +29,13 @@ interface CouponInfo {
 interface OrderDetailsFormProps {
   items: OrderItemDraft[];
   customerEditableFields?: CustomerEditableFields;
-  onCustomerEditableFieldsChange?: (fields: CustomerEditableFields | ((prev: CustomerEditableFields) => CustomerEditableFields)) => void;
+  onCustomerEditableFieldsChange?: (fields: CustomerEditableFields) => void;
   onSubmit: (orderId: string, result?: OrderCreateResult) => void;
   onBack: () => void;
 }
 
 export default function OrderDetailsForm({ items, customerEditableFields, onCustomerEditableFieldsChange, onSubmit, onBack }: OrderDetailsFormProps) {
-  const hasAnyEditable = !!(customerEditableFields?.quantities || customerEditableFields?.customerInfo || customerEditableFields?.shippingInfo);
+  const hasAnyEditable = !!(customerEditableFields?.quantities || customerEditableFields?.customerInfo || customerEditableFields?.shipping);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -142,7 +142,7 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
 
     const ceq = customerEditableFields?.quantities;
     const ceInfo = customerEditableFields?.customerInfo;
-    const ceShip = customerEditableFields?.shippingInfo;
+    const ceShip = customerEditableFields?.shipping;
 
     if (!ceInfo && !customerName.trim()) { setError('고객 이름을 입력해주세요.'); return; }
     if (!ceInfo && !customerEmail.trim()) { setError('고객 이메일을 입력해주세요.'); return; }
@@ -253,23 +253,21 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">고객 정보</h3>
-          {onCustomerEditableFieldsChange && (
-            <button
-              type="button"
-              onClick={() => onCustomerEditableFieldsChange(prev => ({ ...prev, customerInfo: !prev.customerInfo || undefined }))}
-              className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
-                customerEditableFields?.customerInfo
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
-              }`}
-            >
-              고객이 직접 입력
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onCustomerEditableFieldsChange?.({ ...customerEditableFields, customerInfo: !customerEditableFields?.customerInfo })}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              customerEditableFields?.customerInfo
+                ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                : 'border-gray-300 text-gray-500 hover:border-gray-400'
+            }`}
+          >
+            고객이 직접 입력
+          </button>
         </div>
         {customerEditableFields?.customerInfo ? (
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700">고객이 결제 페이지에서 이름, 이메일, 연락처를 직접 입력합니다.</p>
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-sm text-gray-400 text-center">고객이 결제 페이지에서 직접 입력합니다</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -293,23 +291,21 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">배송 정보</h3>
-          {onCustomerEditableFieldsChange && (
-            <button
-              type="button"
-              onClick={() => onCustomerEditableFieldsChange(prev => ({ ...prev, shippingInfo: !prev.shippingInfo || undefined }))}
-              className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
-                customerEditableFields?.shippingInfo
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
-              }`}
-            >
-              고객이 직접 입력
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onCustomerEditableFieldsChange?.({ ...customerEditableFields, shipping: !customerEditableFields?.shipping })}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+              customerEditableFields?.shipping
+                ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                : 'border-gray-300 text-gray-500 hover:border-gray-400'
+            }`}
+          >
+            고객이 직접 입력
+          </button>
         </div>
-        {customerEditableFields?.shippingInfo ? (
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700">고객이 결제 페이지에서 배송 정보를 직접 입력합니다.</p>
+        {customerEditableFields?.shipping ? (
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-sm text-gray-400 text-center">고객이 결제 페이지에서 직접 입력합니다</p>
           </div>
         ) : (
           <>
