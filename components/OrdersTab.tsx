@@ -1037,7 +1037,6 @@ export default function OrdersTab() {
             }
           }}
           onSuccess={() => {
-            setShowOrderCreator(false);
             if (resumeProductId || resumeDesignId) {
               router.replace('/orders');
             }
