@@ -105,7 +105,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
     orderItems,
     appUrl,
   } = params;
-  const shortOrderId = orderId.slice(0, 8).toUpperCase();
+  const displayOrderId = orderId.toUpperCase();
   const formattedDeadline = deadline
     ? new Date(deadline).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
     : null;
@@ -116,7 +116,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
 
   const sharedPageUrl = `${appUrl}/shared/order/${shareToken}`;
 
-  const subject = `[모두의 유니폼] 작업지시서 전달 드립니다 (${shortOrderId})`;
+  const subject = `[모두의 유니폼] 작업지시서 전달 드립니다 (${displayOrderId})`;
 
   const itemsText = orderItems.map((item, i) => {
     const name = item.designTitle || item.productTitle;
@@ -126,7 +126,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
   const text = [
     `안녕하세요, ${factoryName}님.`,
     '',
-    `작업지시서(${shortOrderId}) 전달 드립니다.`,
+    `작업지시서(${displayOrderId}) 전달 드립니다.`,
     '',
     formattedDeadline ? `납기일: ${formattedDeadline}` : null,
     formattedAmount ? `공장 금액: ${formattedAmount}` : null,
@@ -177,7 +177,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
           <tr style="border-bottom: 1px solid #f3f4f6;">
             <td style="padding: 10px 12px; color: #6b7280; font-size: 14px; width: 120px;">주문 번호</td>
-            <td style="padding: 10px 12px; color: #111827; font-size: 14px; font-weight: 600;">${shortOrderId}</td>
+            <td style="padding: 10px 12px; color: #111827; font-size: 14px; font-weight: 600;">${displayOrderId}</td>
           </tr>
           ${formattedDeadline ? `
           <tr style="border-bottom: 1px solid #f3f4f6;">

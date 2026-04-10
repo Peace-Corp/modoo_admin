@@ -194,12 +194,20 @@ export async function PATCH(request: Request) {
       // Notify customer when factory changes status (e.g. shipped -> shipping)
       const newOrderStatus = updateData.order_status as string | undefined;
       if (newOrderStatus && newOrderStatus !== existingOrder.order_status && existingOrder.customer_email) {
+        const { data: orderItems } = await adminClient
+          .from('order_items')
+          .select('product_title, quantity, price_per_item')
+          .eq('order_id', orderId);
+
         sendOrderStatusNotification({
           orderId,
           customerName: existingOrder.customer_name || '고객',
           customerEmail: existingOrder.customer_email,
           newStatus: newOrderStatus as any,
           previousStatus: existingOrder.order_status,
+          items: orderItems?.map(i => ({ product_title: i.product_title, quantity: i.quantity, price_per_item: i.price_per_item })) || [],
+          totalAmount: data?.total_amount ?? undefined,
+          paymentMethod: data?.payment_method ?? undefined,
         }).catch((err) => console.error('Order status notification (factory) failed:', err));
       }
 
@@ -478,11 +486,25 @@ export async function PATCH(request: Request) {
       }).catch((err) => console.error('Factory assignment email failed:', err));
     }
 
-    // Send order status change notification to customer
+    // Fetch order items for notification emails
     const resolvedOrderStatus = (updateData.order_status as string) ?? existingOrder?.order_status;
     const previousOrderStatus = existingOrder?.order_status;
     const previousPaymentStatus = existingOrder?.payment_status;
 
+    const needsNotification =
+      (resolvedOrderStatus && resolvedOrderStatus !== previousOrderStatus && existingOrder?.customer_email) ||
+      (paymentStatusInput === 'completed' && previousPaymentStatus !== 'completed' && existingOrder?.customer_email);
+
+    let notificationItems: { product_title: string; quantity: number; price_per_item: number }[] = [];
+    if (needsNotification) {
+      const { data: orderItems } = await adminClient
+        .from('order_items')
+        .select('product_title, quantity, price_per_item')
+        .eq('order_id', orderId);
+      notificationItems = orderItems?.map(i => ({ product_title: i.product_title, quantity: i.quantity, price_per_item: i.price_per_item })) || [];
+    }
+
+    // Send order status change notification to customer
     if (resolvedOrderStatus && resolvedOrderStatus !== previousOrderStatus && existingOrder?.customer_email) {
       const trackingNumber = payload?.trackingNumber ?? null;
       sendOrderStatusNotification({
@@ -492,6 +514,9 @@ export async function PATCH(request: Request) {
         newStatus: resolvedOrderStatus as OrderStatus,
         previousStatus: previousOrderStatus,
         trackingNumber,
+        items: notificationItems,
+        totalAmount: data?.total_amount ?? undefined,
+        paymentMethod: data?.payment_method ?? undefined,
       }).catch((err) => console.error('Order status notification failed:', err));
     }
 
@@ -504,6 +529,9 @@ export async function PATCH(request: Request) {
         customerEmail: existingOrder.customer_email,
         newStatus: effectiveOrderStatus,
         previousStatus: previousOrderStatus,
+        items: notificationItems,
+        totalAmount: data?.total_amount ?? undefined,
+        paymentMethod: data?.payment_method ?? undefined,
       }).catch((err) => console.error('Payment confirmation notification failed:', err));
     }
 
