@@ -97,7 +97,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleDelete = async (docType: string) => {
+  const handleDelete = async (docType: keyof typeof DOC_LABELS) => {
     if (!confirm(`${DOC_LABELS[docType]}을(를) 삭제하시겠습니까?`)) return;
 
     try {

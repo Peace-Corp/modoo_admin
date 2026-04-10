@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
+import {
+  COMPANY_SEAL_BUCKET,
+  COMPANY_SEAL_MAX_BYTES,
+  COMPANY_SEAL_STORAGE_PATH,
+  isPngBuffer,
+  companySealExists,
+} from '@/lib/company-seal';
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -26,7 +33,7 @@ async function requireAdmin() {
   return { user };
 }
 
-const BUCKET = 'admin-documents';
+const BUCKET_PUBLIC = 'admin-documents';
 
 export async function GET() {
   try {
@@ -34,6 +41,7 @@ export async function GET() {
     if (authResult.error) return authResult.error;
 
     const adminClient = createAdminClient();
+
     const { data, error } = await adminClient
       .from('admin_documents')
       .select('*')
@@ -43,7 +51,21 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    const docs = data || [];
+
+    const hasSeal = await companySealExists(adminClient);
+    if (hasSeal) {
+      docs.push({
+        id: '__seal__',
+        doc_type: 'company_seal',
+        file_name: COMPANY_SEAL_STORAGE_PATH,
+        file_url: null,
+        storage_path: COMPANY_SEAL_STORAGE_PATH,
+        uploaded_at: null,
+      } as never);
+    }
+
+    return NextResponse.json({ data: docs });
   } catch (error) {
     const message = error instanceof Error ? error.message : '문서 목록을 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
@@ -63,20 +85,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '파일과 문서 유형이 필요합니다.' }, { status: 400 });
     }
 
+    const adminClient = createAdminClient();
+
+    if (docType === 'company_seal') {
+      if (file.type !== 'image/png' && !file.name.toLowerCase().endsWith('.png')) {
+        return NextResponse.json({ error: '도장은 PNG 파일만 등록할 수 있습니다.' }, { status: 400 });
+      }
+      if (file.size > COMPANY_SEAL_MAX_BYTES) {
+        return NextResponse.json(
+          { error: `파일 크기는 ${COMPANY_SEAL_MAX_BYTES / 1024 / 1024}MB 이하여야 합니다.` },
+          { status: 400 },
+        );
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      if (!isPngBuffer(arrayBuffer)) {
+        return NextResponse.json({ error: '유효한 PNG 이미지가 아닙니다.' }, { status: 400 });
+      }
+
+      const { error: uploadError } = await adminClient.storage
+        .from(COMPANY_SEAL_BUCKET)
+        .upload(COMPANY_SEAL_STORAGE_PATH, arrayBuffer, {
+          contentType: 'image/png',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        return NextResponse.json(
+          { error: uploadError.message || '도장 업로드에 실패했습니다. admin-seal 버킷을 생성했는지 확인하세요.' },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({
+        data: {
+          id: '__seal__',
+          doc_type: 'company_seal',
+          file_name: file.name,
+          file_url: null,
+          storage_path: COMPANY_SEAL_STORAGE_PATH,
+        },
+      });
+    }
+
     if (!['business_registration', 'bank_account'].includes(docType)) {
       return NextResponse.json({ error: '올바르지 않은 문서 유형입니다.' }, { status: 400 });
     }
-
-    const adminClient = createAdminClient();
 
     const { data: existing } = await adminClient
       .from('admin_documents')
       .select('id, storage_path')
       .eq('doc_type', docType)
-      .single();
+      .maybeSingle();
 
     if (existing) {
-      await adminClient.storage.from(BUCKET).remove([existing.storage_path]);
+      await adminClient.storage.from(BUCKET_PUBLIC).remove([existing.storage_path]);
       await adminClient.from('admin_documents').delete().eq('id', existing.id);
     }
 
@@ -85,7 +148,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
 
     const { error: uploadError } = await adminClient.storage
-      .from(BUCKET)
+      .from(BUCKET_PUBLIC)
       .upload(storagePath, arrayBuffer, {
         contentType: file.type,
         upsert: true,
@@ -95,7 +158,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const { data: urlData } = adminClient.storage.from(BUCKET).getPublicUrl(storagePath);
+    const { data: urlData } = adminClient.storage.from(BUCKET_PUBLIC).getPublicUrl(storagePath);
 
     const { data: doc, error: insertError } = await adminClient
       .from('admin_documents')
@@ -133,17 +196,27 @@ export async function DELETE(request: Request) {
     }
 
     const adminClient = createAdminClient();
+
+    if (docType === 'company_seal') {
+      await adminClient.storage.from(COMPANY_SEAL_BUCKET).remove([COMPANY_SEAL_STORAGE_PATH]);
+      return NextResponse.json({ success: true });
+    }
+
+    if (!['business_registration', 'bank_account'].includes(docType)) {
+      return NextResponse.json({ error: '올바르지 않은 문서 유형입니다.' }, { status: 400 });
+    }
+
     const { data: existing } = await adminClient
       .from('admin_documents')
       .select('id, storage_path')
       .eq('doc_type', docType)
-      .single();
+      .maybeSingle();
 
     if (!existing) {
       return NextResponse.json({ error: '해당 문서가 없습니다.' }, { status: 404 });
     }
 
-    await adminClient.storage.from(BUCKET).remove([existing.storage_path]);
+    await adminClient.storage.from(BUCKET_PUBLIC).remove([existing.storage_path]);
     await adminClient.from('admin_documents').delete().eq('id', existing.id);
 
     return NextResponse.json({ success: true });

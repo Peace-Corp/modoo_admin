@@ -9,6 +9,9 @@ export interface GmailAttachment {
   filename: string;
   content: Buffer;
   contentType?: string;
+  /** 인라인 이미지 (HTML 에서 cid:값 과 동일) */
+  cid?: string;
+  contentDisposition?: 'inline' | 'attachment';
 }
 
 interface SendGmailParams {
@@ -79,6 +82,8 @@ export async function sendGmailEmail({ to, subject, text, html, attachments }: S
         filename: a.filename,
         content: a.content,
         contentType: a.contentType,
+        cid: a.cid,
+        contentDisposition: a.contentDisposition,
       })),
     });
     return true;

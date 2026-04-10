@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendGmailEmail, type GmailAttachment } from '@/lib/gmail';
-import {
-  generateInvoiceEmailHtml,
-  generateInvoiceEmailText,
-} from '@/lib/invoice-email';
 import { renderInvoicePdfBuffer } from '@/lib/invoice-html-to-pdf';
+import { fetchCompanySealBuffer } from '@/lib/company-seal';
+import { INVOICE_SUPPLIER } from '@/lib/invoice-email';
 import type { InvoiceItem } from '@/types/types';
+import type { InvoiceEmailParams } from '@/lib/invoice-email';
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -153,7 +152,7 @@ export async function POST(request: Request) {
       day: 'numeric',
     });
 
-    const emailParams = {
+    const pdfParams: InvoiceEmailParams = {
       invoiceNumber,
       date: dateStr,
       includeVat: !!include_vat,
@@ -166,44 +165,55 @@ export async function POST(request: Request) {
       memo: memo?.trim() || null,
     };
 
+    const sealBuffer = await fetchCompanySealBuffer(adminClient);
+    if (sealBuffer) {
+      pdfParams.companySealImageSrc = `data:image/png;base64,${sealBuffer.toString('base64')}`;
+    }
+
+    const recipientDisplay = [recipient_org?.trim(), recipient_name?.trim()].filter(Boolean).join(' ');
+    const greeting = recipientDisplay ? `${recipientDisplay}님, 안녕하세요.` : '안녕하세요.';
+
     const includeInvoiceBody = attach_invoice !== false;
 
-    let html: string;
-    let text: string;
-
-    if (includeInvoiceBody) {
-      html = generateInvoiceEmailHtml(emailParams);
-      text = generateInvoiceEmailText(emailParams);
-    } else {
-      const recipientDisplay = [recipient_org?.trim(), recipient_name?.trim()].filter(Boolean).join(' ');
-      html = `
+    const html = `
 <div style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
   <div style="background: #1e3a5f; color: #fff; padding: 20px 24px; border-radius: 8px 8px 0 0;">
     <h2 style="margin: 0; font-size: 18px;">모두의 유니폼</h2>
   </div>
   <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
-    <p style="margin: 0 0 16px; color: #374151;">안녕하세요${recipientDisplay ? `, <strong>${recipientDisplay}</strong>님` : ''}.</p>
-    <p style="margin: 0 0 16px; color: #374151;">요청하신 서류를 첨부하여 보내드립니다. 첨부 파일을 확인해 주세요.</p>
-    <p style="margin: 0 0 4px; color: #6b7280; font-size: 13px;">상호: 피스코프</p>
-    <p style="margin: 0 0 20px; color: #6b7280; font-size: 13px;">사업자등록번호: 118-08-15095</p>
+    <p style="margin: 0 0 16px; color: #374151; font-size: 15px;">${greeting}</p>
+    <p style="margin: 0 0 16px; color: #374151;">모두의 유니폼 거래명세서 전달드립니다.</p>
+    <p style="margin: 0 0 16px; color: #374151;">첨부된 PDF 파일을 확인해 주세요.</p>
+    <table style="margin: 16px 0 20px; border-collapse: collapse;">
+      <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-size: 13px;">상호</td><td style="padding: 4px 0; color: #374151; font-size: 13px; font-weight: 600;">${INVOICE_SUPPLIER.tradeName}</td></tr>
+      <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-size: 13px;">대표자</td><td style="padding: 4px 0; color: #374151; font-size: 13px; font-weight: 600;">${INVOICE_SUPPLIER.representative}</td></tr>
+      <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-size: 13px;">사업자등록번호</td><td style="padding: 4px 0; color: #374151; font-size: 13px;">${INVOICE_SUPPLIER.registrationNo}</td></tr>
+      <tr><td style="padding: 4px 12px 4px 0; color: #6b7280; font-size: 13px;">연락처</td><td style="padding: 4px 0; color: #374151; font-size: 13px;">modoogoods.com</td></tr>
+    </table>
+    <p style="margin: 0 0 4px; color: #374151; font-size: 13px;">감사합니다.</p>
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
     <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">본 메일은 모두의 유니폼에서 발송되었습니다.</p>
   </div>
 </div>`;
-      text = [
-        '안녕하세요.',
-        '',
-        '요청하신 서류를 첨부하여 보내드립니다.',
-        '',
-        '상호: 피스코프',
-        '사업자등록번호: 118-08-15095',
-        '',
-        '---',
-        '본 메일은 모두의 유니폼에서 발송되었습니다.',
-      ].join('\n');
-    }
+
+    const text = [
+      greeting,
+      '',
+      '모두의 유니폼 거래명세서 전달드립니다.',
+      '첨부된 PDF 파일을 확인해 주세요.',
+      '',
+      `상호: ${INVOICE_SUPPLIER.tradeName}`,
+      `대표자: ${INVOICE_SUPPLIER.representative}`,
+      `사업자등록번호: ${INVOICE_SUPPLIER.registrationNo}`,
+      '',
+      '감사합니다.',
+      '',
+      '---',
+      '본 메일은 모두의 유니폼에서 발송되었습니다.',
+    ].join('\n');
 
     const attachments: GmailAttachment[] = [];
+
     const docTypesToAttach: string[] = [];
     if (attach_business_registration) docTypesToAttach.push('business_registration');
     if (attach_bank_account) docTypesToAttach.push('bank_account');
@@ -235,7 +245,7 @@ export async function POST(request: Request) {
 
     const wantPdf = includeInvoiceBody && attach_pdf !== false;
     if (wantPdf) {
-      const pdfBuf = await renderInvoicePdfBuffer(emailParams);
+      const pdfBuf = await renderInvoicePdfBuffer(pdfParams);
       if (pdfBuf) {
         attachments.push({
           filename: `거래명세표-${invoiceNumber}.pdf`,

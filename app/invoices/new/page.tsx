@@ -49,12 +49,19 @@ export default function NewInvoicePage() {
   const [attachPdf, setAttachPdf] = useState(true);
   const [attachBusinessReg, setAttachBusinessReg] = useState(false);
   const [attachBankAccount, setAttachBankAccount] = useState(false);
+  const [sealBase64, setSealBase64] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/documents')
       .then((res) => res.json())
       .then((result) => {
         if (result.data) setDocuments(result.data);
+      })
+      .catch(() => {});
+    fetch('/api/admin/documents/seal')
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.base64) setSealBase64(result.base64);
       })
       .catch(() => {});
   }, []);
@@ -116,6 +123,7 @@ export default function NewInvoicePage() {
       recipientOrg: recipientOrg.trim() || null,
       recipientName: recipientName.trim() || null,
       memo: memo.trim() || null,
+      companySealImageSrc: sealBase64 ? `data:image/png;base64,${sealBase64}` : null,
     });
     setPreviewHtml(html);
   };
@@ -467,36 +475,21 @@ export default function NewInvoicePage() {
             <Paperclip className="w-4 h-4 text-gray-400" />
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">발송 항목 선택</h2>
           </div>
-          <p className="text-xs text-gray-400 mb-3">이메일에 포함할 항목을 선택하세요.</p>
+          <p className="text-xs text-gray-400 mb-3">이메일에 첨부할 파일을 선택하세요. 거래명세표는 PDF로 첨부됩니다.</p>
           <div className="space-y-2">
             <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-gray-50 transition-colors">
               <input
                 type="checkbox"
-                checked={attachInvoice}
+                checked={attachInvoice && attachPdf}
                 onChange={(e) => {
                   setAttachInvoice(e.target.checked);
-                  if (!e.target.checked) setAttachPdf(false);
+                  setAttachPdf(e.target.checked);
                 }}
                 className="w-4 h-4 text-blue-600 rounded border-gray-300"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">거래명세서</span>
-                <span className="text-xs text-gray-400 ml-2">이메일 본문에 격자형 명세표 포함</span>
-              </div>
-            </label>
-            <label
-              className={`flex items-center gap-3 p-2 rounded-md transition-colors ${attachInvoice ? 'cursor-pointer hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
-            >
-              <input
-                type="checkbox"
-                disabled={!attachInvoice}
-                checked={attachInvoice && attachPdf}
-                onChange={(e) => setAttachPdf(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <div>
-                <span className="text-sm font-medium text-gray-700">PDF 첨부</span>
-                <span className="text-xs text-gray-400 ml-2">동일 양식 PDF (Chrome 필요, 실패 시 본문만 발송)</span>
+                <span className="text-sm font-medium text-gray-700">거래명세표 PDF</span>
+                <span className="text-xs text-gray-400 ml-2">도장 포함 거래명세표를 PDF 첨부파일로 발송</span>
               </div>
             </label>
             {hasDoc('business_registration') && (
