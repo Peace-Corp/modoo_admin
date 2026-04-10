@@ -131,8 +131,6 @@ export default function CoBuyParticipantModal({
     }
   };
 
-  if (!isOpen) return null;
-
   const editableCustomFields = customFields?.filter(f => f.id !== 'size' && !f.fixed) || [];
 
   const getUnitPrice = (size: string): number | null => {
@@ -154,6 +152,8 @@ export default function CoBuyParticipantModal({
     return total;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItems, sizePrices, basePrice]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
