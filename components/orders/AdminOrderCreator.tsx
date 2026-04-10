@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight, CheckCircle2, Package, Search, X, Copy, Check, ExternalLink,
@@ -31,6 +31,13 @@ export interface OrderItemDraft {
   pricingMode: 'auto' | 'custom_unit_price';
   customUnitPrice: string;
   designPricePerItem: number | null;
+}
+
+export interface CustomerEditableFields {
+  quantities?: boolean;
+  customerName?: boolean;
+  customerEmail?: boolean;
+  customerPhone?: boolean;
 }
 
 export interface OrderCreateResult {
@@ -94,13 +101,20 @@ export default function AdminOrderCreator({
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [sizeCollapsed, setSizeCollapsed] = useState<Record<string, boolean>>({});
   const [itemError, setItemError] = useState<string | null>(null);
+  const [customerEditableFields, setCustomerEditableFields] = useState<CustomerEditableFields>({});
 
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [orderResult, setOrderResult] = useState<OrderCreateResult | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  const initRef = useRef(false);
+
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
     const init = async () => {
       try {
         const response = await fetch('/api/admin/products');
@@ -214,8 +228,9 @@ export default function AdminOrderCreator({
 
   const handleProceedToDetails = () => {
     setItemError(null);
+    const skipQtyValidation = !!customerEditableFields.quantities;
     for (const item of items) {
-      if (getItemTotalQuantity(item) <= 0) {
+      if (!skipQtyValidation && getItemTotalQuantity(item) <= 0) {
         setItemError(`"${item.productTitle}" 제품의 수량을 입력해주세요.`);
         setExpandedItemId(item.id);
         return;
@@ -404,7 +419,15 @@ export default function AdminOrderCreator({
                             <div className="border-t bg-gray-50 p-4 space-y-4">
                               {/* Size / Quantity */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">사이즈 및 수량</label>
+                                <button
+                                  type="button"
+                                  onClick={() => setSizeCollapsed(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                  className="flex items-center justify-between w-full text-sm font-medium text-gray-700 mb-2 hover:text-gray-900 transition-colors"
+                                >
+                                  <span>사이즈 및 수량 ({item.variants.filter(v => v.quantity > 0).length}개 선택)</span>
+                                  {sizeCollapsed[item.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                                </button>
+                                {!sizeCollapsed[item.id] && (
                                 <div className="space-y-2">
                                   {item.variants.map((v, vi) => (
                                     <div key={v.sizeCode} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
@@ -440,6 +463,7 @@ export default function AdminOrderCreator({
                                     <p className="text-sm text-gray-500 text-center py-4">사이즈 옵션이 없습니다.</p>
                                   )}
                                 </div>
+                                )}
                               </div>
 
                               {/* Per-item pricing */}
@@ -505,8 +529,32 @@ export default function AdminOrderCreator({
                     </div>
                   </div>
 
+                  {/* Customer self-input toggles */}
+                  <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-sm font-medium text-gray-700 mb-3">고객 직접 입력 설정</p>
+                    <p className="text-xs text-gray-500 mb-3">체크한 항목은 고객이 결제 페이지에서 직접 입력합니다.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { key: 'quantities' as const, label: '사이즈별 수량' },
+                        { key: 'customerName' as const, label: '이름' },
+                        { key: 'customerPhone' as const, label: '연락처' },
+                        { key: 'customerEmail' as const, label: '이메일' },
+                      ]).map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-100 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={!!customerEditableFields[key]}
+                            onChange={(e) => setCustomerEditableFields(prev => ({ ...prev, [key]: e.target.checked || undefined }))}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                          />
+                          <span className="text-sm text-gray-700">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Actions */}
-                  <div className="mt-6 flex gap-3">
+                  <div className="mt-4 flex gap-3">
                     <button
                       onClick={handleAddProduct}
                       className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors font-medium"
@@ -582,6 +630,7 @@ export default function AdminOrderCreator({
         {!loading && currentStep === 'details' && items.length > 0 && (
           <OrderDetailsForm
             items={items}
+            customerEditableFields={customerEditableFields}
             onSubmit={handleOrderCreated}
             onBack={() => setCurrentStep('items')}
           />

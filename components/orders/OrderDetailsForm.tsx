@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { ArrowLeft, Loader2, Search, MapPin, Tag, Percent, DollarSign, CreditCard, Building2, Link2, Plus, Package } from 'lucide-react';
 import AddressSearch from './AddressSearch';
-import { type OrderItemDraft, type OrderCreateResult, getItemUnitPrice, getItemTotalQuantity, getItemSubtotal } from './AdminOrderCreator';
+import { type OrderItemDraft, type OrderCreateResult, type CustomerEditableFields, getItemUnitPrice, getItemTotalQuantity, getItemSubtotal } from './AdminOrderCreator';
 
 type ShippingMethod = 'pickup' | 'domestic';
 type OrderPricingMode = 'auto' | 'custom_total';
@@ -28,11 +28,13 @@ interface CouponInfo {
 
 interface OrderDetailsFormProps {
   items: OrderItemDraft[];
+  customerEditableFields?: CustomerEditableFields;
   onSubmit: (orderId: string, result?: OrderCreateResult) => void;
   onBack: () => void;
 }
 
-export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetailsFormProps) {
+export default function OrderDetailsForm({ items, customerEditableFields, onSubmit, onBack }: OrderDetailsFormProps) {
+  const hasAnyEditable = !!(customerEditableFields?.quantities || customerEditableFields?.customerName || customerEditableFields?.customerEmail || customerEditableFields?.customerPhone);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -56,7 +58,7 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
   const [adminDiscountValue, setAdminDiscountValue] = useState<string>('');
   const [adminSurcharge, setAdminSurcharge] = useState<string>('');
   const [pricingNote, setPricingNote] = useState('');
-  const [paymentType, setPaymentType] = useState<PaymentType>('completed');
+  const [paymentType, setPaymentType] = useState<PaymentType>(hasAnyEditable ? 'customer_payment' : 'completed');
 
   const totalQuantity = useMemo(
     () => items.reduce((sum, item) => sum + getItemTotalQuantity(item), 0),
@@ -137,10 +139,14 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
   const handleSubmit = async () => {
     setError(null);
 
-    if (!customerName.trim()) { setError('고객 이름을 입력해주세요.'); return; }
-    if (!customerEmail.trim()) { setError('고객 이메일을 입력해주세요.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) { setError('올바른 이메일 형식을 입력해주세요.'); return; }
-    if (totalQuantity <= 0) { setError('최소 하나 이상의 수량을 선택해주세요.'); return; }
+    const ceq = customerEditableFields?.quantities;
+    const ceName = customerEditableFields?.customerName;
+    const ceEmail = customerEditableFields?.customerEmail;
+
+    if (!ceName && !customerName.trim()) { setError('고객 이름을 입력해주세요.'); return; }
+    if (!ceEmail && !customerEmail.trim()) { setError('고객 이메일을 입력해주세요.'); return; }
+    if (!ceEmail && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) { setError('올바른 이메일 형식을 입력해주세요.'); return; }
+    if (!ceq && totalQuantity <= 0) { setError('최소 하나 이상의 수량을 선택해주세요.'); return; }
     if (pricingMode === 'custom_total' && totalAmount <= 0) { setError('전체 금액을 입력해주세요.'); return; }
     if (shippingMethod === 'domestic' && (!shippingAddress.postalCode || !shippingAddress.addressLine1)) {
       setError('배송 주소를 입력해주세요.');
@@ -148,6 +154,8 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
     }
 
     setIsSubmitting(true);
+
+    const effectivePaymentType = hasAnyEditable ? 'customer_payment' : paymentType;
 
     try {
       const response = await fetch('/api/admin/orders/create', {
@@ -157,12 +165,12 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
           items: items.map(item => ({
             designId: item.designId,
             productId: item.productId,
-            variants: item.variants.filter(v => v.quantity > 0),
+            variants: ceq ? item.variants : item.variants.filter(v => v.quantity > 0),
             pricingMode: item.pricingMode,
             customUnitPrice: item.pricingMode === 'custom_unit_price' ? getItemUnitPrice(item) : undefined,
           })),
-          customerName: customerName.trim(),
-          customerEmail: customerEmail.trim(),
+          customerName: customerName.trim() || (ceName ? '고객 입력 대기' : ''),
+          customerEmail: customerEmail.trim() || (ceEmail ? 'pending@placeholder.com' : ''),
           customerPhone: customerPhone.trim() || undefined,
           notes: notes.trim() || undefined,
           shippingMethod,
@@ -182,7 +190,8 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
           adminDiscountType: pricingMode !== 'custom_total' && computedAdminDiscount > 0 ? adminDiscountType : undefined,
           adminSurcharge: pricingMode !== 'custom_total' ? (computedSurcharge || undefined) : undefined,
           pricingNote: pricingNote.trim() || undefined,
-          paymentType,
+          paymentType: effectivePaymentType,
+          ...(hasAnyEditable && { customerEditableFields }),
         }),
       });
 
@@ -244,16 +253,37 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
         <h3 className="text-lg font-semibold mb-4">고객 정보</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
-            <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="고객 이름" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              이름 {!customerEditableFields?.customerName && <span className="text-red-500">*</span>}
+              {customerEditableFields?.customerName && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
+            </label>
+            {customerEditableFields?.customerName ? (
+              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
+            ) : (
+              <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="고객 이름" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">이메일 <span className="text-red-500">*</span></label>
-            <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              이메일 {!customerEditableFields?.customerEmail && <span className="text-red-500">*</span>}
+              {customerEditableFields?.customerEmail && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
+            </label>
+            {customerEditableFields?.customerEmail ? (
+              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
+            ) : (
+              <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
-            <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="010-0000-0000" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              전화번호
+              {customerEditableFields?.customerPhone && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
+            </label>
+            {customerEditableFields?.customerPhone ? (
+              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
+            ) : (
+              <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="010-0000-0000" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            )}
           </div>
         </div>
       </div>
@@ -402,16 +432,21 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
           <CreditCard className="w-5 h-5" />
           결제 방식
         </h3>
+        {hasAnyEditable && (
+          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-700">고객 직접 입력 항목이 설정되어 있어 &quot;고객 온라인 결제&quot;로 자동 설정됩니다.</p>
+          </div>
+        )}
         <div className="space-y-3">
-          <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50" style={{ borderColor: paymentType === 'completed' ? '#2563eb' : '#e5e7eb', backgroundColor: paymentType === 'completed' ? '#eff6ff' : 'white' }}>
-            <input type="radio" name="paymentType" value="completed" checked={paymentType === 'completed'} onChange={() => setPaymentType('completed')} className="w-4 h-4 text-blue-600 mt-0.5" />
+          <label className={`flex items-start gap-3 p-4 border rounded-lg transition-colors ${hasAnyEditable && paymentType !== 'completed' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`} style={{ borderColor: paymentType === 'completed' ? '#2563eb' : '#e5e7eb', backgroundColor: paymentType === 'completed' ? '#eff6ff' : 'white' }}>
+            <input type="radio" name="paymentType" value="completed" checked={paymentType === 'completed'} onChange={() => setPaymentType('completed')} disabled={hasAnyEditable} className="w-4 h-4 text-blue-600 mt-0.5" />
             <div>
               <p className="font-medium text-gray-900">결제 완료 처리</p>
               <p className="text-sm text-gray-500">즉시 결제 완료로 처리합니다 (관리자가 직접 수금한 경우)</p>
             </div>
           </label>
-          <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50" style={{ borderColor: paymentType === 'bank_transfer' ? '#2563eb' : '#e5e7eb', backgroundColor: paymentType === 'bank_transfer' ? '#eff6ff' : 'white' }}>
-            <input type="radio" name="paymentType" value="bank_transfer" checked={paymentType === 'bank_transfer'} onChange={() => setPaymentType('bank_transfer')} className="w-4 h-4 text-blue-600 mt-0.5" />
+          <label className={`flex items-start gap-3 p-4 border rounded-lg transition-colors ${hasAnyEditable && paymentType !== 'bank_transfer' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'}`} style={{ borderColor: paymentType === 'bank_transfer' ? '#2563eb' : '#e5e7eb', backgroundColor: paymentType === 'bank_transfer' ? '#eff6ff' : 'white' }}>
+            <input type="radio" name="paymentType" value="bank_transfer" checked={paymentType === 'bank_transfer'} onChange={() => setPaymentType('bank_transfer')} disabled={hasAnyEditable} className="w-4 h-4 text-blue-600 mt-0.5" />
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-gray-400" />
               <div>
@@ -508,7 +543,7 @@ export default function OrderDetailsForm({ items, onSubmit, onBack }: OrderDetai
       {/* Submit */}
       <button
         onClick={handleSubmit}
-        disabled={isSubmitting || totalQuantity <= 0}
+        disabled={isSubmitting || (!customerEditableFields?.quantities && totalQuantity <= 0)}
         className="w-full py-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
       >
         {isSubmitting ? (

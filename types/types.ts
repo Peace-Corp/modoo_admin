@@ -223,6 +223,14 @@ export interface Order {
   // Customer payment link token (for customer online payment)
   payment_link_token: string | null;
 
+  // Per-field toggles for customer self-input on payment page
+  customer_editable_fields?: {
+    quantities?: boolean;
+    customerName?: boolean;
+    customerEmail?: boolean;
+    customerPhone?: boolean;
+  } | null;
+
   // Factory-specific fields (set by admin)
   factory_status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
   deadline: string | null;

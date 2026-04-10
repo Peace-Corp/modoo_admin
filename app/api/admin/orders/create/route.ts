@@ -49,6 +49,12 @@ interface CreateOrderRequest {
   adminSurcharge?: number;
   pricingNote?: string;
   paymentType?: PaymentType;
+  customerEditableFields?: {
+    quantities?: boolean;
+    customerName?: boolean;
+    customerEmail?: boolean;
+    customerPhone?: boolean;
+  };
 }
 
 const requireAdmin = async () => {
@@ -156,13 +162,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '요청 데이터가 올바르지 않습니다.' }, { status: 400 });
     }
 
-    const { customerName, customerEmail, customerPhone, notes } = payload;
+    const { customerName, customerEmail, customerPhone, notes, customerEditableFields } = payload;
+    const ceq = !!customerEditableFields?.quantities;
 
-    if (!customerName || typeof customerName !== 'string') {
+    if (!customerEditableFields?.customerName && (!customerName || typeof customerName !== 'string')) {
       return NextResponse.json({ error: '고객 이름이 필요합니다.' }, { status: 400 });
     }
 
-    if (!customerEmail || typeof customerEmail !== 'string') {
+    if (!customerEditableFields?.customerEmail && (!customerEmail || typeof customerEmail !== 'string')) {
       return NextResponse.json({ error: '고객 이메일이 필요합니다.' }, { status: 400 });
     }
 
@@ -181,9 +188,11 @@ export async function POST(request: Request) {
       if (!item.variants || !Array.isArray(item.variants) || item.variants.length === 0) {
         return NextResponse.json({ error: '최소 하나의 사이즈/수량을 선택해주세요.' }, { status: 400 });
       }
-      const itemQty = item.variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
-      if (itemQty <= 0) {
-        return NextResponse.json({ error: '총 수량은 1개 이상이어야 합니다.' }, { status: 400 });
+      if (!ceq) {
+        const itemQty = item.variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
+        if (itemQty <= 0) {
+          return NextResponse.json({ error: '총 수량은 1개 이상이어야 합니다.' }, { status: 400 });
+        }
       }
     }
 
@@ -258,8 +267,7 @@ export async function POST(request: Request) {
       const canvasState = normalizeJson<Record<string, unknown>>(design.canvas_state ?? null, {});
       const productColor = resolveProductColor(colorSelections);
 
-      const orderVariants = item.variants
-        .filter(v => v.quantity > 0)
+      const orderVariants = (ceq ? item.variants : item.variants.filter(v => v.quantity > 0))
         .map(variant => ({
           size_id: variant.sizeCode,
           size_name: variant.sizeLabel,
@@ -386,6 +394,7 @@ export async function POST(request: Request) {
       applied_coupon_id: payload.couponId || null,
       pricing_note: payload.pricingNote || null,
       payment_link_token: paymentLinkToken,
+      customer_editable_fields: customerEditableFields || null,
     };
 
     const { error: orderError } = await adminClient
