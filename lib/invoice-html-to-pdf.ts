@@ -66,7 +66,10 @@ export async function renderInvoicePdfBuffer(params: InvoiceEmailParams): Promis
     }
 
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    page.setDefaultNavigationTimeout(45_000);
+    page.setDefaultTimeout(45_000);
+    // networkidle0 는 서버리스에서 대기만 길어지거나 타임아웃나기 쉬움 (정적 HTML만 사용)
+    await page.setContent(html, { waitUntil: 'load' });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,

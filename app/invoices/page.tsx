@@ -242,18 +242,19 @@ export default function InvoicesPage() {
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">합계금액</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">VAT</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">발송일</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">관리</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
                     불러오는 중...
                   </td>
                 </tr>
               ) : invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
                     발송된 거래명세서가 없습니다.
                   </td>
                 </tr>
@@ -283,6 +284,14 @@ export default function InvoicesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.sent_at)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/invoices/${invoice.id}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                          상세 · 수정
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })
