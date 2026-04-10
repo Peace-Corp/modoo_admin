@@ -35,9 +35,8 @@ export interface OrderItemDraft {
 
 export interface CustomerEditableFields {
   quantities?: boolean;
-  customerName?: boolean;
-  customerEmail?: boolean;
-  customerPhone?: boolean;
+  customerInfo?: boolean;
+  shippingInfo?: boolean;
 }
 
 export interface OrderCreateResult {
@@ -419,14 +418,27 @@ export default function AdminOrderCreator({
                             <div className="border-t bg-gray-50 p-4 space-y-4">
                               {/* Size / Quantity */}
                               <div>
-                                <button
-                                  type="button"
-                                  onClick={() => setSizeCollapsed(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                                  className="flex items-center justify-between w-full text-sm font-medium text-gray-700 mb-2 hover:text-gray-900 transition-colors"
-                                >
-                                  <span>사이즈 및 수량 ({item.variants.filter(v => v.quantity > 0).length}개 선택)</span>
-                                  {sizeCollapsed[item.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                                </button>
+                                <div className="flex items-center justify-between mb-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSizeCollapsed(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                                    className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                                  >
+                                    <span>사이즈 및 수량 ({item.variants.filter(v => v.quantity > 0).length}개 선택)</span>
+                                    {sizeCollapsed[item.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomerEditableFields(prev => ({ ...prev, quantities: !prev.quantities || undefined }))}
+                                    className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
+                                      customerEditableFields.quantities
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                        : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    고객이 직접 입력
+                                  </button>
+                                </div>
                                 {!sizeCollapsed[item.id] && (
                                 <div className="space-y-2">
                                   {item.variants.map((v, vi) => (
@@ -529,30 +541,6 @@ export default function AdminOrderCreator({
                     </div>
                   </div>
 
-                  {/* Customer self-input toggles */}
-                  <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <p className="text-sm font-medium text-gray-700 mb-3">고객 직접 입력 설정</p>
-                    <p className="text-xs text-gray-500 mb-3">체크한 항목은 고객이 결제 페이지에서 직접 입력합니다.</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { key: 'quantities' as const, label: '사이즈별 수량' },
-                        { key: 'customerName' as const, label: '이름' },
-                        { key: 'customerPhone' as const, label: '연락처' },
-                        { key: 'customerEmail' as const, label: '이메일' },
-                      ]).map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-100 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={!!customerEditableFields[key]}
-                            onChange={(e) => setCustomerEditableFields(prev => ({ ...prev, [key]: e.target.checked || undefined }))}
-                            className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Actions */}
                   <div className="mt-4 flex gap-3">
                     <button
@@ -639,6 +627,7 @@ export default function AdminOrderCreator({
           <OrderDetailsForm
             items={items}
             customerEditableFields={customerEditableFields}
+            onCustomerEditableFieldsChange={setCustomerEditableFields}
             onSubmit={handleOrderCreated}
             onBack={() => setCurrentStep('items')}
           />

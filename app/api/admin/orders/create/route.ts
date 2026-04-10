@@ -51,9 +51,8 @@ interface CreateOrderRequest {
   paymentType?: PaymentType;
   customerEditableFields?: {
     quantities?: boolean;
-    customerName?: boolean;
-    customerEmail?: boolean;
-    customerPhone?: boolean;
+    customerInfo?: boolean;
+    shippingInfo?: boolean;
   };
 }
 
@@ -165,11 +164,11 @@ export async function POST(request: Request) {
     const { customerName, customerEmail, customerPhone, notes, customerEditableFields } = payload;
     const ceq = !!customerEditableFields?.quantities;
 
-    if (!customerEditableFields?.customerName && (!customerName || typeof customerName !== 'string')) {
+    if (!customerEditableFields?.customerInfo && (!customerName || typeof customerName !== 'string')) {
       return NextResponse.json({ error: '고객 이름이 필요합니다.' }, { status: 400 });
     }
 
-    if (!customerEditableFields?.customerEmail && (!customerEmail || typeof customerEmail !== 'string')) {
+    if (!customerEditableFields?.customerInfo && (!customerEmail || typeof customerEmail !== 'string')) {
       return NextResponse.json({ error: '고객 이메일이 필요합니다.' }, { status: 400 });
     }
 

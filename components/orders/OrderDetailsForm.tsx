@@ -29,12 +29,13 @@ interface CouponInfo {
 interface OrderDetailsFormProps {
   items: OrderItemDraft[];
   customerEditableFields?: CustomerEditableFields;
+  onCustomerEditableFieldsChange?: (fields: CustomerEditableFields | ((prev: CustomerEditableFields) => CustomerEditableFields)) => void;
   onSubmit: (orderId: string, result?: OrderCreateResult) => void;
   onBack: () => void;
 }
 
-export default function OrderDetailsForm({ items, customerEditableFields, onSubmit, onBack }: OrderDetailsFormProps) {
-  const hasAnyEditable = !!(customerEditableFields?.quantities || customerEditableFields?.customerName || customerEditableFields?.customerEmail || customerEditableFields?.customerPhone);
+export default function OrderDetailsForm({ items, customerEditableFields, onCustomerEditableFieldsChange, onSubmit, onBack }: OrderDetailsFormProps) {
+  const hasAnyEditable = !!(customerEditableFields?.quantities || customerEditableFields?.customerInfo || customerEditableFields?.shippingInfo);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -140,15 +141,15 @@ export default function OrderDetailsForm({ items, customerEditableFields, onSubm
     setError(null);
 
     const ceq = customerEditableFields?.quantities;
-    const ceName = customerEditableFields?.customerName;
-    const ceEmail = customerEditableFields?.customerEmail;
+    const ceInfo = customerEditableFields?.customerInfo;
+    const ceShip = customerEditableFields?.shippingInfo;
 
-    if (!ceName && !customerName.trim()) { setError('고객 이름을 입력해주세요.'); return; }
-    if (!ceEmail && !customerEmail.trim()) { setError('고객 이메일을 입력해주세요.'); return; }
-    if (!ceEmail && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) { setError('올바른 이메일 형식을 입력해주세요.'); return; }
+    if (!ceInfo && !customerName.trim()) { setError('고객 이름을 입력해주세요.'); return; }
+    if (!ceInfo && !customerEmail.trim()) { setError('고객 이메일을 입력해주세요.'); return; }
+    if (!ceInfo && customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) { setError('올바른 이메일 형식을 입력해주세요.'); return; }
     if (!ceq && totalQuantity <= 0) { setError('최소 하나 이상의 수량을 선택해주세요.'); return; }
     if (pricingMode === 'custom_total' && totalAmount <= 0) { setError('전체 금액을 입력해주세요.'); return; }
-    if (shippingMethod === 'domestic' && (!shippingAddress.postalCode || !shippingAddress.addressLine1)) {
+    if (!ceShip && shippingMethod === 'domestic' && (!shippingAddress.postalCode || !shippingAddress.addressLine1)) {
       setError('배송 주소를 입력해주세요.');
       return;
     }
@@ -169,8 +170,8 @@ export default function OrderDetailsForm({ items, customerEditableFields, onSubm
             pricingMode: item.pricingMode,
             customUnitPrice: item.pricingMode === 'custom_unit_price' ? getItemUnitPrice(item) : undefined,
           })),
-          customerName: customerName.trim() || (ceName ? '고객 입력 대기' : ''),
-          customerEmail: customerEmail.trim() || (ceEmail ? 'pending@placeholder.com' : ''),
+          customerName: customerName.trim() || (ceInfo ? '고객 입력 대기' : ''),
+          customerEmail: customerEmail.trim() || (ceInfo ? 'pending@placeholder.com' : ''),
           customerPhone: customerPhone.trim() || undefined,
           notes: notes.trim() || undefined,
           shippingMethod,
@@ -250,82 +251,105 @@ export default function OrderDetailsForm({ items, customerEditableFields, onSubm
 
       {/* Customer Info */}
       <div className="mb-8">
-        <h3 className="text-lg font-semibold mb-4">고객 정보</h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              이름 {!customerEditableFields?.customerName && <span className="text-red-500">*</span>}
-              {customerEditableFields?.customerName && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
-            </label>
-            {customerEditableFields?.customerName ? (
-              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
-            ) : (
-              <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="고객 이름" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              이메일 {!customerEditableFields?.customerEmail && <span className="text-red-500">*</span>}
-              {customerEditableFields?.customerEmail && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
-            </label>
-            {customerEditableFields?.customerEmail ? (
-              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
-            ) : (
-              <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              전화번호
-              {customerEditableFields?.customerPhone && <span className="text-xs text-blue-600 ml-1">(고객이 직접 입력)</span>}
-            </label>
-            {customerEditableFields?.customerPhone ? (
-              <div className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm">고객이 결제 페이지에서 직접 입력합니다</div>
-            ) : (
-              <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="010-0000-0000" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            )}
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">고객 정보</h3>
+          {onCustomerEditableFieldsChange && (
+            <button
+              type="button"
+              onClick={() => onCustomerEditableFieldsChange(prev => ({ ...prev, customerInfo: !prev.customerInfo || undefined }))}
+              className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
+                customerEditableFields?.customerInfo
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+              }`}
+            >
+              고객이 직접 입력
+            </button>
+          )}
         </div>
+        {customerEditableFields?.customerInfo ? (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-700">고객이 결제 페이지에서 이름, 이메일, 연락처를 직접 입력합니다.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
+              <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="고객 이름" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">이메일 <span className="text-red-500">*</span></label>
+              <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
+              <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="010-0000-0000" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Shipping */}
       <div className="mb-8">
-        <h3 className="text-lg font-semibold mb-4">배송 정보</h3>
-        <div className="flex gap-4 mb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="shippingMethod" value="pickup" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="w-4 h-4 text-blue-600" />
-            <span className="text-gray-700">직접 수령</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="shippingMethod" value="domestic" checked={shippingMethod === 'domestic'} onChange={() => setShippingMethod('domestic')} className="w-4 h-4 text-blue-600" />
-            <span className="text-gray-700">국내 배송</span>
-          </label>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">배송 정보</h3>
+          {onCustomerEditableFieldsChange && (
+            <button
+              type="button"
+              onClick={() => onCustomerEditableFieldsChange(prev => ({ ...prev, shippingInfo: !prev.shippingInfo || undefined }))}
+              className={`text-xs px-3 py-1 rounded-full transition-colors whitespace-nowrap ${
+                customerEditableFields?.shippingInfo
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                  : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+              }`}
+            >
+              고객이 직접 입력
+            </button>
+          )}
         </div>
-        {shippingMethod === 'domestic' && (
-          <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">주소 <span className="text-red-500">*</span></label>
-              <button type="button" onClick={() => setShowAddressSearch(true)} className="w-full p-3 border border-gray-300 rounded-lg bg-white text-left flex items-center gap-2 hover:border-blue-500 transition-colors">
-                <Search className="w-4 h-4 text-gray-400" />
-                {shippingAddress.addressLine1 ? <span className="text-gray-900">{shippingAddress.addressLine1}</span> : <span className="text-gray-400">주소 검색</span>}
-              </button>
+        {customerEditableFields?.shippingInfo ? (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-700">고객이 결제 페이지에서 배송 정보를 직접 입력합니다.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-4 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="shippingMethod" value="pickup" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="w-4 h-4 text-blue-600" />
+                <span className="text-gray-700">직접 수령</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="shippingMethod" value="domestic" checked={shippingMethod === 'domestic'} onChange={() => setShippingMethod('domestic')} className="w-4 h-4 text-blue-600" />
+                <span className="text-gray-700">국내 배송</span>
+              </label>
             </div>
-            {shippingAddress.addressLine1 && (
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">[{shippingAddress.postalCode}] {shippingAddress.addressLine1}</p>
-                    <p className="text-xs text-gray-500 mt-1">{shippingAddress.state} {shippingAddress.city}</p>
+            {shippingMethod === 'domestic' && (
+              <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">주소 <span className="text-red-500">*</span></label>
+                  <button type="button" onClick={() => setShowAddressSearch(true)} className="w-full p-3 border border-gray-300 rounded-lg bg-white text-left flex items-center gap-2 hover:border-blue-500 transition-colors">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    {shippingAddress.addressLine1 ? <span className="text-gray-900">{shippingAddress.addressLine1}</span> : <span className="text-gray-400">주소 검색</span>}
+                  </button>
+                </div>
+                {shippingAddress.addressLine1 && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">[{shippingAddress.postalCode}] {shippingAddress.addressLine1}</p>
+                        <p className="text-xs text-gray-500 mt-1">{shippingAddress.state} {shippingAddress.city}</p>
+                      </div>
+                    </div>
                   </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">상세 주소</label>
+                  <input type="text" value={shippingAddress.addressLine2} onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }))} placeholder="상세 주소 입력 (동, 호수 등)" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">상세 주소</label>
-              <input type="text" value={shippingAddress.addressLine2} onChange={(e) => setShippingAddress(prev => ({ ...prev, addressLine2: e.target.value }))} placeholder="상세 주소 입력 (동, 호수 등)" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
+          </>
         )}
       </div>
 
