@@ -94,13 +94,20 @@ export async function POST(request: Request) {
       });
     }
 
-    // Check max_uses capacity
-    if (coupon.max_uses !== null && coupon.current_uses + newUserIds.length > coupon.max_uses) {
-      const remaining = coupon.max_uses - coupon.current_uses;
-      return NextResponse.json(
-        { error: `쿠폰 최대 발급 수를 초과합니다. (남은 발급 가능: ${remaining}건)` },
-        { status: 400 }
-      );
+    // Check max_uses capacity based on actual coupon_usages count (not current_uses which tracks redemptions)
+    if (coupon.max_uses !== null) {
+      const { count: totalIssuedCount } = await adminClient
+        .from('coupon_usages')
+        .select('id', { count: 'exact', head: true })
+        .eq('coupon_id', couponId);
+
+      if ((totalIssuedCount || 0) + newUserIds.length > coupon.max_uses) {
+        const remaining = coupon.max_uses - (totalIssuedCount || 0);
+        return NextResponse.json(
+          { error: `쿠폰 최대 발급 수를 초과합니다. (남은 발급 가능: ${Math.max(0, remaining)}건)` },
+          { status: 400 }
+        );
+      }
     }
 
     // Calculate expires_at
@@ -135,15 +142,6 @@ export async function POST(request: Request) {
       }
       throw new Error(insertError.message);
     }
-
-    // Increment current_uses
-    await adminClient
-      .from('coupons')
-      .update({
-        current_uses: coupon.current_uses + newUserIds.length,
-        updated_at: now,
-      })
-      .eq('id', couponId);
 
     return NextResponse.json({
       data: {

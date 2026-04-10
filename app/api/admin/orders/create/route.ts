@@ -419,6 +419,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: orderItemsError.message }, { status: 500 });
     }
 
+    // Increment coupon current_uses when a coupon is applied to admin order
+    if (payload.couponId && couponDiscount > 0) {
+      try {
+        const { data: coupon } = await adminClient
+          .from('coupons')
+          .select('current_uses')
+          .eq('id', payload.couponId)
+          .single();
+
+        if (coupon) {
+          await adminClient
+            .from('coupons')
+            .update({
+              current_uses: (coupon.current_uses || 0) + 1,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', payload.couponId);
+        }
+      } catch (couponError) {
+        console.error('Error incrementing coupon current_uses:', couponError);
+      }
+    }
+
     let paymentLinkUrl: string | null = null;
     if (paymentLinkToken) {
       paymentLinkUrl = `${getBaseUrl()}/order/custom/${paymentLinkToken}`;
