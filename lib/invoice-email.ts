@@ -253,7 +253,14 @@ export function generateInvoicePdfDocumentHtml(params: InvoiceEmailParams): stri
   <title>거래명세표 ${escapeHtml(params.invoiceNumber)}</title>
   <style>
     @page { size: A4; margin: 12mm; }
-    body { margin: 0; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      margin: 0;
+      font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      color: #111;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    table, td, th { font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
   </style>
 </head>
 <body>${body}</body>

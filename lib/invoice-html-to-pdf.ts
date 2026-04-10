@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import type { InvoiceEmailParams } from './invoice-email';
 import { generateInvoicePdfDocumentHtml } from './invoice-email';
 
@@ -32,13 +33,77 @@ function resolveChromeExecutable(): string | undefined {
   return undefined;
 }
 
+let _fontCssCache: string | null = null;
+
 /**
- * 거래명세표 HTML을 PDF 버퍼로 변환합니다.
- * 로컬: Chrome 설치 경로 또는 CHROME_EXECUTABLE_PATH 필요.
- * Vercel 등: @sparticuz/chromium 번들 사용.
+ * @fontsource/noto-sans-kr 의 CSS 를 읽고, 모든 woff2 src 경로를
+ * base64 data URL 로 치환한 CSS 를 돌려줍니다.
+ * 한 번 빌드하면 프로세스 수명 동안 캐시합니다.
  */
+function buildEmbeddedFontCss(): string {
+  if (_fontCssCache !== null) return _fontCssCache;
+
+  const pkgBase = path.join(/*turbopackIgnore: true*/ process.cwd(), 'node_modules', '@fontsource', 'noto-sans-kr');
+
+  const cssFiles = ['400.css', '700.css'].map((f) => path.join(pkgBase, f));
+  const fallbackCss = path.join(pkgBase, 'index.css');
+
+  let rawCss = '';
+
+  for (const cssPath of cssFiles) {
+    if (fs.existsSync(cssPath)) {
+      rawCss += fs.readFileSync(cssPath, 'utf-8') + '\n';
+    }
+  }
+
+  if (!rawCss && fs.existsSync(fallbackCss)) {
+    const full = fs.readFileSync(fallbackCss, 'utf-8');
+    rawCss = full
+      .split(/(?=\/\*\s*noto-sans-kr-)/)
+      .filter((block) => block.includes('-400-') || block.includes('-700-'))
+      .join('\n');
+  }
+
+  if (!rawCss) {
+    console.warn('[invoice PDF] @fontsource/noto-sans-kr 를 찾지 못했습니다.');
+    _fontCssCache = '';
+    return '';
+  }
+
+  const filesDir = path.join(pkgBase, 'files');
+
+  const replaced = rawCss.replace(
+    /url\(\.\/(files\/[^)]+\.woff2)\)\s*format\(['"]woff2['"]\)/g,
+    (_match, relPath: string) => {
+      const absPath = path.join(pkgBase, relPath);
+      if (!fs.existsSync(absPath)) return _match;
+      const buf = fs.readFileSync(absPath);
+      const b64 = buf.toString('base64');
+      return `url(data:font/woff2;base64,${b64}) format('woff2')`;
+    },
+  );
+
+  const withoutWoff = replaced.replace(
+    /,\s*url\(\.\/(files\/[^)]+\.woff)\)\s*format\(['"]woff['"]\)/g,
+    '',
+  );
+
+  _fontCssCache = withoutWoff;
+
+  const sizeKb = Math.round(Buffer.byteLength(withoutWoff, 'utf-8') / 1024);
+  console.log(`[invoice PDF] 한글 폰트 CSS 임베드 완료 (${sizeKb}KB, 캐시됨)`);
+
+  return withoutWoff;
+}
+
 export async function renderInvoicePdfBuffer(params: InvoiceEmailParams): Promise<Buffer | null> {
-  const html = generateInvoicePdfDocumentHtml(params);
+  let html = generateInvoicePdfDocumentHtml(params);
+
+  const fontCss = buildEmbeddedFontCss();
+  if (fontCss) {
+    html = html.replace('</head>', `<style>${fontCss}</style>\n</head>`);
+  }
+
   const puppeteer = (await import('puppeteer-core')).default;
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
 
@@ -66,10 +131,21 @@ export async function renderInvoicePdfBuffer(params: InvoiceEmailParams): Promis
     }
 
     const page = await browser.newPage();
-    page.setDefaultNavigationTimeout(45_000);
-    page.setDefaultTimeout(45_000);
-    // networkidle0 는 서버리스에서 대기만 길어지거나 타임아웃나기 쉬움 (정적 HTML만 사용)
-    await page.setContent(html, { waitUntil: 'load' });
+    page.setDefaultNavigationTimeout(60_000);
+    page.setDefaultTimeout(60_000);
+    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
+    await page.setContent(html, { waitUntil: 'load', timeout: 60_000 });
+
+    try {
+      await Promise.race([
+        page.evaluate(() => document.fonts.ready),
+        new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    } catch {
+      /* 폰트 API 실패 시에도 PDF 시도 */
+    }
+    await new Promise((r) => setTimeout(r, 300));
+
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
