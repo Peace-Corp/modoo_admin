@@ -593,6 +593,14 @@ export default function AdminOrderCreator({
                 </div>
               </div>
 
+              <button
+                onClick={() => setCurrentStep('items')}
+                className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowRight className="w-4 h-4 rotate-180" />
+                <span className="text-sm font-medium">제품 목록으로 돌아가기</span>
+              </button>
+
               {filteredProducts.length === 0 ? (
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
