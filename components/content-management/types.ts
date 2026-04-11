@@ -151,6 +151,31 @@ export type FaqFormState = {
   is_published: boolean;
 };
 
+// Popup Banner Types
+export type PopupBannerRecord = {
+  id: string;
+  title: string;
+  image_url: string;
+  redirect_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PopupBannerFormState = {
+  id?: string | null;
+  title: string;
+  image_url: string;
+  redirect_url: string;
+  sort_order: number;
+  is_active: boolean;
+  start_date: string;
+  end_date: string;
+};
+
 // Chatbot Inquiry Types
 export type ChatbotInquiryStatus = 'pending' | 'contacted' | 'completed' | 'cancelled';
 

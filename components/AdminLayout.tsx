@@ -87,6 +87,7 @@ const navGroups: NavGroup[] = [
           { href: '/content/reviews', label: '리뷰' },
           { href: '/content/examples', label: '제작 사례' },
           { href: '/content/banners', label: '히어로 배너' },
+          { href: '/content/popup-banners', label: '팝업 배너' },
           { href: '/content/announcements', label: '공지' },
           { href: '/content/faqs', label: 'FAQ' },
           { href: '/content/inquiries', label: '문의' },

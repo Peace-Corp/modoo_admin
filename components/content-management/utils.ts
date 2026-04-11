@@ -10,6 +10,8 @@ import type {
   AnnouncementFormState,
   FaqFormState,
   ReviewFormState,
+  PopupBannerRecord,
+  PopupBannerFormState,
   InquiryStatus,
   ChatbotInquiryStatus,
   ChatbotInquiryRecord,
@@ -30,6 +32,8 @@ export const ANNOUNCEMENT_IMAGE_BUCKET = 'products';
 export const ANNOUNCEMENT_IMAGE_FOLDER = 'announcements';
 export const REVIEW_IMAGE_BUCKET = 'products';
 export const REVIEW_IMAGE_FOLDER = 'reviews';
+export const POPUP_BANNER_IMAGE_BUCKET = 'products';
+export const POPUP_BANNER_IMAGE_FOLDER = 'popup-banners';
 
 export const emptyExampleForm: ExampleFormState = {
   product_id: '',
@@ -64,6 +68,16 @@ export const emptyFaqForm: FaqFormState = {
   tags: '',
   sort_order: 0,
   is_published: true,
+};
+
+export const emptyPopupBannerForm: PopupBannerFormState = {
+  title: '',
+  image_url: '',
+  redirect_url: '',
+  sort_order: 0,
+  is_active: true,
+  start_date: '',
+  end_date: '',
 };
 
 export const emptyReviewForm: ReviewFormState = {
@@ -106,6 +120,14 @@ export const sortExamples = (examples: ProductionExampleRecord[]) => {
 };
 
 export const sortHeroBanners = (banners: HeroBannerRecord[]) => {
+  return [...banners].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
+
+export const sortPopupBanners = (banners: PopupBannerRecord[]) => {
   return [...banners].sort((a, b) => {
     const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
     if (orderDiff !== 0) return orderDiff;

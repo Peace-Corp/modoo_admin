@@ -5,5 +5,6 @@ export { default as AnnouncementsSection } from './AnnouncementsSection';
 export { default as FaqsSection } from './FaqsSection';
 export { default as InquiriesSection } from './InquiriesSection';
 export { default as ChatbotInquiriesSection } from './ChatbotInquiriesSection';
+export { default as PopupBannersSection } from './PopupBannersSection';
 export * from './types';
 export * from './utils';
