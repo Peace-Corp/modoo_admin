@@ -72,6 +72,8 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
     )
   );
 
+  const isImageMode = cobuyImageUrls.length > 0 && !savedDesignId;
+
   const handleDesignChoice = () => {
     setCurrentStep('product-select');
   };
@@ -82,9 +84,12 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
 
   const handleProductSelect = (product: Product) => {
     setSelectedProduct(product);
-    // Navigate to editor
-    const returnUrl = encodeURIComponent(`/cobuy?resumeProductId=${product.id}`);
-    router.push(`/editor/${product.id}?mode=design&returnUrl=${returnUrl}`);
+    if (isImageMode) {
+      setCurrentStep('form');
+    } else {
+      const returnUrl = encodeURIComponent(`/cobuy?resumeProductId=${product.id}`);
+      router.push(`/editor/${product.id}?mode=design&returnUrl=${returnUrl}`);
+    }
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,7 +152,7 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
 
   const handleImageUploadNext = () => {
     if (cobuyImageUrls.length === 0) return;
-    setCurrentStep('form');
+    setCurrentStep('product-select');
   };
 
   const handleCoBuyCreated = (session: CoBuySession) => {
@@ -170,7 +175,11 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
 
   const handleBack = () => {
     if (currentStep === 'product-select') {
-      setCurrentStep('creation-method');
+      if (isImageMode) {
+        setCurrentStep('image-upload');
+      } else {
+        setCurrentStep('creation-method');
+      }
       setSelectedProduct(null);
     } else if (currentStep === 'image-upload') {
       setCurrentStep('creation-method');
@@ -178,8 +187,9 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
       setImagePreviews([]);
       setUploadError(null);
     } else if (currentStep === 'form') {
-      if (cobuyImageUrls.length > 0) {
-        setCurrentStep('image-upload');
+      if (isImageMode) {
+        setCurrentStep('product-select');
+        setSelectedProduct(null);
       } else {
         setCurrentStep('product-select');
         setSelectedProduct(null);
@@ -188,13 +198,12 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
     }
   };
 
-  const isImageMode = cobuyImageUrls.length > 0 && !savedDesignId;
-
   // Progress steps
   const getProgressSteps = () => {
     if (isImageMode || currentStep === 'image-upload') {
       return [
         { id: 'image-upload', label: '이미지 업로드' },
+        { id: 'product-select', label: '제품 선택' },
         { id: 'form', label: '정보 입력' },
       ];
     }
@@ -210,9 +219,9 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
 
   const progressSteps = getProgressSteps();
   const getCurrentProgressIndex = () => {
-    if (currentStep === 'product-select') return 0;
     if (currentStep === 'image-upload') return 0;
-    if (currentStep === 'form') return isImageMode ? 1 : 2;
+    if (currentStep === 'product-select') return isImageMode ? 1 : 0;
+    if (currentStep === 'form') return 2;
     return 0;
   };
   const currentProgressIndex = getCurrentProgressIndex();
@@ -312,7 +321,7 @@ export default function AdminCoBuyCreator({ onClose, onSuccess, initialProductId
           </div>
         )}
 
-        {/* Step: Product Selection (design mode only) */}
+        {/* Step: Product Selection */}
         {currentStep === 'product-select' && (
           <div className="p-6">
             <div className="max-w-4xl mx-auto">

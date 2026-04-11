@@ -128,10 +128,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: designError?.message || '디자인 정보를 찾을 수 없습니다.' }, { status: 500 });
     }
 
-    // Image-only cobuys have no product_id - cannot create order_items (product_id is NOT NULL)
     if (!design.product_id) {
       return NextResponse.json({
-        error: '이미지 전용 공동구매는 일괄 주문 생성을 지원하지 않습니다. 주문 관리에서 직접 생성해주세요.',
+        error: '상품이 연결되지 않은 공동구매입니다. 공동구매를 다시 생성해주세요.',
       }, { status: 400 });
     }
 
