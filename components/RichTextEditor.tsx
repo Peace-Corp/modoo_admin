@@ -1,6 +1,6 @@
 'use client';
 
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Extension } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
@@ -15,6 +15,41 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import { useEffect, useRef, useState, useCallback, type ChangeEvent } from 'react';
+
+// style/class/id 속성을 모든 노드에서 보존하는 extension
+const PreserveAttributes = Extension.create({
+  name: 'preserveAttributes',
+  addGlobalAttributes() {
+    const nodeTypes = [
+      'paragraph', 'heading', 'bulletList', 'orderedList', 'listItem',
+      'blockquote', 'codeBlock', 'table', 'tableRow', 'tableCell',
+      'tableHeader', 'image', 'horizontalRule',
+    ];
+    return nodeTypes.map((type) => ({
+      types: [type],
+      attributes: {
+        style: {
+          default: null,
+          parseHTML: (el: Element) => el.getAttribute('style') || null,
+          renderHTML: (attrs: Record<string, unknown>) =>
+            attrs.style ? { style: attrs.style } : {},
+        },
+        class: {
+          default: null,
+          parseHTML: (el: Element) => el.getAttribute('class') || null,
+          renderHTML: (attrs: Record<string, unknown>) =>
+            attrs.class ? { class: attrs.class } : {},
+        },
+        id: {
+          default: null,
+          parseHTML: (el: Element) => el.getAttribute('id') || null,
+          renderHTML: (attrs: Record<string, unknown>) =>
+            attrs.id ? { id: attrs.id } : {},
+        },
+      },
+    }));
+  },
+});
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3,
@@ -77,11 +112,13 @@ export default function RichTextEditor({
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [sourceHtml, setSourceHtml] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      PreserveAttributes,
       Underline,
       TextStyle,
       Color,
@@ -280,18 +317,54 @@ export default function RichTextEditor({
           <Code2 className="w-3.5 h-3.5" />
           {isSourceMode ? 'WYSIWYG' : 'HTML'}
         </button>
+
+        {/* 소스 모드일 때 미리보기 토글 */}
+        {isSourceMode && (
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); setShowPreview(v => !v); }}
+            title={showPreview ? '미리보기 숨기기' : '미리보기 표시'}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
+              showPreview
+                ? 'bg-blue-500 text-white border-blue-500'
+                : 'text-gray-600 hover:bg-gray-100 border-gray-300'
+            }`}
+          >
+            미리보기
+          </button>
+        )}
       </div>
 
       {/* 에디터 본문 */}
       {isSourceMode ? (
-        <textarea
-          value={sourceHtml}
-          onChange={(e) => setSourceHtml(e.target.value)}
-          className="w-full p-3 font-mono text-sm text-gray-800 bg-gray-950 text-green-400 resize-y outline-none"
-          style={{ minHeight }}
-          placeholder="HTML 소스를 직접 입력하세요..."
-          spellCheck={false}
-        />
+        <div className={`flex ${showPreview ? 'divide-x divide-gray-700' : ''}`}>
+          <div className={showPreview ? 'w-1/2' : 'w-full'}>
+            <div className="flex items-center justify-between px-3 py-1 bg-gray-800 text-xs text-gray-400">
+              <span>HTML 소스 — AI 생성 HTML을 여기에 붙여넣으세요</span>
+              <span className="text-yellow-400">⚠ &lt;style&gt; 태그는 소스 모드에서만 지원됩니다</span>
+            </div>
+            <textarea
+              value={sourceHtml}
+              onChange={(e) => setSourceHtml(e.target.value)}
+              className="w-full p-3 font-mono text-sm bg-gray-950 text-green-400 resize-y outline-none"
+              style={{ minHeight }}
+              placeholder="HTML 소스를 직접 입력하세요..."
+              spellCheck={false}
+            />
+          </div>
+          {showPreview && (
+            <div className="w-1/2 flex flex-col">
+              <div className="px-3 py-1 bg-gray-100 border-b border-gray-200 text-xs text-gray-500">
+                미리보기 (실제 렌더링)
+              </div>
+              <div
+                className="rich-content p-4 overflow-auto bg-white"
+                style={{ minHeight }}
+                dangerouslySetInnerHTML={{ __html: sourceHtml }}
+              />
+            </div>
+          )}
+        </div>
       ) : (
         <EditorContent
           editor={editor}
