@@ -6,13 +6,13 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
-import Youtube from '@tiptap/extension-youtube';
-import TextStyle from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { Youtube } from '@tiptap/extension-youtube';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import { useEffect, useRef, useState, useCallback, type ChangeEvent } from 'react';
 import {
@@ -93,7 +93,7 @@ export default function RichTextEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Youtube.configure({ width: '100%', height: 360, HTMLAttributes: { class: 'w-full rounded' } }),
+      Youtube.configure({ width: 640, height: 360, HTMLAttributes: { class: 'w-full rounded', style: 'width:100%;max-width:100%' } }),
     ],
     content: value,
     editorProps: {
@@ -112,7 +112,7 @@ export default function RichTextEditor({
     if (isSourceMode) return;
     const current = editor.getHTML();
     if (current !== value) {
-      editor.commands.setContent(value, false);
+      editor.commands.setContent(value, { emitUpdate: false });
     }
   }, [value, editor, isSourceMode]);
 
@@ -126,7 +126,7 @@ export default function RichTextEditor({
   // 소스 모드 종료 시 textarea의 HTML을 에디터에 반영
   const exitSourceMode = useCallback(() => {
     if (!editor) return;
-    editor.commands.setContent(sourceHtml, false);
+    editor.commands.setContent(sourceHtml, { emitUpdate: false });
     onChange(sourceHtml);
     setIsSourceMode(false);
   }, [editor, sourceHtml, onChange]);
