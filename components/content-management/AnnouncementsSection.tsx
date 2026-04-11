@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { Edit2, Eye, EyeOff, ImageIcon, Plus, Trash2, X } from 'lucide-react';
 import type { AnnouncementRecord, AnnouncementFormState, AnnouncementCategory } from './types';
 import {
   ANNOUNCEMENT_IMAGE_BUCKET,
@@ -31,6 +31,8 @@ export default function AnnouncementsSection() {
   const [announcementFormOpen, setAnnouncementFormOpen] = useState(false);
   const [announcementFormError, setAnnouncementFormError] = useState<string | null>(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
   const handleAnnouncementFormToggle = () => {
     setAnnouncementFormOpen((prev) => !prev);
@@ -59,6 +61,29 @@ export default function AnnouncementsSection() {
     const uploadResult = await uploadFileToStorage(supabase, file, ANNOUNCEMENT_IMAGE_BUCKET, ANNOUNCEMENT_IMAGE_FOLDER);
     if (!uploadResult.success || !uploadResult.url) throw new Error(uploadResult.error || '이미지 업로드 실패');
     return uploadResult.url;
+  };
+
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+    setUploadingThumbnail(true);
+    try {
+      const url = await handleImageUpload(file);
+      setAnnouncementForm((prev) => ({ ...prev, image_links: [url, ...prev.image_links.slice(1)] }));
+    } catch {
+      alert('썸네일 업로드에 실패했습니다.');
+    } finally {
+      setUploadingThumbnail(false);
+    }
+  };
+
+  const handleThumbnailRemove = () => {
+    setAnnouncementForm((prev) => ({ ...prev, image_links: prev.image_links.slice(1) }));
   };
 
   const handleAnnouncementSave = async () => {
@@ -222,6 +247,48 @@ export default function AnnouncementsSection() {
                 onImageUpload={handleImageUpload}
                 placeholder="내용을 입력하세요. 이미지, 표, 유튜브 영상 등을 자유롭게 삽입할 수 있습니다."
                 minHeight="360px"
+              />
+            </div>
+
+            {/* 썸네일 이미지 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">대표 이미지 (썸네일)</span>
+                <span className="text-xs text-gray-400">홈/목록 카드에 표시됩니다</span>
+              </div>
+              {announcementForm.image_links[0] ? (
+                <div className="relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={announcementForm.image_links[0]}
+                    alt="썸네일 미리보기"
+                    className="h-32 w-auto rounded-lg border border-gray-200 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleThumbnailRemove}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  disabled={uploadingThumbnail}
+                  className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  {uploadingThumbnail ? '업로드 중...' : '썸네일 이미지 업로드'}
+                </button>
+              )}
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleThumbnailUpload}
               />
             </div>
 
