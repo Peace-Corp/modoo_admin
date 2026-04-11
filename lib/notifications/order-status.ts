@@ -158,6 +158,7 @@ function buildStatusEmailHtml(params: OrderStatusNotificationParams): string {
         ${totalHtml}
         <div style="text-align:center;margin:28px 0;">
           <a href="${orderUrl}" style="display:inline-block;padding:14px 32px;background-color:${BRAND_COLOR};color:#ffffff;border-radius:10px;font-weight:bold;font-size:14px;text-decoration:none;">주문 상세 보기</a>
+          ${params.newStatus === 'delivered' ? `<a href="https://modoouniform.com/home/my-page/orders" style="display:inline-block;padding:14px 32px;background-color:#333333;color:#ffffff;border-radius:10px;font-weight:bold;font-size:14px;text-decoration:none;margin-left:8px;">리뷰 작성하기</a>` : ''}
         </div>
       </div>
       <div style="border-top:1px solid #e5e7eb;padding:24px 28px;background:${BRAND_BG};">
@@ -203,6 +204,7 @@ function buildStatusEmailText(params: OrderStatusNotificationParams): string {
     itemLines,
     totalLine,
     '주문 상세: https://modoouniform.com/order/' + params.orderId,
+    ...(params.newStatus === 'delivered' ? ['리뷰 작성: https://modoouniform.com/home/my-page/orders'] : []),
     '',
     '문의: 카카오톡 채널 "모두의유니폼" / 010-8140-0621',
   ].filter(Boolean).join('\n');
