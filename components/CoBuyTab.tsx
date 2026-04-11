@@ -8,6 +8,7 @@ import { CoBuyCustomField, CoBuyParticipant, CoBuySession, CoBuyStatus } from '@
 import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 import CoBuyParticipantModal, { ParticipantFormData } from './cobuy/CoBuyParticipantModal';
 import CoBuyRefundModal from './cobuy/CoBuyRefundModal';
+import { addParticipantLineItemsToSizeCounts } from '@/lib/cobuyParticipantSizes';
 
 /** 고객 앱(modoo_app) 공개 URL. 배포 도메인이 다르면 `NEXT_PUBLIC_CUSTOMER_SITE_URL` 설정 */
 function getCustomerSiteOrigin(): string {
@@ -257,9 +258,7 @@ export default function CoBuyTab() {
     const counts = new Map<string, number>();
     for (const s of allSizes) counts.set(s, 0);
     for (const p of participants) {
-      if (p.selected_size) {
-        counts.set(p.selected_size, (counts.get(p.selected_size) || 0) + 1);
-      }
+      addParticipantLineItemsToSizeCounts(counts, p);
     }
 
     // Use defined order from options, then append any extra sizes from participants
