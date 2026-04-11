@@ -49,11 +49,17 @@ export interface OrderCreateResult {
   paymentLinkUrl: string | null;
 }
 
+export interface InitialDesignItem {
+  productId: string;
+  designId: string;
+}
+
 interface AdminOrderCreatorProps {
   onClose: () => void;
   onSuccess?: (orderId: string) => void;
   initialProductId?: string;
   initialDesignId?: string;
+  initialDesignItems?: InitialDesignItem[];
 }
 
 const SESSION_KEY = 'admin_order_draft_items';
@@ -90,7 +96,7 @@ export function getItemSubtotal(item: OrderItemDraft): number {
 }
 
 export default function AdminOrderCreator({
-  onClose, onSuccess, initialProductId, initialDesignId,
+  onClose, onSuccess, initialProductId, initialDesignId, initialDesignItems,
 }: AdminOrderCreatorProps) {
   const router = useRouter();
 
@@ -125,36 +131,53 @@ export default function AdminOrderCreator({
         const existingItems = loadItemsFromSession();
         clearItemsSession();
 
-        if (initialProductId && initialDesignId) {
-          const product = fetched.find(p => p.id === initialProductId);
-          if (product) {
-            let designPreviewUrl: string | null = null;
-            let designPricePerItem: number | null = null;
-            try {
-              const res = await fetch(`/api/admin/designs/${initialDesignId}`);
-              if (res.ok) {
-                const d = await res.json();
-                designPreviewUrl = d?.data?.preview_url || null;
-                const price = d?.data?.price_per_item;
-                if (price && price > 0) designPricePerItem = price;
-              }
-            } catch { /* noop */ }
+        const buildItemFromDesign = async (
+          productId: string,
+          designId: string,
+          allProducts: Product[],
+        ): Promise<OrderItemDraft | null> => {
+          const product = allProducts.find(p => p.id === productId);
+          if (!product) return null;
 
-            const sizeOpts = product.size_options || [];
-            const newItem: OrderItemDraft = {
-              id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              productId: product.id,
-              productTitle: product.title,
-              productThumbnail: product.thumbnail_image_link?.[0] || null,
-              designId: initialDesignId,
-              designPreviewUrl,
-              basePrice: product.base_price,
-              sizeOptions: sizeOpts,
-              variants: sizeOpts.map(o => ({ sizeLabel: o.label, sizeCode: o.size_code, quantity: 0 })),
-              pricingMode: 'auto',
-              customUnitPrice: '',
-              designPricePerItem,
-            };
+          let designPreviewUrl: string | null = null;
+          let designPricePerItem: number | null = null;
+          try {
+            const res = await fetch(`/api/admin/designs/${designId}`);
+            if (res.ok) {
+              const d = await res.json();
+              designPreviewUrl = d?.data?.preview_url || null;
+              const price = d?.data?.price_per_item;
+              if (price && price > 0) designPricePerItem = price;
+            }
+          } catch { /* noop */ }
+
+          const sizeOpts = product.size_options || [];
+          return {
+            id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${designId.slice(0, 6)}`,
+            productId: product.id,
+            productTitle: product.title,
+            productThumbnail: product.thumbnail_image_link?.[0] || null,
+            designId,
+            designPreviewUrl,
+            basePrice: product.base_price,
+            sizeOptions: sizeOpts,
+            variants: sizeOpts.map(o => ({ sizeLabel: o.label, sizeCode: o.size_code, quantity: 0 })),
+            pricingMode: 'auto',
+            customUnitPrice: '',
+            designPricePerItem,
+          };
+        };
+
+        if (initialDesignItems && initialDesignItems.length > 0) {
+          const results = await Promise.all(
+            initialDesignItems.map(item => buildItemFromDesign(item.productId, item.designId, fetched))
+          );
+          const newItems = results.filter((item): item is OrderItemDraft => item !== null);
+          setItems([...existingItems, ...newItems]);
+          if (newItems.length > 0) setExpandedItemId(newItems[0].id);
+        } else if (initialProductId && initialDesignId) {
+          const newItem = await buildItemFromDesign(initialProductId, initialDesignId, fetched);
+          if (newItem) {
             setItems([...existingItems, newItem]);
             setExpandedItemId(newItem.id);
           } else {
@@ -170,7 +193,7 @@ export default function AdminOrderCreator({
       }
     };
     init();
-  }, [initialProductId, initialDesignId]);
+  }, [initialProductId, initialDesignId, initialDesignItems]);
 
   const filteredProducts = products.filter(p =>
     p.is_active && (
