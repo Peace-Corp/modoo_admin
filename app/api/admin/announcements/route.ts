@@ -35,7 +35,7 @@ const requireAdmin = async () => {
 };
 
 const ANNOUNCEMENT_FIELDS =
-  'id, title, content, is_published, image_links, created_at, updated_at';
+  'id, title, content, category, is_published, image_links, created_at, updated_at';
 
 export async function GET() {
   try {
@@ -81,12 +81,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '내용이 필요합니다.' }, { status: 400 });
     }
 
+    const category = payload?.category ?? 'notice';
+    const validCategories = ['notice', 'fabric', 'printing', 'order_guide'];
+    const finalCategory = validCategories.includes(category) ? category : 'notice';
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('announcements')
       .insert({
         title,
         content,
+        category: finalCategory,
         is_published: Boolean(isPublished),
         image_links: imageLinks,
       })
@@ -134,6 +139,13 @@ export async function PATCH(request: Request) {
 
     if (Array.isArray(payload?.image_links)) {
       updateData.image_links = payload.image_links.filter((item: unknown) => typeof item === 'string');
+    }
+
+    if (typeof payload?.category === 'string') {
+      const validCategories = ['notice', 'fabric', 'printing', 'order_guide'];
+      if (validCategories.includes(payload.category)) {
+        updateData.category = payload.category;
+      }
     }
 
     if (Object.keys(updateData).length === 1) {

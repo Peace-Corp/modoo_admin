@@ -59,10 +59,13 @@ export type HeroBannerRecord = {
   updated_at: string;
 };
 
+export type AnnouncementCategory = 'notice' | 'fabric' | 'printing' | 'order_guide';
+
 export type AnnouncementRecord = {
   id: string;
   title: string;
   content: string;
+  category: AnnouncementCategory;
   is_published: boolean | null;
   image_links: string[] | null;
   created_at: string;
@@ -123,6 +126,7 @@ export type AnnouncementFormState = {
   id?: string | null;
   title: string;
   content: string;
+  category: AnnouncementCategory;
   is_published: boolean;
   image_links: string[];
 };

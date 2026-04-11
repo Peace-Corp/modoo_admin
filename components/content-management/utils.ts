@@ -2,6 +2,7 @@ import type {
   ProductionExampleRecord,
   HeroBannerRecord,
   AnnouncementRecord,
+  AnnouncementCategory,
   FaqRecord,
   ReviewRecord,
   ExampleFormState,
@@ -13,6 +14,13 @@ import type {
   ChatbotInquiryStatus,
   ChatbotInquiryRecord,
 } from './types';
+
+export const ANNOUNCEMENT_CATEGORIES: Record<AnnouncementCategory, string> = {
+  notice: '공지',
+  fabric: '원단 안내',
+  printing: '인쇄방법 안내',
+  order_guide: '주문 가이드',
+};
 
 export const EXAMPLE_IMAGE_BUCKET = 'products';
 export const EXAMPLE_IMAGE_FOLDER = 'production-examples';
@@ -44,6 +52,7 @@ export const emptyHeroBannerForm: HeroBannerFormState = {
 export const emptyAnnouncementForm: AnnouncementFormState = {
   title: '',
   content: '',
+  category: 'notice',
   is_published: true,
   image_links: [],
 };
