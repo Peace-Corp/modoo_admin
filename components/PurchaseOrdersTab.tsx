@@ -143,6 +143,8 @@ export default function PurchaseOrdersTab() {
     for (const item of filteredItems) {
       const variants = extractVariants(item);
       for (const v of variants) {
+        const qty = v.quantity ?? item.quantity ?? 1;
+        if (qty === 0) continue;
         const productKey = item.product_title;
         if (!map.has(productKey)) {
           map.set(productKey, { productTitle: productKey, variants: new Map() });
@@ -150,7 +152,6 @@ export default function PurchaseOrdersTab() {
         const variantKey = `${v.color_name || '-'}_${v.size_name || '-'}`;
         const entry = map.get(productKey)!;
         const existing = entry.variants.get(variantKey);
-        const qty = v.quantity || item.quantity || 1;
         if (existing) {
           existing.totalQty += qty;
           if (item.purchase_order_status === 'pending') existing.pendingQty += qty;
@@ -631,7 +632,7 @@ function OrdersView({
                           </div>
                         )}
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {variants.map((v, vi) => (
+                          {variants.filter(v => (v.quantity ?? 0) > 0).map((v, vi) => (
                             <span
                               key={vi}
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-[11px] text-gray-600"
@@ -639,7 +640,7 @@ function OrdersView({
                               <ColorDot hex={v.color_hex} />
                               {v.color_name && <span>{v.color_name}</span>}
                               {v.size_name && <span>{v.size_name}</span>}
-                              <span className="font-medium">x{v.quantity || item.quantity}</span>
+                              <span className="font-medium">x{v.quantity ?? item.quantity}</span>
                             </span>
                           ))}
                         </div>
