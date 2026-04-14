@@ -25,6 +25,7 @@ export default function OrdersTab() {
   const resumeDesignId = searchParams.get('designId');
 
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [selectedPaymentStatuses, setSelectedPaymentStatuses] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showOrderCreator, setShowOrderCreator] = useState(!!resumeProductId && !!resumeDesignId);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
@@ -232,6 +233,15 @@ export default function OrdersTab() {
     });
   }, []);
 
+  const togglePaymentStatus = useCallback((status: string) => {
+    setSelectedPaymentStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
+
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -276,6 +286,8 @@ export default function OrdersTab() {
         return order.total_amount ?? 0;
       case 'order_status':
         return order.order_status || '';
+      case 'payment_status':
+        return order.payment_status || '';
       case 'factory':
         return getFactoryLabel(order.assigned_manufacturer_id);
       case 'design_title': {
@@ -297,6 +309,11 @@ export default function OrdersTab() {
           ? selectedStatuses.has(o.factory_status || 'pending')
           : selectedStatuses.has(o.order_status)
       );
+    }
+
+    // Payment status filter (multi-select)
+    if (selectedPaymentStatuses.size > 0) {
+      result = result.filter((o) => selectedPaymentStatuses.has(o.payment_status));
     }
 
     // Text search (name, email, order ID)
@@ -330,7 +347,7 @@ export default function OrdersTab() {
     }
 
     return result;
-  }, [orders, selectedStatuses, searchQuery, isFactoryUser, sortKey, sortDir, getSortValue]);
+  }, [orders, selectedStatuses, selectedPaymentStatuses, searchQuery, isFactoryUser, sortKey, sortDir, getSortValue]);
 
   // Get order item count from the API response
   const getOrderItemCount = (order: OrderWithItemCount) => {
@@ -494,6 +511,37 @@ export default function OrdersTab() {
             </button>
           )}
         </div>
+        {!isFactoryUser && (
+          <div className="flex gap-1.5 flex-wrap items-center">
+            <span className="text-[11px] sm:text-xs text-gray-400 mr-0.5">결제</span>
+            {[
+              { value: 'pending', label: '입금대기' },
+              { value: 'completed', label: '결제완료' },
+              { value: 'failed', label: '결제실패' },
+              { value: 'refunded', label: '환불' },
+            ].map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => togglePaymentStatus(filter.value)}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
+                  selectedPaymentStatuses.has(filter.value)
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+            {selectedPaymentStatuses.size > 0 && (
+              <button
+                onClick={() => setSelectedPaymentStatuses(new Set())}
+                className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                초기화
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Orders List */}
@@ -546,6 +594,7 @@ export default function OrdersTab() {
                     { key: 'created_at', label: '주문 일시' },
                     { key: 'total_amount', label: '금액' },
                     { key: 'order_status', label: '주문 상태' },
+                    { key: 'payment_status', label: '결제상태' },
                     { key: 'factory', label: '공장 배정' },
                     { key: 'factory_status', label: '배정 상태' },
                   ] as const).map((col) => (
@@ -756,6 +805,11 @@ export default function OrdersTab() {
                           <option value="cancelled">취소</option>
                           <option value="partially_cancelled">부분취소</option>
                         </select>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(order.payment_status)}`}>
+                          {{pending:'입금대기',completed:'결제완료',failed:'결제실패',refunded:'환불'}[order.payment_status] || order.payment_status}
+                        </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_manufacturer_id) === '미배정' && 'text-red-500'}`}>
