@@ -352,7 +352,7 @@ export async function POST(request: Request) {
       case 'customer_payment':
         paymentMethod = 'toss';
         paymentStatus = 'pending';
-        orderStatus = 'payment_completed';
+        orderStatus = 'payment_pending';
         paymentLinkToken = randomBytes(16).toString('hex');
         break;
       case 'completed':

@@ -239,7 +239,7 @@ export async function POST(request: Request) {
       payment_method: isSurveyMode ? 'toss' : 'admin',
       payment_key: null,
       payment_status: isSurveyMode ? 'pending' : 'completed',
-      order_status: 'payment_completed',
+      order_status: isSurveyMode ? 'payment_pending' : 'payment_completed',
       total_amount: totalAmount,
       payment_link_token: paymentLinkToken,
     };

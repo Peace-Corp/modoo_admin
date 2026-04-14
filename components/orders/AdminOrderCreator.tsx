@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowRight, CheckCircle2, Package, Search, X, Copy, Check, ExternalLink,
   Clock, Link2, Plus, Trash2, ChevronDown, ChevronUp, Minus,
+  Palette, User, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react';
-import { Product, SizeOption } from '@/types/types';
+import { Product, SavedDesign, SizeOption } from '@/types/types';
 import OrderDetailsForm from './OrderDetailsForm';
 
-type Step = 'items' | 'product-select' | 'details' | 'success';
+type Step = 'items' | 'product-select' | 'design-select' | 'details' | 'success';
 type PaymentType = 'completed' | 'bank_transfer' | 'customer_payment';
 
 export interface OrderVariant {
@@ -114,7 +115,63 @@ export default function AdminOrderCreator({
   const [orderResult, setOrderResult] = useState<OrderCreateResult | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // Design select step state
+  const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
+  const [designSearchQuery, setDesignSearchQuery] = useState('');
+  const [designPage, setDesignPage] = useState(1);
+  const [designTotal, setDesignTotal] = useState(0);
+  const [designTotalPages, setDesignTotalPages] = useState(0);
+  const [designLoading, setDesignLoading] = useState(false);
+  const [selectedDesignIds, setSelectedDesignIds] = useState<Set<string>>(new Set());
+  const [addingDesigns, setAddingDesigns] = useState(false);
+  const designLimit = 12;
+
   const initRef = useRef(false);
+  const productsRef = useRef<Product[]>([]);
+
+  const buildItemFromDesign = async (
+    productId: string,
+    designId: string,
+    allProducts: Product[],
+    designData?: { preview_url?: string | null; price_per_item?: number | null },
+  ): Promise<OrderItemDraft | null> => {
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return null;
+
+    let designPreviewUrl: string | null = designData?.preview_url ?? null;
+    let designPricePerItem: number | null = null;
+    if (designData?.price_per_item && designData.price_per_item > 0) {
+      designPricePerItem = designData.price_per_item;
+    }
+
+    if (!designData) {
+      try {
+        const res = await fetch(`/api/admin/designs/${designId}`);
+        if (res.ok) {
+          const d = await res.json();
+          designPreviewUrl = d?.data?.preview_url || null;
+          const price = d?.data?.price_per_item;
+          if (price && price > 0) designPricePerItem = price;
+        }
+      } catch { /* noop */ }
+    }
+
+    const sizeOpts = product.size_options || [];
+    return {
+      id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${designId.slice(0, 6)}`,
+      productId: product.id,
+      productTitle: product.title,
+      productThumbnail: product.thumbnail_image_link?.[0] || null,
+      designId,
+      designPreviewUrl,
+      basePrice: product.base_price,
+      sizeOptions: sizeOpts,
+      variants: sizeOpts.map(o => ({ sizeLabel: o.label, sizeCode: o.size_code, quantity: 0 })),
+      pricingMode: 'auto',
+      customUnitPrice: '',
+      designPricePerItem,
+    };
+  };
 
   useEffect(() => {
     if (initRef.current) return;
@@ -127,46 +184,10 @@ export default function AdminOrderCreator({
         const data = await response.json();
         const fetched: Product[] = data.data || [];
         setProducts(fetched);
+        productsRef.current = fetched;
 
         const existingItems = loadItemsFromSession();
         clearItemsSession();
-
-        const buildItemFromDesign = async (
-          productId: string,
-          designId: string,
-          allProducts: Product[],
-        ): Promise<OrderItemDraft | null> => {
-          const product = allProducts.find(p => p.id === productId);
-          if (!product) return null;
-
-          let designPreviewUrl: string | null = null;
-          let designPricePerItem: number | null = null;
-          try {
-            const res = await fetch(`/api/admin/designs/${designId}`);
-            if (res.ok) {
-              const d = await res.json();
-              designPreviewUrl = d?.data?.preview_url || null;
-              const price = d?.data?.price_per_item;
-              if (price && price > 0) designPricePerItem = price;
-            }
-          } catch { /* noop */ }
-
-          const sizeOpts = product.size_options || [];
-          return {
-            id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${designId.slice(0, 6)}`,
-            productId: product.id,
-            productTitle: product.title,
-            productThumbnail: product.thumbnail_image_link?.[0] || null,
-            designId,
-            designPreviewUrl,
-            basePrice: product.base_price,
-            sizeOptions: sizeOpts,
-            variants: sizeOpts.map(o => ({ sizeLabel: o.label, sizeCode: o.size_code, quantity: 0 })),
-            pricingMode: 'auto',
-            customUnitPrice: '',
-            designPricePerItem,
-          };
-        };
 
         if (initialDesignItems && initialDesignItems.length > 0) {
           const results = await Promise.all(
@@ -211,10 +232,83 @@ export default function AdminOrderCreator({
     [items],
   );
 
+  const fetchSavedDesigns = async (page: number, search: string) => {
+    setDesignLoading(true);
+    try {
+      const params = new URLSearchParams({ page: page.toString(), limit: designLimit.toString() });
+      if (search.trim()) params.append('search', search.trim());
+      const res = await fetch(`/api/admin/designs?${params}`);
+      if (!res.ok) throw new Error();
+      const payload = await res.json();
+      setSavedDesigns(payload?.data || []);
+      setDesignTotal(payload?.total || 0);
+      setDesignTotalPages(payload?.totalPages || 0);
+    } catch {
+      setSavedDesigns([]);
+      setDesignTotal(0);
+      setDesignTotalPages(0);
+    } finally {
+      setDesignLoading(false);
+    }
+  };
+
   const handleAddProduct = () => {
     saveItemsToSession(items);
     setSearchQuery('');
     setCurrentStep('product-select');
+  };
+
+  const handleImportDesign = () => {
+    setDesignSearchQuery('');
+    setDesignPage(1);
+    setSelectedDesignIds(new Set());
+    fetchSavedDesigns(1, '');
+    setCurrentStep('design-select');
+  };
+
+  const handleDesignSearchChange = (value: string) => {
+    setDesignSearchQuery(value);
+    setDesignPage(1);
+    fetchSavedDesigns(1, value);
+  };
+
+  const handleDesignPageChange = (newPage: number) => {
+    setDesignPage(newPage);
+    fetchSavedDesigns(newPage, designSearchQuery);
+  };
+
+  const toggleDesignSelect = (designId: string) => {
+    setSelectedDesignIds(prev => {
+      const next = new Set(prev);
+      if (next.has(designId)) next.delete(designId);
+      else next.add(designId);
+      return next;
+    });
+  };
+
+  const handleAddSelectedDesigns = async () => {
+    const toAdd = savedDesigns.filter(d => selectedDesignIds.has(d.id) && d.product_id);
+    if (toAdd.length === 0) return;
+    setAddingDesigns(true);
+    try {
+      const results = await Promise.all(
+        toAdd.map(d => buildItemFromDesign(
+          d.product_id,
+          d.id,
+          productsRef.current.length > 0 ? productsRef.current : products,
+          { preview_url: d.preview_url, price_per_item: d.price_per_item },
+        ))
+      );
+      const newItems = results.filter((item): item is OrderItemDraft => item !== null);
+      if (newItems.length > 0) {
+        setItems(prev => [...prev, ...newItems]);
+        setExpandedItemId(newItems[0].id);
+      }
+      setSelectedDesignIds(new Set());
+      setCurrentStep('items');
+    } finally {
+      setAddingDesigns(false);
+    }
   };
 
   const handleProductSelect = (product: Product) => {
@@ -299,6 +393,7 @@ export default function AdminOrderCreator({
     switch (currentStep) {
       case 'items': return items.length === 0 ? '제품을 추가하여 주문을 구성하세요' : '제품별 수량과 가격을 설정하세요';
       case 'product-select': return '추가할 제품을 선택하세요';
+      case 'design-select': return '불러올 디자인을 선택하세요';
       case 'details': return '주문 정보를 입력하세요';
       case 'success': return '주문이 생성되었습니다';
       default: return '';
@@ -310,9 +405,9 @@ export default function AdminOrderCreator({
       {/* Header */}
       <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
-          {(currentStep === 'product-select' || currentStep === 'details') && (
+          {(currentStep === 'product-select' || currentStep === 'design-select' || currentStep === 'details') && (
             <button
-              onClick={() => setCurrentStep(currentStep === 'details' ? 'items' : 'items')}
+              onClick={() => setCurrentStep('items')}
               className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
             >
               <ArrowRight className="w-5 h-5 rotate-180" />
@@ -380,14 +475,23 @@ export default function AdminOrderCreator({
                 <div className="text-center py-16">
                   <Package className="w-20 h-20 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">주문에 제품을 추가하세요</h3>
-                  <p className="text-gray-500 mb-6">제품을 선택하고 디자인하여 주문에 추가합니다</p>
-                  <button
-                    onClick={handleAddProduct}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    <Plus className="w-5 h-5" />
-                    제품 추가
-                  </button>
+                  <p className="text-gray-500 mb-6">새로 디자인하거나, 이미 완성된 디자인을 불러올 수 있습니다</p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={handleAddProduct}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-5 h-5" />
+                      새 디자인
+                    </button>
+                    <button
+                      onClick={handleImportDesign}
+                      className="inline-flex items-center gap-2 px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors"
+                    >
+                      <Palette className="w-5 h-5" />
+                      기존 디자인 불러오기
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -565,17 +669,26 @@ export default function AdminOrderCreator({
                   </div>
 
                   {/* Actions */}
-                  <div className="mt-4 flex gap-3">
-                    <button
-                      onClick={handleAddProduct}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors font-medium"
-                    >
-                      <Plus className="w-5 h-5" />
-                      제품 추가
-                    </button>
+                  <div className="mt-4 flex flex-col gap-3">
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleAddProduct}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors font-medium"
+                      >
+                        <Plus className="w-5 h-5" />
+                        새 디자인
+                      </button>
+                      <button
+                        onClick={handleImportDesign}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors font-medium"
+                      >
+                        <Palette className="w-5 h-5" />
+                        기존 디자인 불러오기
+                      </button>
+                    </div>
                     <button
                       onClick={handleProceedToDetails}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                     >
                       다음: 주문 정보
                       <ArrowRight className="w-5 h-5" />
@@ -639,6 +752,167 @@ export default function AdminOrderCreator({
                       </div>
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============ Design Select Step ============ */}
+        {!loading && currentStep === 'design-select' && (
+          <div className="p-6">
+            <div className="max-w-4xl mx-auto">
+              {/* Search */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={designSearchQuery}
+                    onChange={(e) => handleDesignSearchChange(e.target.value)}
+                    placeholder="디자인 제목, 사용자, 제품명으로 검색..."
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => setCurrentStep('items')}
+                className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ArrowRight className="w-4 h-4 rotate-180" />
+                <span className="text-sm font-medium">주문 구성으로 돌아가기</span>
+              </button>
+
+              {designLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : savedDesigns.length === 0 ? (
+                <div className="text-center py-12">
+                  <Palette className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">
+                    {designSearchQuery ? '검색 결과가 없습니다' : '저장된 디자인이 없습니다'}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">총 {designTotal}개의 디자인</p>
+                    {selectedDesignIds.size > 0 && (
+                      <span className="text-sm font-medium text-blue-600">
+                        {selectedDesignIds.size}개 선택됨
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {savedDesigns.map((design) => {
+                      const isSelected = selectedDesignIds.has(design.id);
+                      const hasProduct = !!design.product_id;
+                      return (
+                        <button
+                          key={design.id}
+                          disabled={!hasProduct}
+                          onClick={() => toggleDesignSelect(design.id)}
+                          className={`relative bg-white border-2 rounded-lg overflow-hidden transition-all text-left ${
+                            isSelected
+                              ? 'border-blue-500 ring-2 ring-blue-200 shadow-md'
+                              : hasProduct
+                                ? 'border-gray-200 hover:border-blue-300 hover:shadow-md'
+                                : 'border-gray-100 opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 z-10 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                              <Check className="w-4 h-4 text-white" />
+                            </div>
+                          )}
+                          <div className="aspect-square bg-gray-100 flex items-center justify-center">
+                            {design.preview_url ? (
+                              <img
+                                src={design.preview_url}
+                                alt={design.title || '디자인'}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : design.product?.thumbnail_image_link?.[0] ? (
+                              <img
+                                src={design.product.thumbnail_image_link[0]}
+                                alt={design.product.title}
+                                className="w-full h-full object-contain opacity-50"
+                              />
+                            ) : (
+                              <Palette className="w-10 h-10 text-gray-300" />
+                            )}
+                          </div>
+                          <div className="p-3 space-y-1">
+                            <p className="font-medium text-gray-900 text-sm truncate">
+                              {design.title || '제목 없음'}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Package className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{design.product?.title || '제품 없음'}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-gray-400">
+                              <User className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{design.user?.email || design.user?.name || '-'}</span>
+                            </div>
+                            {design.price_per_item > 0 && (
+                              <p className="text-xs font-semibold text-blue-600">
+                                {design.price_per_item.toLocaleString()}원
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination */}
+                  {designTotalPages > 1 && (
+                    <div className="mt-6 flex items-center justify-between">
+                      <p className="text-sm text-gray-500">
+                        {designTotal}개 중 {(designPage - 1) * designLimit + 1}-{Math.min(designPage * designLimit, designTotal)}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDesignPageChange(designPage - 1)}
+                          disabled={designPage <= 1}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          이전
+                        </button>
+                        <span className="text-sm text-gray-700">{designPage} / {designTotalPages}</span>
+                        <button
+                          onClick={() => handleDesignPageChange(designPage + 1)}
+                          disabled={designPage >= designTotalPages}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          다음
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Floating add button */}
+              {selectedDesignIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+                  <button
+                    onClick={handleAddSelectedDesigns}
+                    disabled={addingDesigns}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl shadow-2xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-70"
+                  >
+                    {addingDesigns ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Plus className="w-5 h-5" />
+                    )}
+                    {addingDesigns ? '추가 중...' : `선택한 ${selectedDesignIds.size}개 디자인 추가`}
+                  </button>
                 </div>
               )}
             </div>
