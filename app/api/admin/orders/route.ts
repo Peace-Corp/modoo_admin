@@ -292,9 +292,12 @@ export async function PATCH(request: Request) {
 
     // Build update object
     const updateData: Record<string, unknown> = {
-      assigned_manufacturer_id: manufacturerId,
       updated_at: new Date().toISOString(),
     };
+
+    if ('factoryId' in payload) {
+      updateData.assigned_manufacturer_id = manufacturerId;
+    }
 
     if (trackingNumberInput !== null) {
       updateData.tracking_number = trackingNumberInput;
