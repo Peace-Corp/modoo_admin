@@ -1042,6 +1042,56 @@ export default function OrderDetail({
                     </div>
                   )
                 )}
+                {/* Inline add discount when no discount exists */}
+                {!(order.admin_discount > 0) && (
+                  editingSummaryField === 'discount' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-orange-600 shrink-0">할인</span>
+                      <div className="flex-1 flex items-center gap-1">
+                        <input
+                          type="number" min="0" autoFocus
+                          value={editingSummaryValue}
+                          onChange={e => setEditingSummaryValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSummaryUpdate('discount'); if (e.key === 'Escape') { setEditingSummaryField(null); setEditingSummaryValue(''); } }}
+                          className="w-full p-1 text-sm border border-orange-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-right"
+                          placeholder="할인 금액"
+                        />
+                        <span className="text-xs text-gray-400 shrink-0">원</span>
+                      </div>
+                      <button onClick={() => handleSummaryUpdate('discount')} disabled={savingSummaryField} className="p-1 text-orange-600 hover:bg-orange-50 rounded" title="저장">
+                        {savingSummaryField ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => { setEditingSummaryField(null); setEditingSummaryValue(''); }} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="취소">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : null
+                )}
+                {/* Inline add surcharge when no surcharge exists */}
+                {!(order.admin_surcharge > 0) && (
+                  editingSummaryField === 'surcharge' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-purple-600 shrink-0">추가 금액</span>
+                      <div className="flex-1 flex items-center gap-1">
+                        <input
+                          type="number" min="0" autoFocus
+                          value={editingSummaryValue}
+                          onChange={e => setEditingSummaryValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSummaryUpdate('surcharge'); if (e.key === 'Escape') { setEditingSummaryField(null); setEditingSummaryValue(''); } }}
+                          className="w-full p-1 text-sm border border-purple-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                          placeholder="추가 금액"
+                        />
+                        <span className="text-xs text-gray-400 shrink-0">원</span>
+                      </div>
+                      <button onClick={() => handleSummaryUpdate('surcharge')} disabled={savingSummaryField} className="p-1 text-purple-600 hover:bg-purple-50 rounded" title="저장">
+                        {savingSummaryField ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => { setEditingSummaryField(null); setEditingSummaryValue(''); }} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="취소">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : null
+                )}
                 {(() => {
                   const computedTotal = subtotal
                     + (order.delivery_fee ?? 0)
@@ -1063,6 +1113,27 @@ export default function OrderDetail({
                     {(order.total_amount ?? 0).toLocaleString()}원
                   </span>
                 </div>
+                {/* Add discount / surcharge buttons */}
+                {editingSummaryField === null && (
+                  <div className="flex gap-2 pt-2">
+                    {!(order.admin_discount > 0) && (
+                      <button
+                        onClick={() => { setEditingSummaryField('discount'); setEditingSummaryValue(''); }}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-orange-600 border border-orange-200 rounded-md hover:bg-orange-50 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" /> 할인 추가
+                      </button>
+                    )}
+                    {!(order.admin_surcharge > 0) && (
+                      <button
+                        onClick={() => { setEditingSummaryField('surcharge'); setEditingSummaryValue(''); }}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-purple-600 border border-purple-200 rounded-md hover:bg-purple-50 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" /> 추가금액
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
