@@ -53,6 +53,7 @@ export default function OrderDetail({
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
   const [showAddItemModal, setShowAddItemModal] = useState(!!initialAddItemDesignId);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [editingOrderItem, setEditingOrderItem] = useState<OrderItem | null>(null);
   const [editingSummaryField, setEditingSummaryField] = useState<'discount' | 'surcharge' | null>(null);
   const [editingSummaryValue, setEditingSummaryValue] = useState('');
   const [savingSummaryField, setSavingSummaryField] = useState(false);
@@ -799,14 +800,23 @@ export default function OrderDetail({
                               <MessageSquare className="w-4 h-4" />
                             </button>
                             {!isFactoryUser && order.order_category !== 'cobuy' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                                disabled={deletingItemId === item.id || orderItems.length <= 1}
-                                className="p-1.5 rounded transition-colors hover:bg-red-100 text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                                title={orderItems.length <= 1 ? '최소 1개의 상품이 필요합니다' : '상품 삭제'}
-                              >
-                                {deletingItemId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                              </button>
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditingOrderItem(item); setShowAddItemModal(true); }}
+                                  className="p-1.5 rounded transition-colors hover:bg-blue-100 text-gray-400 hover:text-blue-600"
+                                  title="상품 수정"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
+                                  disabled={deletingItemId === item.id || orderItems.length <= 1}
+                                  className="p-1.5 rounded transition-colors hover:bg-red-100 text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  title={orderItems.length <= 1 ? '최소 1개의 상품이 필요합니다' : '상품 삭제'}
+                                >
+                                  {deletingItemId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </>
                             )}
                             {!isFactoryUser && (
                               <span className="font-semibold text-gray-900">
@@ -1627,9 +1637,10 @@ export default function OrderDetail({
       <AddOrderItemModal
         orderId={order.id}
         isOpen={showAddItemModal}
-        onClose={() => setShowAddItemModal(false)}
+        onClose={() => { setShowAddItemModal(false); setEditingOrderItem(null); }}
         onAdded={handleItemAdded}
         initialDesignId={initialAddItemDesignId}
+        editingItem={editingOrderItem}
       />
     </div>
   );

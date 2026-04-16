@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Search, Loader2, Package, Plus, Minus, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
-import type { SizeOption } from '@/types/types';
+import { X, Search, Loader2, Package, Plus, Minus, ChevronDown, ChevronUp, ExternalLink, Check } from 'lucide-react';
+import type { OrderItem, SizeOption } from '@/types/types';
 
 interface DesignEntry {
   id: string;
@@ -25,9 +25,11 @@ interface AddOrderItemModalProps {
   onClose: () => void;
   onAdded: () => void;
   initialDesignId?: string | null;
+  editingItem?: OrderItem | null;
 }
 
-export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, initialDesignId }: AddOrderItemModalProps) {
+export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, initialDesignId, editingItem }: AddOrderItemModalProps) {
+  const isEditMode = !!editingItem;
   const [tab, setTab] = useState<'existing' | 'new'>('existing');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,6 +77,41 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
     setError(null);
     setPricingMode('auto');
     setCustomUnitPrice('');
+
+    if (editingItem) {
+      const designEntry: DesignEntry = {
+        id: editingItem.design_id || '',
+        title: editingItem.design_title || editingItem.product_title,
+        preview_url: editingItem.thumbnail_url,
+        product_id: editingItem.product_id,
+        price_per_item: editingItem.price_per_item,
+      };
+      setSelectedDesign(designEntry);
+      setPricingMode('custom_unit_price');
+      setCustomUnitPrice(String(editingItem.price_per_item));
+
+      (async () => {
+        try {
+          const res = await fetch('/api/admin/products');
+          const json = await res.json();
+          const allProducts: Array<{ id: string; size_options?: SizeOption[] }> = json.data || [];
+          const product = allProducts.find(p => p.id === editingItem.product_id);
+          if (product?.size_options) {
+            setSizeOptions(product.size_options);
+            const existingVariants = editingItem.item_options?.variants;
+            if (existingVariants && Array.isArray(existingVariants)) {
+              setVariants(product.size_options.map(o => {
+                const existing = existingVariants.find((ev: { size_id?: string }) => ev.size_id === o.size_code);
+                return { sizeLabel: o.label, sizeCode: o.size_code, quantity: existing?.quantity ?? 0 };
+              }));
+            } else {
+              setVariants(product.size_options.map(o => ({ sizeLabel: o.label, sizeCode: o.size_code, quantity: 0 })));
+            }
+          }
+        } catch { /* noop */ }
+      })();
+      return;
+    }
 
     if (initialDesignId) {
       (async () => {
@@ -140,24 +177,45 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/orders/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          designId: selectedDesign.id,
-          productId: selectedDesign.product_id,
+      if (isEditMode && editingItem) {
+        const designChanged = selectedDesign.id !== editingItem.design_id;
+        const body: Record<string, unknown> = {
+          orderItemId: editingItem.id,
+          updateMode: 'admin_edit',
           variants: variants.filter(v => v.quantity > 0),
-          pricingMode,
-          customUnitPrice: pricingMode === 'custom_unit_price' ? parseFloat(customUnitPrice) : undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) { setError(json.error || '추가에 실패했습니다.'); return; }
+          pricePerItem: pricingMode === 'custom_unit_price' ? parseFloat(customUnitPrice) : undefined,
+        };
+        if (designChanged) {
+          body.designId = selectedDesign.id;
+          body.productId = selectedDesign.product_id;
+        }
+        const res = await fetch('/api/admin/orders/items', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (!res.ok) { setError(json.error || '수정에 실패했습니다.'); return; }
+      } else {
+        const res = await fetch('/api/admin/orders/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            designId: selectedDesign.id,
+            productId: selectedDesign.product_id,
+            variants: variants.filter(v => v.quantity > 0),
+            pricingMode,
+            customUnitPrice: pricingMode === 'custom_unit_price' ? parseFloat(customUnitPrice) : undefined,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) { setError(json.error || '추가에 실패했습니다.'); return; }
+      }
       onAdded();
       onClose();
     } catch {
-      setError('추가 중 오류가 발생했습니다.');
+      setError(isEditMode ? '수정 중 오류가 발생했습니다.' : '추가 중 오류가 발생했습니다.');
     } finally {
       setSubmitting(false);
     }
@@ -184,29 +242,31 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-bold text-gray-900">주문 상품 추가</h2>
+          <h2 className="text-lg font-bold text-gray-900">{isEditMode ? '주문 상품 수정' : '주문 상품 추가'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b">
-          <button
-            onClick={() => { setTab('existing'); setSelectedDesign(null); }}
-            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === 'existing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            기존 디자인 선택
-          </button>
-          <button
-            onClick={() => { setTab('new'); setSelectedDesign(null); }}
-            className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === 'new' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            새 디자인 만들기
-          </button>
-        </div>
+        {/* Tabs - hidden in edit mode */}
+        {!isEditMode && (
+          <div className="flex border-b">
+            <button
+              onClick={() => { setTab('existing'); setSelectedDesign(null); }}
+              className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === 'existing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              기존 디자인 선택
+            </button>
+            <button
+              onClick={() => { setTab('new'); setSelectedDesign(null); }}
+              className={`flex-1 py-3 text-sm font-medium text-center border-b-2 transition-colors ${tab === 'new' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              새 디자인 만들기
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === 'existing' && !selectedDesign && (
+          {tab === 'existing' && !selectedDesign && !isEditMode && (
             <div className="space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -256,7 +316,7 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
             </div>
           )}
 
-          {tab === 'existing' && selectedDesign && (
+          {(tab === 'existing' || isEditMode) && selectedDesign && (
             <div className="space-y-5">
               <div className="flex items-start gap-4">
                 <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden shrink-0">
@@ -385,7 +445,7 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
         </div>
 
         {/* Footer */}
-        {tab === 'existing' && selectedDesign && (
+        {(tab === 'existing' || isEditMode) && selectedDesign && (
           <div className="px-6 py-4 border-t flex gap-3">
             <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">취소</button>
             <button
@@ -393,8 +453,8 @@ export default function AddOrderItemModal({ orderId, isOpen, onClose, onAdded, i
               disabled={submitting || totalQty <= 0}
               className="flex-1 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              상품 추가
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditMode ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {isEditMode ? '변경 저장' : '상품 추가'}
             </button>
           </div>
         )}

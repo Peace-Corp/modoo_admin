@@ -178,20 +178,136 @@ export async function PATCH(request: Request) {
 
     const payload = await request.json().catch(() => null);
     const orderItemId = payload?.orderItemId;
-    const canvasState = payload?.canvasState;
-    const thumbnailUrl = payload?.thumbnailUrl;
+    const updateMode = payload?.updateMode;
 
     if (!orderItemId || typeof orderItemId !== 'string') {
       return NextResponse.json({ error: '주문 상품 ID가 필요합니다.' }, { status: 400 });
     }
 
+    const adminClient = createAdminClient();
+
+    // --- admin_edit mode: update quantity/price/design ---
+    if (updateMode === 'admin_edit') {
+      if (profile.role !== 'admin') {
+        return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
+      }
+
+      const { data: existingItem, error: existingErr } = await adminClient
+        .from('order_items')
+        .select('id, order_id')
+        .eq('id', orderItemId)
+        .single();
+
+      if (existingErr || !existingItem) {
+        return NextResponse.json({ error: '주문 상품을 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      const orderId = existingItem.order_id;
+      const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+      const { variants, pricePerItem, designId, productId } = payload;
+
+      // Design change
+      if (designId && productId) {
+        const { data: design } = await adminClient
+          .from('saved_designs')
+          .select('id, product_id, title, canvas_state, color_selections, preview_url, price_per_item, image_urls, text_svg_exports, custom_fonts')
+          .eq('id', designId)
+          .single();
+        const { data: product } = await adminClient
+          .from('products')
+          .select('id, title, base_price')
+          .eq('id', productId)
+          .single();
+
+        if (!design || !product) {
+          return NextResponse.json({ error: '디자인 또는 제품을 찾을 수 없습니다.' }, { status: 404 });
+        }
+
+        const colorSelections = normalizeJson<Record<string, unknown>>(design.color_selections ?? null, {});
+        const canvasState = normalizeJson<Record<string, unknown>>(design.canvas_state ?? null, {});
+
+        updateData.design_id = designId;
+        updateData.product_id = productId;
+        updateData.product_title = product.title || 'Product';
+        updateData.canvas_state = canvasState;
+        updateData.color_selections = colorSelections;
+        updateData.thumbnail_url = design.preview_url || null;
+        updateData.image_urls = design.image_urls || null;
+        updateData.text_svg_exports = design.text_svg_exports || null;
+        updateData.custom_fonts = design.custom_fonts || null;
+
+        if (pricePerItem == null) {
+          const designPrice = toNumber(design.price_per_item);
+          updateData.price_per_item = designPrice > 0 ? designPrice : toNumber(product.base_price);
+        }
+      }
+
+      // Price change
+      if (pricePerItem != null && pricePerItem > 0) {
+        updateData.price_per_item = pricePerItem;
+      }
+
+      // Variants / quantity change
+      if (variants && Array.isArray(variants) && variants.length > 0) {
+        const totalQty = variants.reduce((s: number, v: { quantity: number }) => s + (v.quantity || 0), 0);
+        if (totalQty <= 0) {
+          return NextResponse.json({ error: '총 수량은 1개 이상이어야 합니다.' }, { status: 400 });
+        }
+
+        const colorSelections = (updateData.color_selections as Record<string, unknown> | undefined) ?? {};
+        const productColor = resolveProductColor(colorSelections);
+        const orderVariants = variants
+          .filter((v: { quantity: number }) => v.quantity > 0)
+          .map((v: { sizeCode: string; sizeLabel: string; quantity: number }) => ({
+            size_id: v.sizeCode,
+            size_name: v.sizeLabel,
+            quantity: v.quantity,
+            color_hex: productColor || undefined,
+          }));
+
+        const itemOptions: Record<string, unknown> = { variants: orderVariants };
+        if (orderVariants.length === 1) {
+          const [single] = orderVariants;
+          itemOptions.size_id = single.size_id;
+          itemOptions.size_name = single.size_name;
+          if (single.color_hex) itemOptions.color_hex = single.color_hex;
+        }
+
+        updateData.quantity = totalQty;
+        updateData.item_options = itemOptions;
+      }
+
+      const { data, error } = await adminClient
+        .from('order_items')
+        .update(updateData)
+        .eq('id', orderItemId)
+        .select('*, products(product_code)')
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      await recalcOrderTotals(adminClient, orderId);
+
+      const { data: updatedOrder } = await adminClient
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      return NextResponse.json({ data: { item: data, order: updatedOrder } });
+    }
+
+    // --- Default mode: canvas_state update (factory/admin) ---
+    const canvasState = payload?.canvasState;
+    const thumbnailUrl = payload?.thumbnailUrl;
+
     if (!canvasState || typeof canvasState !== 'object') {
       return NextResponse.json({ error: 'canvas_state가 필요합니다.' }, { status: 400 });
     }
 
-    const adminClient = createAdminClient();
-
-    // Factory users: verify the order item belongs to an order assigned to their factory
     if (profile.role === 'factory') {
       if (!profile.manufacturer_id) {
         return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
