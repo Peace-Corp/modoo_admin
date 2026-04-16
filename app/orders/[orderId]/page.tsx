@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Factory, Order } from '@/types/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from '@/components/OrderDetail';
@@ -9,9 +9,26 @@ import OrderDetail from '@/components/OrderDetail';
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
 
   const orderId = params.orderId as string;
+
+  const addItemDesignId = useMemo(() => {
+    const addItem = searchParams.get('addItem');
+    const designId = searchParams.get('initialDesignId');
+    if (addItem === 'true') {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('addItem');
+        url.searchParams.delete('initialDesignId');
+        router.replace(url.pathname + url.search, { scroll: false });
+      }
+      return designId || '';
+    }
+    return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,6 +166,7 @@ export default function OrderDetailPage() {
       canAssign={user?.role === 'admin'}
       loadingFactories={loadingFactories}
       isFactoryUser={isFactoryUser}
+      initialAddItemDesignId={addItemDesignId}
     />
   );
 }

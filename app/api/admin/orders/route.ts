@@ -313,14 +313,11 @@ export async function PATCH(request: Request) {
     }
 
     if (priceAdjustment !== null && typeof priceAdjustment === 'object') {
-      const { mode, value, note } = priceAdjustment as { mode: string; value: number; note?: string };
-      if (typeof value !== 'number' || value < 0) {
-        return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
-      }
+      const { mode, value, note } = priceAdjustment as { mode: string; value?: number; note?: string };
 
       const { data: currentOrder } = await adminClient
         .from('orders')
-        .select('total_amount, original_amount')
+        .select('total_amount, original_amount, delivery_fee, coupon_discount')
         .eq('id', orderId)
         .single();
 
@@ -330,51 +327,66 @@ export async function PATCH(request: Request) {
 
       const baseAmount = currentOrder.original_amount ?? currentOrder.total_amount;
 
-      switch (mode) {
-        case 'set_total':
-          updateData.total_amount = value;
-          if (!currentOrder.original_amount) {
-            updateData.original_amount = currentOrder.total_amount;
-          }
-          if (value >= baseAmount) {
-            updateData.admin_surcharge = value - baseAmount;
-            updateData.admin_discount = 0;
-          } else {
-            updateData.admin_discount = baseAmount - value;
-            updateData.admin_surcharge = 0;
-          }
-          break;
-        case 'discount_fixed':
-          updateData.total_amount = Math.max(0, baseAmount - value);
-          if (!currentOrder.original_amount) {
-            updateData.original_amount = currentOrder.total_amount;
-          }
-          updateData.admin_discount = value;
-          updateData.admin_surcharge = 0;
-          break;
-        case 'discount_rate': {
-          const discountAmount = Math.floor(baseAmount * (value / 100));
-          updateData.total_amount = Math.max(0, baseAmount - discountAmount);
-          if (!currentOrder.original_amount) {
-            updateData.original_amount = currentOrder.total_amount;
-          }
-          updateData.admin_discount = discountAmount;
-          updateData.admin_surcharge = 0;
-          break;
+      if (mode === 'reset') {
+        updateData.admin_discount = 0;
+        updateData.admin_surcharge = 0;
+        updateData.total_amount = Math.max(0,
+          baseAmount
+          + (currentOrder.delivery_fee ?? 0)
+          - (currentOrder.coupon_discount ?? 0)
+        );
+        updateData.pricing_note = note || null;
+      } else {
+        if (typeof value !== 'number' || value < 0) {
+          return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
         }
-        case 'surcharge':
-          updateData.total_amount = baseAmount + value;
-          if (!currentOrder.original_amount) {
-            updateData.original_amount = currentOrder.total_amount;
-          }
-          updateData.admin_surcharge = value;
-          break;
-        default:
-          return NextResponse.json({ error: '유효하지 않은 조정 모드입니다.' }, { status: 400 });
-      }
 
-      if (note) {
-        updateData.pricing_note = note;
+        switch (mode) {
+          case 'set_total':
+            updateData.total_amount = value;
+            if (!currentOrder.original_amount) {
+              updateData.original_amount = currentOrder.total_amount;
+            }
+            if (value >= baseAmount) {
+              updateData.admin_surcharge = value - baseAmount;
+              updateData.admin_discount = 0;
+            } else {
+              updateData.admin_discount = baseAmount - value;
+              updateData.admin_surcharge = 0;
+            }
+            break;
+          case 'discount_fixed':
+            updateData.total_amount = Math.max(0, baseAmount - value);
+            if (!currentOrder.original_amount) {
+              updateData.original_amount = currentOrder.total_amount;
+            }
+            updateData.admin_discount = value;
+            updateData.admin_surcharge = 0;
+            break;
+          case 'discount_rate': {
+            const discountAmount = Math.floor(baseAmount * (value / 100));
+            updateData.total_amount = Math.max(0, baseAmount - discountAmount);
+            if (!currentOrder.original_amount) {
+              updateData.original_amount = currentOrder.total_amount;
+            }
+            updateData.admin_discount = discountAmount;
+            updateData.admin_surcharge = 0;
+            break;
+          }
+          case 'surcharge':
+            updateData.total_amount = baseAmount + value;
+            if (!currentOrder.original_amount) {
+              updateData.original_amount = currentOrder.total_amount;
+            }
+            updateData.admin_surcharge = value;
+            break;
+          default:
+            return NextResponse.json({ error: '유효하지 않은 조정 모드입니다.' }, { status: 400 });
+        }
+
+        if (note) {
+          updateData.pricing_note = note;
+        }
       }
     }
 

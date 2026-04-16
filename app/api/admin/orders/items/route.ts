@@ -2,6 +2,73 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const normalizeJson = <T,>(value: T | string | null | undefined, fallback: T): T => {
+  if (!value) return fallback;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) as T; } catch { return fallback; }
+  }
+  return value as T;
+};
+
+const resolveProductColor = (colorSelections: Record<string, unknown>): string | null => {
+  if (!colorSelections || typeof colorSelections !== 'object') return null;
+  if (typeof colorSelections.productColor === 'string') return colorSelections.productColor;
+  if (typeof colorSelections.body === 'string') return colorSelections.body;
+  const front = colorSelections.front as Record<string, unknown> | undefined;
+  if (front && typeof front.body === 'string') return front.body;
+  return null;
+};
+
+const requireAdmin = async () => {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError) return { error: NextResponse.json({ error: authError.message }, { status: 401 }) };
+  if (!user) return { error: NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 }) };
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  if (profileError) return { error: NextResponse.json({ error: profileError.message }, { status: 403 }) };
+  if (!profile || profile.role !== 'admin') return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
+  return { user };
+};
+
+async function recalcOrderTotals(adminClient: ReturnType<typeof createAdminClient>, orderId: string) {
+  const { data: items } = await adminClient
+    .from('order_items')
+    .select('price_per_item, quantity')
+    .eq('order_id', orderId);
+
+  const newOriginalAmount = (items || []).reduce((sum, i) => sum + i.price_per_item * i.quantity, 0);
+
+  const { data: order } = await adminClient
+    .from('orders')
+    .select('delivery_fee, coupon_discount, admin_discount, admin_surcharge')
+    .eq('id', orderId)
+    .single();
+
+  const newTotalAmount = Math.max(0,
+    newOriginalAmount
+    + (order?.delivery_fee ?? 0)
+    - (order?.coupon_discount ?? 0)
+    - (order?.admin_discount ?? 0)
+    + (order?.admin_surcharge ?? 0)
+  );
+
+  await adminClient
+    .from('orders')
+    .update({ original_amount: newOriginalAmount, total_amount: newTotalAmount, updated_at: new Date().toISOString() })
+    .eq('id', orderId);
+
+  return { newOriginalAmount, newTotalAmount };
+}
+
 const requireAdminOrFactory = async () => {
   const supabase = await createClient();
   const {
@@ -167,6 +234,201 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ data });
   } catch (error) {
     const message = error instanceof Error ? error.message : '주문 상품 수정에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const payload = await request.json().catch(() => null);
+    if (!payload) {
+      return NextResponse.json({ error: '요청 데이터가 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    const { orderId, designId, productId, variants, pricingMode, customUnitPrice } = payload;
+
+    if (!orderId || typeof orderId !== 'string') {
+      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
+    }
+    if (!designId || typeof designId !== 'string') {
+      return NextResponse.json({ error: '디자인 ID가 필요합니다.' }, { status: 400 });
+    }
+    if (!productId || typeof productId !== 'string') {
+      return NextResponse.json({ error: '제품 ID가 필요합니다.' }, { status: 400 });
+    }
+    if (!variants || !Array.isArray(variants) || variants.length === 0) {
+      return NextResponse.json({ error: '최소 하나의 사이즈/수량을 선택해주세요.' }, { status: 400 });
+    }
+
+    const totalQty = variants.reduce((s: number, v: { quantity: number }) => s + (v.quantity || 0), 0);
+    if (totalQty <= 0) {
+      return NextResponse.json({ error: '총 수량은 1개 이상이어야 합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    const { data: order, error: orderError } = await adminClient
+      .from('orders')
+      .select('id, order_category')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !order) {
+      return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    const { data: design, error: designError } = await adminClient
+      .from('saved_designs')
+      .select('id, product_id, title, canvas_state, color_selections, preview_url, price_per_item, image_urls, text_svg_exports, custom_fonts')
+      .eq('id', designId)
+      .single();
+
+    if (designError || !design) {
+      return NextResponse.json({ error: '디자인을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    const { data: product, error: productError } = await adminClient
+      .from('products')
+      .select('id, title, base_price, size_options')
+      .eq('id', productId)
+      .single();
+
+    if (productError || !product) {
+      return NextResponse.json({ error: '제품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    if (design.product_id !== productId) {
+      return NextResponse.json({ error: '디자인과 제품이 일치하지 않습니다.' }, { status: 400 });
+    }
+
+    let unitPrice: number;
+    if (pricingMode === 'custom_unit_price' && customUnitPrice != null && customUnitPrice > 0) {
+      unitPrice = customUnitPrice;
+    } else {
+      const designPrice = toNumber(design.price_per_item);
+      unitPrice = designPrice > 0 ? designPrice : toNumber(product.base_price);
+    }
+
+    const colorSelections = normalizeJson<Record<string, unknown>>(design.color_selections ?? null, {});
+    const canvasState = normalizeJson<Record<string, unknown>>(design.canvas_state ?? null, {});
+    const productColor = resolveProductColor(colorSelections);
+
+    const orderVariants = variants
+      .filter((v: { quantity: number }) => v.quantity > 0)
+      .map((v: { sizeCode: string; sizeLabel: string; quantity: number }) => ({
+        size_id: v.sizeCode,
+        size_name: v.sizeLabel,
+        quantity: v.quantity,
+        color_hex: productColor || undefined,
+      }));
+
+    const itemOptions: Record<string, unknown> = { variants: orderVariants };
+    if (orderVariants.length === 1) {
+      const [single] = orderVariants;
+      itemOptions.size_id = single.size_id;
+      itemOptions.size_name = single.size_name;
+      if (single.color_hex) itemOptions.color_hex = single.color_hex;
+    }
+
+    const itemPayload = {
+      order_id: orderId,
+      product_id: productId,
+      design_id: designId,
+      product_title: product.title || 'Product',
+      quantity: totalQty,
+      price_per_item: unitPrice,
+      canvas_state: canvasState,
+      color_selections: colorSelections,
+      item_options: itemOptions,
+      thumbnail_url: design.preview_url || null,
+      image_urls: design.image_urls || null,
+      text_svg_exports: design.text_svg_exports || null,
+      custom_fonts: design.custom_fonts || null,
+    };
+
+    const { data: newItem, error: insertError } = await adminClient
+      .from('order_items')
+      .insert(itemPayload)
+      .select('*, products(product_code)')
+      .single();
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    const { newOriginalAmount, newTotalAmount } = await recalcOrderTotals(adminClient, orderId);
+
+    const { data: updatedOrder } = await adminClient
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    return NextResponse.json({ data: { item: newItem, order: updatedOrder, originalAmount: newOriginalAmount, totalAmount: newTotalAmount } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '주문 상품 추가에 실패했습니다.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const authResult = await requireAdmin();
+    if (authResult.error) return authResult.error;
+
+    const url = new URL(request.url);
+    const orderId = url.searchParams.get('orderId');
+    const orderItemId = url.searchParams.get('orderItemId');
+
+    if (!orderId || !orderItemId) {
+      return NextResponse.json({ error: '주문 ID와 상품 ID가 필요합니다.' }, { status: 400 });
+    }
+
+    const adminClient = createAdminClient();
+
+    const { data: item, error: itemError } = await adminClient
+      .from('order_items')
+      .select('id, order_id')
+      .eq('id', orderItemId)
+      .eq('order_id', orderId)
+      .single();
+
+    if (itemError || !item) {
+      return NextResponse.json({ error: '주문 상품을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    const { count } = await adminClient
+      .from('order_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('order_id', orderId);
+
+    if ((count ?? 0) <= 1) {
+      return NextResponse.json({ error: '주문에는 최소 1개의 상품이 필요합니다.' }, { status: 400 });
+    }
+
+    const { error: deleteError } = await adminClient
+      .from('order_items')
+      .delete()
+      .eq('id', orderItemId);
+
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    const { newOriginalAmount, newTotalAmount } = await recalcOrderTotals(adminClient, orderId);
+
+    const { data: updatedOrder } = await adminClient
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    return NextResponse.json({ data: { order: updatedOrder, originalAmount: newOriginalAmount, totalAmount: newTotalAmount } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '주문 상품 삭제에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

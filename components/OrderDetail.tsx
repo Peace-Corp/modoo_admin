@@ -3,10 +3,11 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoBuyParticipant, Factory, Order, OrderItem } from '@/types/types';
-import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck, Link2, Pencil, X, Loader2, Send } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CreditCard, Package, Factory as FactoryIcon, Download, Share2, Copy, Check, Link2Off, RotateCcw, MessageSquare, User, Receipt, Truck, Link2, Pencil, X, Loader2, Send, Plus, Trash2 } from 'lucide-react';
 import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
+import AddOrderItemModal from '@/components/orders/AddOrderItemModal';
 import { extractVariants } from '@/lib/orderUtils';
 
 type CoBuyParticipantSummary = Pick<
@@ -32,6 +33,7 @@ interface OrderDetailProps {
   canAssign: boolean;
   loadingFactories: boolean;
   isFactoryUser?: boolean;
+  initialAddItemDesignId?: string | null;
 }
 
 export default function OrderDetail({
@@ -43,11 +45,14 @@ export default function OrderDetail({
   canAssign,
   loadingFactories,
   isFactoryUser = false,
+  initialAddItemDesignId,
 }: OrderDetailProps) {
   const router = useRouter();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
+  const [showAddItemModal, setShowAddItemModal] = useState(!!initialAddItemDesignId);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -232,6 +237,32 @@ export default function OrderDetail({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!confirm('이 상품을 주문에서 삭제하시겠습니까?')) return;
+    setDeletingItemId(itemId);
+    try {
+      const res = await fetch(`/api/admin/orders/items?orderId=${order.id}&orderItemId=${itemId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) { alert(json.error || '삭제에 실패했습니다.'); return; }
+      if (json.data?.order) onOrderUpdate(json.data.order as Order);
+      await fetchOrderItems();
+      onUpdate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleItemAdded = async () => {
+    await fetchOrderItems();
+    const res = await fetch(`/api/admin/orders?orderId=${order.id}`);
+    const json = await res.json();
+    const orders: Order[] = json.data || [];
+    if (orders.length > 0) onOrderUpdate(orders[0]);
+    onUpdate();
   };
 
   const fetchCobuySession = async () => {
@@ -596,10 +627,21 @@ export default function OrderDetail({
         <div className="lg:col-span-2 space-y-4">
           {/* Order Items */}
           <div className="bg-white border border-gray-200/60 rounded-md shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-              <Package className="w-4 h-4 text-gray-500" />
-              <h3 className="text-sm font-semibold text-gray-900">주문 상품</h3>
-              {!loading && <span className="text-xs text-gray-400">({orderItems.length})</span>}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">주문 상품</h3>
+                {!loading && <span className="text-xs text-gray-400">({orderItems.length})</span>}
+              </div>
+              {!isFactoryUser && order.order_category !== 'cobuy' && (
+                <button
+                  onClick={() => setShowAddItemModal(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  상품 추가
+                </button>
+              )}
             </div>
             <div className="p-4">
               {loading ? (
@@ -719,6 +761,16 @@ export default function OrderDetail({
                             >
                               <MessageSquare className="w-4 h-4" />
                             </button>
+                            {!isFactoryUser && order.order_category !== 'cobuy' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
+                                disabled={deletingItemId === item.id || orderItems.length <= 1}
+                                className="p-1.5 rounded transition-colors hover:bg-red-100 text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                title={orderItems.length <= 1 ? '최소 1개의 상품이 필요합니다' : '상품 삭제'}
+                              >
+                                {deletingItemId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            )}
                             {!isFactoryUser && (
                               <span className="font-semibold text-gray-900">
                                 {((item.price_per_item ?? 0) * (item.quantity ?? 0)).toLocaleString()}원
@@ -1389,6 +1441,14 @@ export default function OrderDetail({
           }}
         />
       )}
+
+      <AddOrderItemModal
+        orderId={order.id}
+        isOpen={showAddItemModal}
+        onClose={() => setShowAddItemModal(false)}
+        onAdded={handleItemAdded}
+        initialDesignId={initialAddItemDesignId}
+      />
     </div>
   );
 }
@@ -1488,7 +1548,7 @@ function GeneratePaymentLinkCard({ orderId, onGenerated }: { orderId: string; on
   );
 }
 
-type AdjustMode = 'set_total' | 'discount_fixed' | 'discount_rate' | 'surcharge';
+type AdjustMode = 'set_total' | 'discount_fixed' | 'discount_rate' | 'surcharge' | 'reset';
 
 function PriceAdjustmentCard({
   order,
@@ -1508,7 +1568,12 @@ function PriceAdjustmentCard({
 
   const baseAmount = order.original_amount ?? order.total_amount;
 
+  const resetPreview = useMemo(() => {
+    return Math.max(0, baseAmount + (order.delivery_fee ?? 0) - (order.coupon_discount ?? 0));
+  }, [baseAmount, order.delivery_fee, order.coupon_discount]);
+
   const preview = useMemo(() => {
+    if (mode === 'reset') return resetPreview;
     const v = parseFloat(value) || 0;
     if (v <= 0) return null;
     switch (mode) {
@@ -1523,9 +1588,37 @@ function PriceAdjustmentCard({
       default:
         return null;
     }
-  }, [mode, value, baseAmount]);
+  }, [mode, value, baseAmount, resetPreview]);
 
   const handleSave = async () => {
+    if (mode === 'reset') {
+      if (!confirm('할인/추가금액을 모두 제거하고 원래 금액으로 복원하시겠습니까?')) return;
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/admin/orders', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            priceAdjustment: { mode: 'reset', note: note.trim() || undefined },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setError(data.error || '초기화에 실패했습니다.'); return; }
+        onOrderUpdate(data.data as Order);
+        onUpdate();
+        setIsEditing(false);
+        setValue('');
+        setNote('');
+      } catch {
+        setError('초기화 중 오류가 발생했습니다.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     const v = parseFloat(value);
     if (!v || v <= 0) {
       setError('금액을 입력해주세요.');
@@ -1608,6 +1701,7 @@ function PriceAdjustmentCard({
                 { key: 'discount_fixed' as const, label: '금액 할인' },
                 { key: 'discount_rate' as const, label: '할인율(%)' },
                 { key: 'surcharge' as const, label: '금액 추가' },
+                { key: 'reset' as const, label: '초기화' },
               ]).map((opt) => (
                 <button
                   key={opt.key}
@@ -1624,24 +1718,30 @@ function PriceAdjustmentCard({
             </div>
 
             {/* Value input */}
-            <div className="relative">
-              <input
-                type="number"
-                min="0"
-                value={value}
-                onChange={(e) => { setValue(e.target.value); setError(null); }}
-                placeholder={
-                  mode === 'set_total' ? '최종 결제 금액'
-                  : mode === 'discount_fixed' ? '할인할 금액'
-                  : mode === 'discount_rate' ? '할인 비율'
-                  : '추가할 금액'
-                }
-                className="w-full p-2.5 pr-10 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                {mode === 'discount_rate' ? '%' : '원'}
-              </span>
-            </div>
+            {mode === 'reset' ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <p className="text-xs text-amber-800">할인/추가금액을 모두 제거하고 원래 금액으로 복원합니다.</p>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  value={value}
+                  onChange={(e) => { setValue(e.target.value); setError(null); }}
+                  placeholder={
+                    mode === 'set_total' ? '최종 결제 금액'
+                    : mode === 'discount_fixed' ? '할인할 금액'
+                    : mode === 'discount_rate' ? '할인 비율'
+                    : '추가할 금액'
+                  }
+                  className="w-full p-2.5 pr-10 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                  {mode === 'discount_rate' ? '%' : '원'}
+                </span>
+              </div>
+            )}
 
             {/* Preview */}
             {preview !== null && (
@@ -1675,7 +1775,7 @@ function PriceAdjustmentCard({
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !value}
+                disabled={saving || (mode !== 'reset' && !value)}
                 className="flex-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
               >
                 {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
