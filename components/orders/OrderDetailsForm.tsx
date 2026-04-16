@@ -83,6 +83,11 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
     [adminSurcharge],
   );
 
+  const deliveryFee = useMemo(
+    () => shippingMethod === 'domestic' ? 3000 : 0,
+    [shippingMethod],
+  );
+
   const computedCouponDiscount = useMemo(
     () => couponInfo?.discountAmount ?? 0,
     [couponInfo],
@@ -93,8 +98,8 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
       const parsed = parseFloat(customTotalPrice);
       return parsed > 0 ? parsed : 0;
     }
-    return Math.max(0, originalAmount - computedCouponDiscount - computedAdminDiscount + computedSurcharge);
-  }, [pricingMode, customTotalPrice, originalAmount, computedCouponDiscount, computedAdminDiscount, computedSurcharge]);
+    return Math.max(0, originalAmount + deliveryFee - computedCouponDiscount - computedAdminDiscount + computedSurcharge);
+  }, [pricingMode, customTotalPrice, originalAmount, deliveryFee, computedCouponDiscount, computedAdminDiscount, computedSurcharge]);
 
   const handleCouponValidate = async (silent = false) => {
     const code = couponCode.trim();
@@ -175,6 +180,7 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
           customerPhone: customerPhone.trim() || undefined,
           notes: notes.trim() || undefined,
           shippingMethod,
+          deliveryFee,
           ...(shippingMethod === 'domestic' && {
             postalCode: shippingAddress.postalCode,
             state: shippingAddress.state,
@@ -509,6 +515,11 @@ export default function OrderDetailsForm({ items, customerEditableFields, onCust
           <div className="flex justify-between text-gray-700">
             <span>소계 ({items.length}건 · {totalQuantity}개)</span>
             <span>{originalAmount.toLocaleString()}원</span>
+          </div>
+
+          <div className="flex justify-between text-gray-700">
+            <span>배송비 ({shippingMethod === 'domestic' ? '국내 배송' : '직접 수령'})</span>
+            <span>{deliveryFee > 0 ? `+${deliveryFee.toLocaleString()}원` : '무료'}</span>
           </div>
 
           {pricingMode !== 'custom_total' && (

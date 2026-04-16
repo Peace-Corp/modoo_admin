@@ -32,6 +32,7 @@ interface CreateOrderRequest {
   customerPhone?: string;
   notes?: string;
   shippingMethod?: 'pickup' | 'domestic';
+  deliveryFee?: number;
   postalCode?: string;
   state?: string;
   city?: string;
@@ -307,6 +308,7 @@ export async function POST(request: Request) {
     const orderPricingMode = payload.pricingMode || 'auto';
     const paymentType: PaymentType = payload.paymentType || 'completed';
     const originalAmount = grandOriginalAmount;
+    const deliveryFee = payload.deliveryFee ?? (payload.shippingMethod === 'domestic' ? 3000 : 0);
     let couponDiscount = 0;
     let adminDiscount = 0;
     let adminSurcharge = 0;
@@ -332,7 +334,7 @@ export async function POST(request: Request) {
       }
 
       adminSurcharge = Math.max(0, toNumber(payload.adminSurcharge));
-      totalAmount = Math.max(0, originalAmount - couponDiscount - adminDiscount + adminSurcharge);
+      totalAmount = Math.max(0, originalAmount + deliveryFee - couponDiscount - adminDiscount + adminSurcharge);
     }
 
     const orderId = buildOrderId();
@@ -378,7 +380,7 @@ export async function POST(request: Request) {
       postal_code: payload.postalCode || null,
       address_line_1: payload.addressLine1 || null,
       address_line_2: payload.addressLine2 || null,
-      delivery_fee: 0,
+      delivery_fee: deliveryFee,
       payment_method: paymentMethod,
       payment_key: null,
       payment_status: paymentStatus,
