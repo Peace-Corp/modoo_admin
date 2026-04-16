@@ -106,6 +106,14 @@ export type InquiryRecord = {
   content: string;
   status: InquiryStatus;
   is_admin: boolean | null;
+  group_name: string | null;
+  manager_name: string | null;
+  phone: string | null;
+  kakao_id: string | null;
+  desired_date: string | null;
+  expected_qty: number | null;
+  fabric_color: string | null;
+  file_urls: string[] | null;
   created_at: string;
   updated_at: string;
   inquiry_products?: InquiryProductRecord[] | null;

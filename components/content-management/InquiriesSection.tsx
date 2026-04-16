@@ -182,19 +182,30 @@ export default function InquiriesSection() {
                   aria-controls={detailsId}
                   className="w-full px-4 py-3 flex flex-wrap items-start justify-between gap-3 text-left hover:bg-gray-50 transition-colors"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-semibold text-gray-900">{inquiry.title}</h3>
                       {isToday(inquiry.created_at) && (
                         <span className="text-xs text-red-500 font-bold">NEW</span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{formatDate(inquiry.created_at)}</p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+                      <span className="text-xs text-gray-500">{formatDate(inquiry.created_at)}</span>
+                      {inquiry.group_name && (
+                        <span className="text-xs text-gray-700 font-medium">{inquiry.group_name}</span>
+                      )}
+                      {inquiry.manager_name && (
+                        <span className="text-xs text-gray-600">{inquiry.manager_name}</span>
+                      )}
+                      {inquiry.phone && (
+                        <span className="text-xs text-gray-500">{inquiry.phone}</span>
+                      )}
+                      {inquiry.expected_qty && (
+                        <span className="text-xs text-gray-500">{inquiry.expected_qty}벌</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    {isToday(inquiry.created_at) && (
-                      <span className="text-xs text-red-500 font-bold">NEW</span>
-                    )}
+                  <div className="flex items-center gap-3 shrink-0">
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusStyle(
                         inquiry.status
@@ -212,12 +223,80 @@ export default function InquiriesSection() {
 
                 {isExpanded && (
                   <div id={detailsId} className="px-4 pb-4 space-y-4">
+                    {(inquiry.group_name || inquiry.manager_name || inquiry.phone || inquiry.kakao_id || inquiry.desired_date || inquiry.expected_qty || inquiry.fabric_color) && (
+                      <div className="bg-gray-50 rounded-md p-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                          {inquiry.group_name && (
+                            <div>
+                              <span className="text-gray-500">단체명</span>
+                              <p className="font-medium text-gray-900">{inquiry.group_name}</p>
+                            </div>
+                          )}
+                          {inquiry.manager_name && (
+                            <div>
+                              <span className="text-gray-500">담당자</span>
+                              <p className="font-medium text-gray-900">{inquiry.manager_name}</p>
+                            </div>
+                          )}
+                          {inquiry.phone && (
+                            <div>
+                              <span className="text-gray-500">연락처</span>
+                              <p className="font-medium text-gray-900">{inquiry.phone}</p>
+                            </div>
+                          )}
+                          {inquiry.kakao_id && (
+                            <div>
+                              <span className="text-gray-500">카카오톡</span>
+                              <p className="font-medium text-gray-900">{inquiry.kakao_id}</p>
+                            </div>
+                          )}
+                          {inquiry.desired_date && (
+                            <div>
+                              <span className="text-gray-500">착용희망일</span>
+                              <p className="font-medium text-gray-900">{new Date(inquiry.desired_date).toLocaleDateString('ko-KR')}</p>
+                            </div>
+                          )}
+                          {inquiry.expected_qty && (
+                            <div>
+                              <span className="text-gray-500">예상수량</span>
+                              <p className="font-medium text-gray-900">{inquiry.expected_qty}벌</p>
+                            </div>
+                          )}
+                          {inquiry.fabric_color && (
+                            <div>
+                              <span className="text-gray-500">원단 색상</span>
+                              <p className="font-medium text-gray-900">{inquiry.fabric_color}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-gray-700">문의 내용</p>
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">
                         {inquiry.content}
                       </p>
                     </div>
+
+                    {inquiry.file_urls && inquiry.file_urls.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">첨부파일</p>
+                        <div className="flex flex-wrap gap-2">
+                          {inquiry.file_urls.map((url, i) => (
+                            <a
+                              key={i}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-2.5 py-1 rounded-md text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                            >
+                              파일 {i + 1}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-gray-700">관련 제품</p>
