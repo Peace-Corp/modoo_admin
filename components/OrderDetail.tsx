@@ -53,6 +53,9 @@ export default function OrderDetail({
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
   const [showAddItemModal, setShowAddItemModal] = useState(!!initialAddItemDesignId);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [editingSummaryField, setEditingSummaryField] = useState<'discount' | 'surcharge' | null>(null);
+  const [editingSummaryValue, setEditingSummaryValue] = useState('');
+  const [savingSummaryField, setSavingSummaryField] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -263,6 +266,40 @@ export default function OrderDetail({
     const orders: Order[] = json.data || [];
     if (orders.length > 0) onOrderUpdate(orders[0]);
     onUpdate();
+  };
+
+  const handleSummaryRemove = async (field: 'discount' | 'surcharge') => {
+    const label = field === 'discount' ? '할인' : '추가 금액';
+    if (!confirm(`${label}을(를) 삭제하시겠습니까?`)) return;
+    setSavingSummaryField(true);
+    try {
+      const mode = field === 'discount' ? 'remove_discount' : 'remove_surcharge';
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, priceAdjustment: { mode } }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data) { onOrderUpdate(json.data as Order); onUpdate(); }
+    } catch { /* noop */ }
+    finally { setSavingSummaryField(false); }
+  };
+
+  const handleSummaryUpdate = async (field: 'discount' | 'surcharge') => {
+    const v = parseFloat(editingSummaryValue);
+    if (!v || v <= 0) return;
+    setSavingSummaryField(true);
+    try {
+      const mode = field === 'discount' ? 'update_discount' : 'update_surcharge';
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, priceAdjustment: { mode, value: v } }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data) { onOrderUpdate(json.data as Order); onUpdate(); }
+    } catch { /* noop */ }
+    finally { setSavingSummaryField(false); setEditingSummaryField(null); setEditingSummaryValue(''); }
   };
 
   const fetchCobuySession = async () => {
@@ -920,16 +957,90 @@ export default function OrderDetail({
                   </div>
                 )}
                 {order.admin_discount > 0 && (
-                  <div className="flex justify-between text-sm text-orange-600">
-                    <span>할인</span>
-                    <span>-{order.admin_discount.toLocaleString()}원</span>
-                  </div>
+                  editingSummaryField === 'discount' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-orange-600 shrink-0">할인</span>
+                      <div className="flex-1 flex items-center gap-1">
+                        <input
+                          type="number" min="0" autoFocus
+                          value={editingSummaryValue}
+                          onChange={e => setEditingSummaryValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSummaryUpdate('discount'); if (e.key === 'Escape') setEditingSummaryField(null); }}
+                          className="w-full p-1 text-sm border border-orange-300 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 text-right"
+                        />
+                        <span className="text-xs text-gray-400 shrink-0">원</span>
+                      </div>
+                      <button onClick={() => handleSummaryUpdate('discount')} disabled={savingSummaryField} className="p-1 text-orange-600 hover:bg-orange-50 rounded" title="저장">
+                        {savingSummaryField ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => setEditingSummaryField(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="취소">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-sm text-orange-600 group">
+                      <span>할인</span>
+                      <div className="flex items-center gap-1">
+                        <span>-{order.admin_discount.toLocaleString()}원</span>
+                        <button
+                          onClick={() => { setEditingSummaryField('discount'); setEditingSummaryValue(String(order.admin_discount)); }}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-orange-50 rounded transition-opacity" title="수정"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleSummaryRemove('discount')}
+                          disabled={savingSummaryField}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-600 rounded transition-opacity" title="삭제"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
                 {order.admin_surcharge > 0 && (
-                  <div className="flex justify-between text-sm text-purple-600">
-                    <span>추가 금액</span>
-                    <span>+{order.admin_surcharge.toLocaleString()}원</span>
-                  </div>
+                  editingSummaryField === 'surcharge' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-purple-600 shrink-0">추가 금액</span>
+                      <div className="flex-1 flex items-center gap-1">
+                        <input
+                          type="number" min="0" autoFocus
+                          value={editingSummaryValue}
+                          onChange={e => setEditingSummaryValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSummaryUpdate('surcharge'); if (e.key === 'Escape') setEditingSummaryField(null); }}
+                          className="w-full p-1 text-sm border border-purple-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-right"
+                        />
+                        <span className="text-xs text-gray-400 shrink-0">원</span>
+                      </div>
+                      <button onClick={() => handleSummaryUpdate('surcharge')} disabled={savingSummaryField} className="p-1 text-purple-600 hover:bg-purple-50 rounded" title="저장">
+                        {savingSummaryField ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => setEditingSummaryField(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="취소">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-sm text-purple-600 group">
+                      <span>추가 금액</span>
+                      <div className="flex items-center gap-1">
+                        <span>+{order.admin_surcharge.toLocaleString()}원</span>
+                        <button
+                          onClick={() => { setEditingSummaryField('surcharge'); setEditingSummaryValue(String(order.admin_surcharge)); }}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-purple-50 rounded transition-opacity" title="수정"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleSummaryRemove('surcharge')}
+                          disabled={savingSummaryField}
+                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 hover:text-red-600 rounded transition-opacity" title="삭제"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
                 {(() => {
                   const computedTotal = subtotal

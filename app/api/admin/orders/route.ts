@@ -317,7 +317,7 @@ export async function PATCH(request: Request) {
 
       const { data: currentOrder } = await adminClient
         .from('orders')
-        .select('total_amount, original_amount, delivery_fee, coupon_discount')
+        .select('total_amount, original_amount, delivery_fee, coupon_discount, admin_discount, admin_surcharge')
         .eq('id', orderId)
         .single();
 
@@ -336,6 +336,32 @@ export async function PATCH(request: Request) {
           - (currentOrder.coupon_discount ?? 0)
         );
         updateData.pricing_note = note || null;
+      } else if (mode === 'remove_discount') {
+        const oldDiscount = currentOrder.admin_discount ?? 0;
+        updateData.admin_discount = 0;
+        updateData.total_amount = (currentOrder.total_amount ?? 0) + oldDiscount;
+        if (note) updateData.pricing_note = note;
+      } else if (mode === 'remove_surcharge') {
+        const oldSurcharge = currentOrder.admin_surcharge ?? 0;
+        updateData.admin_surcharge = 0;
+        updateData.total_amount = Math.max(0, (currentOrder.total_amount ?? 0) - oldSurcharge);
+        if (note) updateData.pricing_note = note;
+      } else if (mode === 'update_discount') {
+        if (typeof value !== 'number' || value < 0) {
+          return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
+        }
+        const oldDiscount = currentOrder.admin_discount ?? 0;
+        updateData.admin_discount = value;
+        updateData.total_amount = Math.max(0, (currentOrder.total_amount ?? 0) + oldDiscount - value);
+        if (note) updateData.pricing_note = note;
+      } else if (mode === 'update_surcharge') {
+        if (typeof value !== 'number' || value < 0) {
+          return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
+        }
+        const oldSurcharge = currentOrder.admin_surcharge ?? 0;
+        updateData.admin_surcharge = value;
+        updateData.total_amount = Math.max(0, (currentOrder.total_amount ?? 0) - oldSurcharge + value);
+        if (note) updateData.pricing_note = note;
       } else {
         if (typeof value !== 'number' || value < 0) {
           return NextResponse.json({ error: '유효하지 않은 금액입니다.' }, { status: 400 });
