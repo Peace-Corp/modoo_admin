@@ -16,6 +16,7 @@ import type {
   ChatbotInquiryStatus,
   ChatbotInquiryRecord,
 } from './types';
+import { formatKstDateLong, isTodayKst } from '@/lib/kst';
 
 export const ANNOUNCEMENT_CATEGORIES: Record<AnnouncementCategory, string> = {
   notice: '공지',
@@ -91,25 +92,9 @@ export const emptyReviewForm: ReviewFormState = {
   review_image_urls: [],
 };
 
-export const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+export const formatDate = (dateString: string) => formatKstDateLong(dateString);
 
-export const isToday = (dateString: string) => {
-  const date = new Date(dateString);
-  const today = new Date();
-  return (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate()
-  );
-};
+export const isToday = (dateString: string) => isTodayKst(dateString);
 
 export const sortExamples = (examples: ProductionExampleRecord[]) => {
   return [...examples].sort((a, b) => {

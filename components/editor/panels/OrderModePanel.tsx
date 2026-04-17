@@ -495,14 +495,20 @@ export default function OrderModePanel({
       </div>
 
       {/* Size/Quantity Table */}
-      {sizeOptions.length > 0 && (
-        <div className="p-3 border-b">
-          <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">주문 옵션</h3>
+      {sizeOptions.length > 0 && (() => {
+        const mobileSizeOptions = sizeOptions.filter((size) => {
+          const qty = sizeQuantities.get(size.size_code);
+          return qty && qty > 0;
+        });
+        const totalQtySum = Array.from(sizeQuantities.values()).reduce((sum, qty) => sum + qty, 0);
+        const totalQtyCell = totalQtySum > 0 ? totalQtySum : '-';
+
+        const renderSizeTable = (sizes: typeof sizeOptions) => (
           <div className="overflow-hidden rounded border border-gray-200">
             <table className="w-full text-[11px] border-collapse">
               <thead className="bg-gray-50 text-black">
                 <tr>
-                  {sizeOptions.map((size) => (
+                  {sizes.map((size) => (
                     <th key={size.size_code} className="px-2 py-1.5 text-center font-medium border border-gray-200">
                       <div>{size.label}</div>
                       {size.size_code && size.size_code !== size.label && (
@@ -515,7 +521,7 @@ export default function OrderModePanel({
               </thead>
               <tbody className="divide-y divide-gray-200 text-black">
                 <tr>
-                  {sizeOptions.map((size) => {
+                  {sizes.map((size) => {
                     const quantity = sizeQuantities.get(size.size_code);
                     return (
                       <td key={size.size_code} className="px-2 py-1.5 text-center border border-gray-200">
@@ -524,14 +530,34 @@ export default function OrderModePanel({
                     );
                   })}
                   <td className="px-2 py-1.5 text-center border border-gray-200 bg-gray-100 font-bold">
-                    {Array.from(sizeQuantities.values()).reduce((sum, qty) => sum + qty, 0) || '-'}
+                    {totalQtyCell}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        );
+
+        return (
+          <div className="p-3 border-b">
+            <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">주문 옵션</h3>
+            {/* 모바일: 수량이 있는 사이즈만 표시 */}
+            <div className="block md:hidden">
+              {mobileSizeOptions.length > 0 ? renderSizeTable(mobileSizeOptions) : renderSizeTable(sizeOptions)}
+            </div>
+            {/* 데스크톱: 모든 사이즈 표시 */}
+            <div className="hidden md:block">
+              {renderSizeTable(sizeOptions)}
+            </div>
+            <div className="mt-2 flex justify-end text-[11px] text-gray-600">
+              <span>
+                총 수량{' '}
+                <span className="font-semibold text-gray-900 tabular-nums">{totalQtySum}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Product Info + Color */}
       <div className="p-3 border-b">

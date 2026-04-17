@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { BarChart3, Factory, MessageSquare, Package, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { formatKstDateTimeCompact } from '@/lib/kst';
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   payment_completed: '결제완료',
@@ -69,13 +70,7 @@ type DashboardPayload =
 
 const formatNumber = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 
-const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const formatDateTime = (value: string) => formatKstDateTimeCompact(value);
 
 export default function Dashboard() {
   const router = useRouter();

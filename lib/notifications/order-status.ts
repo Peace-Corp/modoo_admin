@@ -1,4 +1,5 @@
 import { sendGmailEmail } from '@/lib/gmail';
+import { formatKstTodayLong } from '@/lib/kst';
 
 export type OrderStatus = 'payment_pending' | 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
 
@@ -77,7 +78,7 @@ function buildStatusEmailHtml(params: OrderStatusNotificationParams): string {
   if (!config) return '';
 
   const orderUrl = `https://modoouniform.com/order/${params.orderId}`;
-  const orderDate = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  const orderDate = formatKstTodayLong();
 
   const trackingHtml = params.newStatus === 'shipping' && params.trackingNumber
     ? `<div style="background:${BRAND_LIGHT};border-radius:8px;padding:14px 16px;margin:16px 0;">

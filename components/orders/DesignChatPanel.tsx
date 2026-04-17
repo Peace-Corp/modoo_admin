@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, X, MessageSquare, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import type { EditorChatMessage } from '@/types/types';
+import { formatKstDateTimeMedium } from '@/lib/kst';
 
 interface DesignChatPanelProps {
   orderItemId: string;
@@ -119,15 +120,7 @@ export default function DesignChatPanel({
     }
   };
 
-  const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleString('ko-KR', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatTime = (dateStr: string) => formatKstDateTimeMedium(dateStr);
 
   return (
     <div className={`flex flex-col ${compact ? 'h-full' : 'h-[500px]'} bg-white border border-gray-200 rounded-lg overflow-hidden`}>

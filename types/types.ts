@@ -208,7 +208,6 @@ export interface Order {
   payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
 
   order_status: 'payment_pending' | 'payment_completed' | 'in_production' | 'shipping' | 'delivered' | 'cancelled' | 'partially_cancelled';
-  assigned_manufacturer_id: string | null;
   total_amount: number;
 
   // Pricing adjustment fields (admin custom orders)
@@ -230,12 +229,13 @@ export interface Order {
     shipping?: boolean;
   } | null;
 
-  // Factory-specific fields (set by admin)
-  factory_status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
-  deadline: string | null;
-  factory_amount: number | null;
-  factory_payment_date: string | null;
-  factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
+  // @deprecated — factory fields moved to OrderItem for per-item assignment
+  assigned_manufacturer_id?: string | null;
+  factory_status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
+  deadline?: string | null;
+  factory_amount?: number | null;
+  factory_payment_date?: string | null;
+  factory_payment_status?: 'pending' | 'completed' | 'cancelled' | null;
 
   // Refund reason (set when order is refunded)
   refund_reason: string | null;
@@ -248,8 +248,15 @@ export interface Order {
   tracking_number: string | null;
   tracking_carrier: string | null;
 
+  // Logen integration
+  logen_registered_at: string | null;
+  logen_slip_printed: boolean;
+
   // Shareable link token (generated on demand)
   share_token: string | null;
+
+  // Joined order items (for list views)
+  order_items?: OrderItem[];
 
   created_at: string;
   updated_at: string;
@@ -307,8 +314,19 @@ export interface OrderItem {
   purchase_order_status: 'pending' | 'ordered' | 'received' | 'cancelled';
   purchase_ordered_at: string | null;
 
+  // Factory assignment (per-item)
+  assigned_manufacturer_id: string | null;
+  factory_status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'shipped' | 'cancelled' | null;
+  factory_amount: number | null;
+  deadline: string | null;
+  factory_payment_date: string | null;
+  factory_payment_status: 'pending' | 'completed' | 'cancelled' | null;
+
   // Joined from products table
   products?: { product_code: string | null } | null;
+
+  // Joined manufacturer info
+  manufacturers?: { id: string; name: string; email: string | null } | null;
 
   created_at: string;
   updated_at: string;

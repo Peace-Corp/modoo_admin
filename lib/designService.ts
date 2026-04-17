@@ -1,4 +1,5 @@
 import { createClient } from './supabase-client';
+import { formatKstDateTimeFull } from '@/lib/kst';
 import { extractImageUrlsFromCanvasState } from './server-svg-export';
 
 export interface SaveDesignData {
@@ -50,7 +51,7 @@ export async function saveDesign(data: SaveDesignData): Promise<SavedDesign | nu
     const designData = {
       user_id: user.id,
       product_id: data.productId,
-      title: data.title || `Design ${new Date().toLocaleString('ko-KR')}`,
+      title: data.title || `Design ${formatKstDateTimeFull(new Date())}`,
       color_selections: {
         productColor: data.productColor,
       },

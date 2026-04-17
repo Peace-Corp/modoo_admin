@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Plus, RefreshCw, ChevronLeft, ChevronRight, Upload, Trash2, Download, FileCheck } from 'lucide-react';
 import type { Invoice } from '@/types/types';
+import { formatKstDateNumeric } from '@/lib/kst';
 
 interface AdminDocument {
   id: string;
@@ -114,13 +115,7 @@ export default function InvoicesPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  };
+  const formatDate = (dateStr: string) => formatKstDateNumeric(dateStr);
 
   const formatCurrency = (n: number) => n.toLocaleString('ko-KR');
 

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-client';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import { extractVariantsFromOptions } from '@/lib/orderUtils';
 import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
+import { formatKstDateOnly } from '@/lib/kst';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 import EditorRightPanel from '@/components/editor/EditorRightPanel';
 import OrderModePanel from '@/components/editor/panels/OrderModePanel';
@@ -434,13 +435,7 @@ export default function SharedOrderPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateString: string) => formatKstDateOnly(dateString);
 
   const handleAdminOrdersClick = async () => {
     try {

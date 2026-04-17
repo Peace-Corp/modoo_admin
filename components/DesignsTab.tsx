@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { SavedDesign } from '@/types/types';
 import { Palette, Calendar, User, Package, ChevronRight, ChevronLeft, ShoppingCart, X } from 'lucide-react';
 import AdminOrderCreator, { type InitialDesignItem } from '@/components/orders/AdminOrderCreator';
+import { formatKstDateLong } from '@/lib/kst';
 
 interface PaginatedResponse {
   data: SavedDesign[];
@@ -75,16 +76,6 @@ export default function DesignsTab() {
   useEffect(() => {
     fetchDesigns();
   }, [fetchDesigns]);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -263,7 +254,7 @@ export default function DesignsTab() {
 
                         <div className="flex items-center gap-1 text-[11px] sm:text-xs text-gray-400">
                           <Calendar className="w-3 h-3 shrink-0" />
-                          <span>{formatDate(design.created_at)}</span>
+                          <span>{formatKstDateLong(design.created_at)}</span>
                         </div>
                       </div>
 

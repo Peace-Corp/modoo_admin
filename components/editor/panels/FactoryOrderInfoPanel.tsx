@@ -8,6 +8,7 @@ import type { Order, OrderItem } from '@/types/types';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import { extractVariants } from '@/lib/orderUtils';
+import { formatKstDateShort } from '@/lib/kst';
 
 interface FactoryOrderInfoPanelProps {
   orderId: string;
@@ -64,27 +65,38 @@ export default function FactoryOrderInfoPanel({
     if (user) fetchData();
   }, [user, fetchData]);
 
+  const currentItem = orderItems.find((i) => i.id === currentOrderItemId);
+
   const handleFactoryStatusChange = useCallback(async (newStatus: string) => {
-    if (!order) return;
+    if (!order || !currentItem) return;
     setUpdatingStatus(true);
     try {
       const response = await fetch('/api/admin/orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
+        body: JSON.stringify({ orderId: order.id, itemId: currentItem.id, factoryStatus: newStatus }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '상태 변경에 실패했습니다.');
       }
       const { data } = await response.json();
-      setOrder((prev) => prev ? { ...prev, factory_status: data.factory_status, order_status: data.order_status } : prev);
+      setOrderItems((prev) =>
+        prev.map((item) =>
+          item.id === currentItem.id
+            ? { ...item, factory_status: data.factory_status }
+            : item
+        )
+      );
+      if (data.order_status) {
+        setOrder((prev) => prev ? { ...prev, order_status: data.order_status } : prev);
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
     } finally {
       setUpdatingStatus(false);
     }
-  }, [order]);
+  }, [order, currentItem]);
 
   const handleItemClick = useCallback((item: OrderItem) => {
     const returnUrl = encodeURIComponent('/orders');
@@ -93,14 +105,8 @@ export default function FactoryOrderInfoPanel({
     );
   }, [router, orderId]);
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateString: string | null) =>
+    dateString ? formatKstDateShort(dateString) : '-';
 
   const getStatusColor = (status: string | null) => {
     if (!status) return 'bg-gray-100 text-gray-800';
@@ -138,55 +144,59 @@ export default function FactoryOrderInfoPanel({
               </span>
             </div>
 
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0 w-16">배정 상태</span>
-              <select
-                value={order.factory_status || 'assigned'}
-                onChange={(e) => handleFactoryStatusChange(e.target.value)}
-                disabled={updatingStatus || order.factory_status === 'shipped'}
-                className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(order.factory_status)}`}
-              >
-                <option value="assigned">배정완료</option>
-                <option value="in_progress">작업중</option>
-                <option value="completed">작업완료</option>
-                <option value="shipped">출고완료</option>
-              </select>
-            </div>
+            {currentItem && (
+              <>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[11px] text-gray-400 shrink-0 w-16">배정 상태</span>
+                  <select
+                    value={currentItem.factory_status || 'assigned'}
+                    onChange={(e) => handleFactoryStatusChange(e.target.value)}
+                    disabled={updatingStatus || currentItem.factory_status === 'shipped'}
+                    className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getStatusColor(currentItem.factory_status ?? null)}`}
+                  >
+                    <option value="assigned">배정완료</option>
+                    <option value="in_progress">작업중</option>
+                    <option value="completed">작업완료</option>
+                    <option value="shipped">출고완료</option>
+                  </select>
+                </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0 w-16">마감일</span>
-              <span className="text-[11px] font-medium text-gray-800 flex items-center gap-1">
-                <Clock className="w-3 h-3 text-gray-400" />
-                {formatDate(order.deadline)}
-              </span>
-            </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-400 shrink-0 w-16">마감일</span>
+                  <span className="text-[11px] font-medium text-gray-800 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-gray-400" />
+                    {formatDate(currentItem.deadline ?? null)}
+                  </span>
+                </div>
 
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0 w-16">금액</span>
-              <span className="text-[11px] font-semibold text-gray-800">
-                {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
-              </span>
-            </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[11px] text-gray-400 shrink-0 w-16">금액</span>
+                  <span className="text-[11px] font-semibold text-gray-800">
+                    {currentItem.factory_amount ? `${currentItem.factory_amount.toLocaleString()}원` : '-'}
+                  </span>
+                </div>
 
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 예정일</span>
-              <span className="text-[11px] font-medium text-gray-800">
-                {formatDate(order.factory_payment_date)}
-              </span>
-            </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 예정일</span>
+                  <span className="text-[11px] font-medium text-gray-800">
+                    {formatDate(currentItem.factory_payment_date ?? null)}
+                  </span>
+                </div>
 
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 상태</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                order.factory_payment_status === 'completed' ? 'bg-green-100 text-green-800' :
-                order.factory_payment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                'bg-yellow-100 text-yellow-800'
-              }`}>
-                {order.factory_payment_status === 'pending' ? '대기' :
-                 order.factory_payment_status === 'completed' ? '완료' :
-                 order.factory_payment_status === 'cancelled' ? '취소' : '-'}
-              </span>
-            </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[11px] text-gray-400 shrink-0 w-16">결제 상태</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                    currentItem.factory_payment_status === 'completed' ? 'bg-green-100 text-green-800' :
+                    currentItem.factory_payment_status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {currentItem.factory_payment_status === 'pending' ? '대기' :
+                     currentItem.factory_payment_status === 'completed' ? '완료' :
+                     currentItem.factory_payment_status === 'cancelled' ? '취소' : '-'}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

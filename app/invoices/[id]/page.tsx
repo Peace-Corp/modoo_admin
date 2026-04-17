@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Plus, Trash2, Send, Eye, ArrowLeft, X, Paperclip, Save } from 'lucide-react';
 import type { Invoice, InvoiceItem } from '@/types/types';
 import { generateInvoiceEmailHtml, INVOICE_SUPPLIER } from '@/lib/invoice-email';
+import { formatKstTodayLong, formatKstDateTimeCompact } from '@/lib/kst';
 
 interface AdminDocument {
   id: string;
@@ -166,8 +167,7 @@ export default function EditInvoicePage() {
   );
 
   const handlePreview = () => {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = formatKstTodayLong();
     const html = generateInvoiceEmailHtml({
       invoiceNumber: invoiceNumber || 'INV',
       date: dateStr,
@@ -278,14 +278,7 @@ export default function EditInvoicePage() {
 
   const formatNumber = (n: number) => n.toLocaleString('ko-KR');
 
-  const formatDateTime = (dateStr: string) =>
-    new Date(dateStr).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatDateTime = (dateStr: string) => formatKstDateTimeCompact(dateStr);
 
   if (loadState === 'loading') {
     return (

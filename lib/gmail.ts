@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { formatKstDateOnly } from '@/lib/kst';
 
 interface GmailRecipient {
   email: string;
@@ -106,9 +107,7 @@ export async function sendFactoryAssignmentEmail(params: FactoryAssignmentEmailP
     appUrl,
   } = params;
   const displayOrderId = orderId.toUpperCase();
-  const formattedDeadline = deadline
-    ? new Date(deadline).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
-    : null;
+  const formattedDeadline = deadline ? formatKstDateOnly(deadline) : null;
   const formattedAmount = factoryAmount != null
     ? factoryAmount.toLocaleString('ko-KR') + '원'
     : null;

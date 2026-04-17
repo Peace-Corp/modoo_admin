@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Send, Eye, ArrowLeft, X, Paperclip } from 'lucide-react';
 import type { InvoiceItem } from '@/types/types';
 import { generateInvoiceEmailHtml, INVOICE_SUPPLIER } from '@/lib/invoice-email';
+import { formatKstTodayLong } from '@/lib/kst';
 
 interface AdminDocument {
   id: string;
@@ -110,8 +111,7 @@ export default function NewInvoicePage() {
   }, [updateItem]);
 
   const handlePreview = () => {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = formatKstTodayLong();
     const html = generateInvoiceEmailHtml({
       invoiceNumber: 'INV-PREVIEW',
       date: dateStr,

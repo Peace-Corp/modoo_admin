@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { Mail, Check } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestStatus, CoBuyRequestAdminStatus } from '@/types/types';
+import { formatKstDateTimeMedium, formatKstMonthDay } from '@/lib/kst';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
   draft: '작성중',
@@ -51,19 +52,11 @@ const fetcher = (url: string) => fetch(url).then(r => {
   return r.json();
 });
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-};
+const formatDate = (dateString?: string | null) =>
+  dateString ? formatKstDateTimeMedium(dateString) : '-';
 
-const formatDateShort = (dateString?: string | null) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    month: 'short', day: 'numeric',
-  });
-};
+const formatDateShort = (dateString?: string | null) =>
+  dateString ? formatKstMonthDay(dateString) : '-';
 
 export default function CoBuyRequestsTab() {
   const router = useRouter();

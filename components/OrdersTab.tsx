@@ -9,10 +9,23 @@ import { useAuthStore } from '@/store/useAuthStore';
 import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 import RefundModal from '@/components/orders/RefundModal';
+import { formatKstDateLong, formatKstDateShort, formatKstMonthDay } from '@/lib/kst';
 
-// Extended order type with item count/purchase status from API
+// Extended order type with items from API (now includes factory fields)
+type OrderItemSummary = {
+  id: string;
+  purchase_order_status?: string;
+  design_title?: string | null;
+  thumbnail_url?: string | null;
+  assigned_manufacturer_id?: string | null;
+  factory_status?: string | null;
+  factory_amount?: number | null;
+  deadline?: string | null;
+  factory_payment_date?: string | null;
+  factory_payment_status?: string | null;
+};
 type OrderWithItemCount = Order & {
-  order_items?: { count: number }[] | { id: string; purchase_order_status?: string; design_title?: string | null; thumbnail_url?: string | null }[];
+  order_items?: { count: number }[] | OrderItemSummary[];
 };
 
 export default function OrdersTab() {
@@ -92,25 +105,6 @@ export default function OrdersTab() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatDateShort = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
   const getFactoryPaymentStatusLabel = (status: string | null) => {
     if (!status) return '-';
     const labels: Record<string, string> = {
@@ -140,6 +134,7 @@ export default function OrdersTab() {
       completed: 'bg-green-100 text-green-800',
       shipped: 'bg-indigo-100 text-indigo-800',
       cancelled: 'bg-red-100 text-red-800',
+      mixed: 'bg-purple-100 text-purple-800',
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
@@ -153,6 +148,7 @@ export default function OrdersTab() {
       completed: '작업완료',
       shipped: '출고완료',
       cancelled: '취소',
+      mixed: '혼합',
     };
     return labels[status] || status;
   };
@@ -179,11 +175,7 @@ export default function OrdersTab() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '금액 저장에 실패했습니다.');
       }
-      const { data } = await response.json();
-      mutateOrders(
-        orders.map((o) => (o.id === orderId ? { ...o, factory_amount: data.factory_amount } : o)),
-        { revalidate: false }
-      );
+      mutateOrders();
       setEditingAmountId(null);
     } catch (error) {
       console.error('Error updating factory amount:', error);
@@ -191,7 +183,7 @@ export default function OrdersTab() {
     } finally {
       setSavingAmountId(null);
     }
-  }, [editingAmountValue, orders, mutateOrders]);
+  }, [editingAmountValue, mutateOrders]);
 
   const handleFactoryStatusChange = useCallback(async (orderId: string, newStatus: string) => {
     setUpdatingFactoryStatusId(orderId);
@@ -205,18 +197,14 @@ export default function OrdersTab() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.error || '상태 변경에 실패했습니다.');
       }
-      const { data } = await response.json();
-      mutateOrders(
-        orders.map((o) => (o.id === orderId ? { ...o, factory_status: data.factory_status, order_status: data.order_status } : o)),
-        { revalidate: false }
-      );
+      mutateOrders();
     } catch (error) {
       console.error('Error updating factory status:', error);
       setErrorMessage(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
     } finally {
       setUpdatingFactoryStatusId(null);
     }
-  }, [orders, mutateOrders]);
+  }, [mutateOrders]);
 
   const factoryMap = useMemo(() => {
     const map = new Map<string, Factory>();
@@ -268,16 +256,26 @@ export default function OrdersTab() {
         const c = getOrderItemCount(order);
         return typeof c === 'number' ? c : 0;
       }
-      case 'factory_status':
-        return order.factory_status || '';
-      case 'deadline':
-        return order.deadline ? new Date(order.deadline).getTime() : null;
-      case 'factory_amount':
-        return order.factory_amount ?? null;
-      case 'factory_payment_date':
-        return order.factory_payment_date ? new Date(order.factory_payment_date).getTime() : null;
-      case 'factory_payment_status':
-        return order.factory_payment_status || '';
+      case 'factory_status': {
+        const fSum = getMyFactorySummary(order);
+        return fSum.status || '';
+      }
+      case 'deadline': {
+        const fSum1 = getMyFactorySummary(order);
+        return fSum1.deadline ? new Date(fSum1.deadline).getTime() : null;
+      }
+      case 'factory_amount': {
+        const fSum2 = getMyFactorySummary(order);
+        return fSum2.amount ?? null;
+      }
+      case 'factory_payment_date': {
+        const fSum3 = getMyFactorySummary(order);
+        return fSum3.payDate ? new Date(fSum3.payDate).getTime() : null;
+      }
+      case 'factory_payment_status': {
+        const fSum4 = getMyFactorySummary(order);
+        return fSum4.payStatus || '';
+      }
       case 'customer_name':
         return order.customer_name?.toLowerCase() || '';
       case 'created_at':
@@ -289,7 +287,7 @@ export default function OrdersTab() {
       case 'payment_status':
         return order.payment_status || '';
       case 'factory':
-        return getFactoryLabel(order.assigned_manufacturer_id);
+        return getOrderFactoryLabel(order);
       case 'design_title': {
         const items = order.order_items as { design_title?: string | null }[] | undefined;
         return items?.map(i => i.design_title).filter(Boolean).join(', ').toLowerCase() || '';
@@ -304,11 +302,13 @@ export default function OrdersTab() {
 
     // Status filter (multi-select)
     if (selectedStatuses.size > 0) {
-      result = result.filter((o) =>
-        isFactoryUser
-          ? selectedStatuses.has(o.factory_status || 'pending')
-          : selectedStatuses.has(o.order_status)
-      );
+      result = result.filter((o) => {
+        if (isFactoryUser) {
+          const fs = getMyFactorySummary(o).status;
+          return selectedStatuses.has(fs);
+        }
+        return selectedStatuses.has(o.order_status);
+      });
     }
 
     // Payment status filter (multi-select)
@@ -396,11 +396,54 @@ export default function OrdersTab() {
     return { label: '부분발주', color: 'bg-blue-100 text-blue-800' };
   };
 
-  const getFactoryLabel = (manufacturerId: string | null | undefined) => {
+  const getFactoryLabelById = (manufacturerId: string | null | undefined) => {
     if (!manufacturerId) return '미배정';
     const factory = factoryMap.get(manufacturerId);
     return factory?.name || factory?.email || manufacturerId;
   };
+
+  const getOrderFactoryLabel = (order: OrderWithItemCount): string => {
+    const items = order.order_items as OrderItemSummary[] | undefined;
+    if (!items || items.length === 0) return '미배정';
+    const factoryIds = [...new Set(items.map((i) => i.assigned_manufacturer_id).filter(Boolean))] as string[];
+    if (factoryIds.length === 0) return '미배정';
+    const firstName = getFactoryLabelById(factoryIds[0]);
+    if (factoryIds.length === 1) return firstName;
+    return `${firstName} 외 ${factoryIds.length - 1}곳`;
+  };
+
+  const getOrderFactoryStatus = (order: OrderWithItemCount): string | null => {
+    const items = order.order_items as OrderItemSummary[] | undefined;
+    if (!items || items.length === 0) return null;
+    const statuses = items.map((i) => i.factory_status).filter(Boolean) as string[];
+    if (statuses.length === 0) return null;
+    if (statuses.every((s) => s === statuses[0])) return statuses[0];
+    return 'mixed';
+  };
+
+  const getMyFactoryItems = useCallback((order: OrderWithItemCount): OrderItemSummary[] => {
+    const items = order.order_items as OrderItemSummary[] | undefined;
+    if (!items) return [];
+    if (!user?.manufacturer_id) return items;
+    return items.filter((i) => i.assigned_manufacturer_id === user.manufacturer_id);
+  }, [user?.manufacturer_id]);
+
+  const getMyFactorySummary = useCallback((order: OrderWithItemCount) => {
+    const myItems = getMyFactoryItems(order);
+    if (myItems.length === 0) {
+      return { status: 'assigned' as string, deadline: null as string | null, amount: null as number | null, payDate: null as string | null, payStatus: null as string | null };
+    }
+    const statuses = myItems.map((i) => i.factory_status).filter(Boolean) as string[];
+    const status = statuses.length === 0 ? 'assigned' : (statuses.every((s) => s === statuses[0]) ? statuses[0] : 'mixed');
+    const deadlines = myItems.map((i) => i.deadline).filter(Boolean) as string[];
+    const deadline = deadlines.length > 0 ? deadlines.sort()[0] : null;
+    const amount = myItems.reduce((sum, i) => sum + (i.factory_amount ?? 0), 0) || null;
+    const payDates = myItems.map((i) => i.factory_payment_date).filter(Boolean) as string[];
+    const payDate = payDates.length > 0 ? payDates.sort()[0] : null;
+    const payStatuses = myItems.map((i) => i.factory_payment_status).filter(Boolean) as string[];
+    const payStatus = payStatuses.length === 0 ? null : (payStatuses.every((s) => s === payStatuses[0]) ? payStatuses[0] : 'mixed');
+    return { status, deadline, amount, payDate, payStatus };
+  }, [getMyFactoryItems]);
 
   const handleOrderClick = useCallback((orderId: string) => {
     router.push(`/orders/${orderId}`);
@@ -679,80 +722,92 @@ export default function OrdersTab() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm text-gray-900">{getOrderItemCount(order)}</span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.factory_status || 'assigned'}
-                          onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                          disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
-                          className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
-                        >
-                          <option value="assigned">배정완료</option>
-                          <option value="in_progress">작업중</option>
-                          <option value="completed">작업완료</option>
-                          <option value="shipped">출고완료</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-900">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          {formatDateShort(order.deadline)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {editingAmountId === order.id ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={editingAmountValue}
-                              onChange={(e) => setEditingAmountValue(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleFactoryAmountSave(order.id);
-                                if (e.key === 'Escape') setEditingAmountId(null);
-                              }}
-                              autoFocus
-                              className="w-24 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              placeholder="금액 입력"
-                            />
-                            <button
-                              onClick={() => handleFactoryAmountSave(order.id)}
-                              disabled={savingAmountId === order.id}
-                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                            >
-                              {savingAmountId === order.id ? '...' : '저장'}
-                            </button>
-                            <button
-                              onClick={() => setEditingAmountId(null)}
-                              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
-                            >
-                              취소
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingAmountId(order.id);
-                              setEditingAmountValue(order.factory_amount ? String(order.factory_amount) : '');
-                            }}
-                            className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors"
-                          >
-                            {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '금액 입력'}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-sm text-gray-900">
-                          {formatDateShort(order.factory_payment_date)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getFactoryPaymentStatusColor(
-                            order.factory_payment_status
-                          )}`}
-                        >
-                          {getFactoryPaymentStatusLabel(order.factory_payment_status)}
-                        </span>
-                      </td>
+                      {(() => {
+                        const fSummary = getMyFactorySummary(order);
+                        const fStatus = fSummary.status;
+                        const fDeadline = fSummary.deadline;
+                        const fAmount = fSummary.amount;
+                        const fPayDate = fSummary.payDate;
+                        const fPayStatus = fSummary.payStatus;
+                        return (
+                          <>
+                            <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {fStatus === 'mixed' ? (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getFactoryStatusColor('mixed')}`}>
+                                  {getFactoryStatusLabel('mixed')}
+                                </span>
+                              ) : (
+                                <select
+                                  value={fStatus}
+                                  onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                                  disabled={updatingFactoryStatusId === order.id || fStatus === 'shipped'}
+                                  className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(fStatus)}`}
+                                >
+                                  <option value="assigned">배정완료</option>
+                                  <option value="in_progress">작업중</option>
+                                  <option value="completed">작업완료</option>
+                                  <option value="shipped">출고완료</option>
+                                </select>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1 text-sm text-gray-900">
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                {formatKstDateShort(fDeadline)}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {editingAmountId === order.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={editingAmountValue}
+                                    onChange={(e) => setEditingAmountValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleFactoryAmountSave(order.id);
+                                      if (e.key === 'Escape') setEditingAmountId(null);
+                                    }}
+                                    autoFocus
+                                    className="w-24 px-2 py-1 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="금액 입력"
+                                  />
+                                  <button
+                                    onClick={() => handleFactoryAmountSave(order.id)}
+                                    disabled={savingAmountId === order.id}
+                                    className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {savingAmountId === order.id ? '...' : '저장'}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingAmountId(null)}
+                                    className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                                  >
+                                    취소
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setEditingAmountId(order.id);
+                                    setEditingAmountValue(fAmount ? String(fAmount) : '');
+                                  }}
+                                  className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors"
+                                >
+                                  {fAmount ? `${fAmount.toLocaleString()}원` : '금액 입력'}
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="text-sm text-gray-900">{formatKstDateShort(fPayDate)}</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getFactoryPaymentStatusColor(fPayStatus)}`}>
+                                {getFactoryPaymentStatusLabel(fPayStatus)}
+                              </span>
+                            </td>
+                          </>
+                        );
+                      })()}
                     </>
                   ) : (
                     // Admin row - full info
@@ -782,7 +837,7 @@ export default function OrdersTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-xs text-gray-600">
-                          {new Date(order.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                          {formatKstMonthDay(order.created_at)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -811,30 +866,45 @@ export default function OrdersTab() {
                           {{pending:'입금대기',completed:'결제완료',failed:'결제실패',refunded:'환불'}[order.payment_status] || order.payment_status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`text-sm text-gray-900 ${getFactoryLabel(order.assigned_manufacturer_id) === '미배정' && 'text-red-500'}`}>
-                          {getFactoryLabel(order.assigned_manufacturer_id)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {order.assigned_manufacturer_id ? (
-                          <select
-                            value={order.factory_status || 'pending'}
-                            onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                            disabled={updatingFactoryStatusId === order.id}
-                            className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
-                          >
-                            <option value="pending">대기중</option>
-                            <option value="assigned">배정완료</option>
-                            <option value="in_progress">작업중</option>
-                            <option value="completed">작업완료</option>
-                            <option value="shipped">출고완료</option>
-                            <option value="cancelled">취소</option>
-                          </select>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </td>
+                      {(() => {
+                        const factoryLabel = getOrderFactoryLabel(order);
+                        const factoryStatus = getOrderFactoryStatus(order);
+                        const hasFactory = factoryLabel !== '미배정';
+                        return (
+                          <>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`text-sm text-gray-900 ${!hasFactory && 'text-red-500'}`}>
+                                {factoryLabel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              {hasFactory ? (
+                                factoryStatus === 'mixed' ? (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getFactoryStatusColor('mixed')}`}>
+                                    {getFactoryStatusLabel('mixed')}
+                                  </span>
+                                ) : (
+                                  <select
+                                    value={factoryStatus || 'pending'}
+                                    onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                                    disabled={updatingFactoryStatusId === order.id}
+                                    className={`px-2 py-1 rounded-md text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${getFactoryStatusColor(factoryStatus)}`}
+                                  >
+                                    <option value="pending">대기중</option>
+                                    <option value="assigned">배정완료</option>
+                                    <option value="in_progress">작업중</option>
+                                    <option value="completed">작업완료</option>
+                                    <option value="shipped">출고완료</option>
+                                    <option value="cancelled">취소</option>
+                                  </select>
+                                )
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </td>
+                          </>
+                        );
+                      })()}
                       <td className="px-4 py-3 whitespace-nowrap">
                         {(() => {
                           const ps = getPurchaseOrderSummary(order);
@@ -924,68 +994,88 @@ export default function OrdersTab() {
                           </div>
                           <div className="text-[11px] font-mono text-blue-600 truncate">{order.id}</div>
                         </div>
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <select
-                            value={order.factory_status || 'assigned'}
-                            onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                            disabled={updatingFactoryStatusId === order.id || order.factory_status === 'shipped'}
-                            className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
-                          >
-                            <option value="assigned">배정완료</option>
-                            <option value="in_progress">작업중</option>
-                            <option value="completed">작업완료</option>
-                            <option value="shipped">출고완료</option>
-                          </select>
-                        </div>
+                        {(() => {
+                          const mSummary = getMyFactorySummary(order);
+                          const mfs = mSummary.status;
+                          return mfs === 'mixed' ? (
+                            <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${getFactoryStatusColor('mixed')}`}>
+                              {getFactoryStatusLabel('mixed')}
+                            </span>
+                          ) : (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <select
+                                value={mfs}
+                                onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                                disabled={updatingFactoryStatusId === order.id || mfs === 'shipped'}
+                                className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(mfs)}`}
+                              >
+                                <option value="assigned">배정완료</option>
+                                <option value="in_progress">작업중</option>
+                                <option value="completed">작업완료</option>
+                                <option value="shipped">출고완료</option>
+                              </select>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                     <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
                     <span>수량: {getOrderItemCount(order)}</span>
-                    <span onClick={(e) => e.stopPropagation()}>
-                      {editingAmountId === order.id ? (
-                        <span className="inline-flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={editingAmountValue}
-                            onChange={(e) => setEditingAmountValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleFactoryAmountSave(order.id);
-                              if (e.key === 'Escape') setEditingAmountId(null);
-                            }}
-                            autoFocus
-                            className="w-20 px-1.5 py-0.5 text-[11px] border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="금액"
-                          />
-                          <button
-                            onClick={() => handleFactoryAmountSave(order.id)}
-                            disabled={savingAmountId === order.id}
-                            className="px-1.5 py-0.5 text-[10px] bg-blue-600 text-white rounded disabled:opacity-50"
-                          >
-                            {savingAmountId === order.id ? '...' : '저장'}
-                          </button>
+                    {(() => {
+                      const mfa = getMyFactorySummary(order).amount;
+                      return (
+                        <span onClick={(e) => e.stopPropagation()}>
+                          {editingAmountId === order.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={editingAmountValue}
+                                onChange={(e) => setEditingAmountValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleFactoryAmountSave(order.id);
+                                  if (e.key === 'Escape') setEditingAmountId(null);
+                                }}
+                                autoFocus
+                                className="w-20 px-1.5 py-0.5 text-[11px] border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="금액"
+                              />
+                              <button
+                                onClick={() => handleFactoryAmountSave(order.id)}
+                                disabled={savingAmountId === order.id}
+                                className="px-1.5 py-0.5 text-[10px] bg-blue-600 text-white rounded disabled:opacity-50"
+                              >
+                                {savingAmountId === order.id ? '...' : '저장'}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingAmountId(order.id);
+                                setEditingAmountValue(mfa ? String(mfa) : '');
+                              }}
+                              className="font-medium text-gray-700 hover:text-blue-600 hover:underline"
+                            >
+                              {mfa ? `${mfa.toLocaleString()}원` : '금액 입력'}
+                            </button>
+                          )}
                         </span>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setEditingAmountId(order.id);
-                            setEditingAmountValue(order.factory_amount ? String(order.factory_amount) : '');
-                          }}
-                          className="font-medium text-gray-700 hover:text-blue-600 hover:underline"
-                        >
-                          {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '금액 입력'}
-                        </button>
-                      )}
-                    </span>
+                      );
+                    })()}
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />마감: {formatDateShort(order.deadline)}</span>
-                    <span>결제: {formatDateShort(order.factory_payment_date)}</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getFactoryPaymentStatusColor(order.factory_payment_status)}`}>
-                      {getFactoryPaymentStatusLabel(order.factory_payment_status)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const mSummary3 = getMyFactorySummary(order);
+                    return (
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-400">
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />마감: {formatKstDateShort(mSummary3.deadline)}</span>
+                        <span>결제: {formatKstDateShort(mSummary3.payDate)}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getFactoryPaymentStatusColor(mSummary3.payStatus)}`}>
+                          {getFactoryPaymentStatusLabel(mSummary3.payStatus)}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 /* Admin mobile card */
@@ -1024,25 +1114,40 @@ export default function OrdersTab() {
                     })()}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.created_at)}</span>
-                    <span className={getFactoryLabel(order.assigned_manufacturer_id) === '미배정' ? 'text-red-500' : ''}>{getFactoryLabel(order.assigned_manufacturer_id)}</span>
-                    {order.assigned_manufacturer_id && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.factory_status || 'pending'}
-                          onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
-                          disabled={updatingFactoryStatusId === order.id}
-                          className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(order.factory_status)}`}
-                        >
-                          <option value="pending">대기중</option>
-                          <option value="assigned">배정완료</option>
-                          <option value="in_progress">작업중</option>
-                          <option value="completed">작업완료</option>
-                          <option value="shipped">출고완료</option>
-                          <option value="cancelled">취소</option>
-                        </select>
-                      </div>
-                    )}
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatKstDateLong(order.created_at)}</span>
+                    {(() => {
+                      const fl = getOrderFactoryLabel(order);
+                      const fs = getOrderFactoryStatus(order);
+                      const hasF = fl !== '미배정';
+                      return (
+                        <>
+                          <span className={!hasF ? 'text-red-500' : ''}>{fl}</span>
+                          {hasF && (
+                            fs === 'mixed' ? (
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${getFactoryStatusColor('mixed')}`}>
+                                {getFactoryStatusLabel('mixed')}
+                              </span>
+                            ) : (
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={fs || 'pending'}
+                                  onChange={(e) => handleFactoryStatusChange(order.id, e.target.value)}
+                                  disabled={updatingFactoryStatusId === order.id}
+                                  className={`px-1.5 py-0.5 rounded text-[11px] font-medium border-0 cursor-pointer disabled:opacity-60 ${getFactoryStatusColor(fs)}`}
+                                >
+                                  <option value="pending">대기중</option>
+                                  <option value="assigned">배정완료</option>
+                                  <option value="in_progress">작업중</option>
+                                  <option value="completed">작업완료</option>
+                                  <option value="shipped">출고완료</option>
+                                  <option value="cancelled">취소</option>
+                                </select>
+                              </div>
+                            )
+                          )}
+                        </>
+                      );
+                    })()}
                     <span>{order.shipping_method === 'domestic' ? '국내배송' : order.shipping_method === 'international' ? '해외배송' : '픽업'}{order.shipping_method !== 'pickup' && order.address_line_1 ? ` · ${order.address_line_1}` : ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">

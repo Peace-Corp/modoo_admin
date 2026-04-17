@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import type { InquiryRecord, InquiryStatus, InquiryReplyRecord } from './types';
 import { formatDate, getStatusStyle, getStatusLabel, isToday } from './utils';
+import { formatKstDateOnly } from '@/lib/kst';
 
 export default function InquiriesSection() {
   const { data: inquiries = [], error: swrError, isLoading: loading, mutate } = useSWR<InquiryRecord[]>('/api/admin/inquiries');
@@ -253,7 +254,7 @@ export default function InquiriesSection() {
                           {inquiry.desired_date && (
                             <div>
                               <span className="text-gray-500">착용희망일</span>
-                              <p className="font-medium text-gray-900">{new Date(inquiry.desired_date).toLocaleDateString('ko-KR')}</p>
+                              <p className="font-medium text-gray-900">{formatKstDateOnly(inquiry.desired_date)}</p>
                             </div>
                           )}
                           {inquiry.expected_qty && (

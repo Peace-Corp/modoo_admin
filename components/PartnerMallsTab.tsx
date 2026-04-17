@@ -12,6 +12,7 @@ import {
   Package,
 } from 'lucide-react';
 import { PartnerMall } from '@/types/types';
+import { formatKstDateOnly } from '@/lib/kst';
 import PartnerMallCreator from './partner-malls/PartnerMallCreator';
 
 export default function PartnerMallsTab() {
@@ -265,7 +266,7 @@ export default function PartnerMallsTab() {
                       </button>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-sm">
-                      {new Date(mall.created_at).toLocaleDateString('ko-KR')}
+                      {formatKstDateOnly(mall.created_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -317,7 +318,7 @@ export default function PartnerMallsTab() {
                         <Package className="w-3 h-3" />
                         {mall.partner_mall_products?.length || 0}개
                       </span>
-                      <span>{new Date(mall.created_at).toLocaleDateString('ko-KR')}</span>
+                      <span>{formatKstDateOnly(mall.created_at)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">

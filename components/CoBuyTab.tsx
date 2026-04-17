@@ -9,6 +9,7 @@ import AdminCoBuyCreator from './cobuy/AdminCoBuyCreator';
 import CoBuyParticipantModal, { ParticipantFormData } from './cobuy/CoBuyParticipantModal';
 import CoBuyRefundModal from './cobuy/CoBuyRefundModal';
 import { addParticipantLineItemsToSizeCounts } from '@/lib/cobuyParticipantSizes';
+import { formatKstDateLong, formatKstDateShort } from '@/lib/kst';
 
 /** 고객 앱(modoo_app) 공개 URL. 배포 도메인이 다르면 `NEXT_PUBLIC_CUSTOMER_SITE_URL` 설정 */
 function getCustomerSiteOrigin(): string {
@@ -63,16 +64,8 @@ const pickupStatusColors: Record<string, string> = {
   picked_up: 'bg-green-100 text-green-800',
 };
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const formatDate = (dateString?: string | null) =>
+  dateString ? formatKstDateLong(dateString) : '-';
 
 const formatCurrency = (value?: number | null) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-';
@@ -839,7 +832,7 @@ export default function CoBuyTab() {
                                 </div>
                               </td>
                               <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
-                                {new Date(participant.joined_at).toLocaleDateString('ko-KR')}
+                                {formatKstDateShort(participant.joined_at)}
                               </td>
                               <td className="px-3 py-3">
                                 <div className="flex items-center justify-center gap-1">
@@ -927,7 +920,7 @@ export default function CoBuyTab() {
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] text-gray-400">
-                              {new Date(participant.joined_at).toLocaleDateString('ko-KR')}
+                              {formatKstDateShort(participant.joined_at)}
                             </span>
                             <div className="flex items-center gap-1">
                               <button

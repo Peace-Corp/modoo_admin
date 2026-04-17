@@ -7,6 +7,7 @@ import { ChevronLeft, Palette, User, Calendar, Package, Grid3x3, Download, Loade
 import SingleSideCanvas from './canvas/SingleSideCanvas';
 import { useCanvasStore } from '@/store/useCanvasStore';
 import { Canvas as FabricCanvas } from 'fabric';
+import { formatKstDateLong } from '@/lib/kst';
 
 type ImageUrlEntry = { url: string; path?: string; uploadedAt?: string };
 type ImageUrlsBySide = Record<string, ImageUrlEntry[]>;
@@ -1158,16 +1159,6 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
     }
   }, [getAppliedProductColorHex, design.canvas_state, design.color_selections, product, productColors]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   if (!mounted || loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1386,11 +1377,11 @@ export default function DesignDetail({ design, onBack }: DesignDetailProps) {
             <div className="space-y-2">
               <div className="flex items-start gap-2">
                 <span className="text-sm text-gray-500 shrink-0 w-16">생성일:</span>
-                <span className="text-sm text-gray-900">{formatDate(design.created_at)}</span>
+                <span className="text-sm text-gray-900">{formatKstDateLong(design.created_at)}</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-sm text-gray-500 shrink-0 w-16">수정일:</span>
-                <span className="text-sm text-gray-900">{formatDate(design.updated_at)}</span>
+                <span className="text-sm text-gray-900">{formatKstDateLong(design.updated_at)}</span>
               </div>
             </div>
           </div>

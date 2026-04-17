@@ -15,6 +15,7 @@ import {
   Trash2,
   Eye,
 } from 'lucide-react';
+import { formatKstDateShort, formatKstDateTimeMedium } from '@/lib/kst';
 
 type FilterStatus = 'all' | 'active' | 'expired' | 'inactive';
 
@@ -268,25 +269,11 @@ export default function CouponsTab() {
     setShowEditModal(true);
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateString: string | null) =>
+    dateString ? formatKstDateShort(dateString) : '-';
 
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDateTime = (dateString: string | null) =>
+    dateString ? formatKstDateTimeMedium(dateString) : '-';
 
   const getStatusBadge = (coupon: Coupon) => {
     const isExpired = coupon.expires_at && new Date(coupon.expires_at) < new Date();

@@ -5,18 +5,15 @@ import Link from 'next/link';
 import useSWR, { mutate } from 'swr';
 import { Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
 import { DesignTemplate } from '@/types/types';
+import { formatKstDateTimeMedium } from '@/lib/kst';
 
 const fetcher = (url: string) => fetch(url).then(r => {
   if (!r.ok) throw new Error(`API error: ${r.status}`);
   return r.json();
 });
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-};
+const formatDate = (dateString?: string | null) =>
+  dateString ? formatKstDateTimeMedium(dateString) : '-';
 
 // Fetch products for display names
 function useProducts() {

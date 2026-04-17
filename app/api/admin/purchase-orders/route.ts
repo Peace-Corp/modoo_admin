@@ -45,8 +45,10 @@ export async function GET(request: Request) {
       .select(`
         id, order_id, product_id, product_title, design_title, quantity, item_options,
         thumbnail_url, purchase_order_status, purchase_ordered_at, created_at,
+        assigned_manufacturer_id,
         products(product_code),
-        orders!inner(id, customer_name, customer_email, order_status, assigned_manufacturer_id, created_at, manufacturers:manufacturers(id, name, address))
+        manufacturers(id, name, address),
+        orders!inner(id, customer_name, customer_email, order_status, created_at)
       `)
       .neq('orders.order_status', 'cancelled')
       .order('created_at', { ascending: false });

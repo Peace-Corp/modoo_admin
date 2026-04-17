@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Product, CoBuyCustomField, CoBuyPricingTier, CoBuySession } from '@/types/types';
 import CustomFieldBuilder from './CustomFieldBuilder';
+import { formatDatetimeLocalKst } from '@/lib/kst';
 
 interface AdminCoBuyFormProps {
   product: Product | null;
@@ -182,11 +183,9 @@ export default function AdminCoBuyForm({
     const oneWeekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-    const formatDate = (date: Date) => date.toISOString().slice(0, 16);
-
-    setStartDate(formatDate(now));
-    setEndDate(formatDate(oneWeekLater));
-    setReceiveByDate(formatDate(twoWeeksLater));
+    setStartDate(formatDatetimeLocalKst(now));
+    setEndDate(formatDatetimeLocalKst(oneWeekLater));
+    setReceiveByDate(formatDatetimeLocalKst(twoWeeksLater));
   }, []);
 
   const handleUserSearch = async () => {

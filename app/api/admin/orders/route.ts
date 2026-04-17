@@ -45,38 +45,41 @@ export async function GET(request: Request) {
     // Factory users: sort by deadline (마감일), Admin users: sort by created_at
     const isFactoryUser = profile.role === 'factory';
 
-    // Select only fields needed for the list view, include order_items count/status
+    // Factory fields are now on order_items, include them in the join
     const selectFields = isFactoryUser
-      ? `id, order_category, order_status, factory_status, assigned_manufacturer_id, deadline, factory_amount, factory_payment_date, factory_payment_status, customer_note, attachment_urls, created_at, order_items(id, design_title, thumbnail_url)`
-      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, assigned_manufacturer_id, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, deadline, factory_status, factory_amount, factory_payment_date, factory_payment_status, refund_reason, customer_note, attachment_urls, notes, original_amount, custom_unit_price, admin_discount, admin_surcharge, coupon_discount, applied_coupon_id, pricing_note, payment_link_token, share_token, order_items(id, purchase_order_status, design_title)`;
+      ? `id, order_category, order_status, customer_note, attachment_urls, created_at, order_items!inner(id, design_title, thumbnail_url, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)`
+      : `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, tracking_number, tracking_carrier, logen_registered_at, logen_slip_printed, refund_reason, customer_note, attachment_urls, notes, original_amount, custom_unit_price, admin_discount, admin_surcharge, coupon_discount, applied_coupon_id, pricing_note, payment_link_token, share_token, order_items(id, purchase_order_status, design_title, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)`;
 
     let query = adminClient.from('orders').select(selectFields as string);
 
-    // Filter by specific orderId if provided
     if (orderId) {
       query = query.eq('id', orderId);
-    }
-
-    if (isFactoryUser) {
-      // For factory users, sort by deadline (nulls last to show orders with deadlines first)
-      query = query.order('deadline', { ascending: true, nullsFirst: false });
-    } else {
-      // For admin users, sort by created_at (newest first)
-      query = query.order('created_at', { ascending: false });
     }
 
     if (isFactoryUser) {
       if (!profile.manufacturer_id) {
         return NextResponse.json({ data: [] });
       }
-      query = query.eq('assigned_manufacturer_id', profile.manufacturer_id);
-    } else if (profile.role === 'admin' && factoryId) {
-      query = query.eq('assigned_manufacturer_id', factoryId);
+      // Filter orders that have at least one item assigned to this factory
+      query = query.eq('order_items.assigned_manufacturer_id', profile.manufacturer_id);
+      query = query.order('created_at', { ascending: false });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    if (profile.role === 'admin' && factoryId) {
+      // Admin filtering by a specific factory — use inner join filter
+      query = adminClient.from('orders').select(
+        `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, refund_reason, customer_note, attachment_urls, notes, original_amount, custom_unit_price, admin_discount, admin_surcharge, coupon_discount, applied_coupon_id, pricing_note, payment_link_token, share_token, order_items!inner(id, purchase_order_status, design_title, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)` as string
+      ).eq('order_items.assigned_manufacturer_id', factoryId).order('created_at', { ascending: false });
+      if (orderId) {
+        query = query.eq('id', orderId);
+      }
     }
 
     if (status !== 'all') {
-      if (profile.role === 'factory') {
-        query = query.eq('factory_status', status);
+      if (isFactoryUser) {
+        query = query.eq('order_items.factory_status', status);
       } else {
         query = query.eq('order_status', status);
       }
@@ -85,11 +88,13 @@ export async function GET(request: Request) {
     const { data, error } = await query;
 
     if (error) {
+      console.error('Orders GET supabase error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ data: data || [] });
   } catch (error) {
+    console.error('Orders GET error:', error);
     const message = error instanceof Error ? error.message : '주문 데이터를 불러오지 못했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -136,10 +141,11 @@ export async function PATCH(request: Request) {
 
     const adminClient = createAdminClient();
 
-    // Factory users can update factory_status and factory_amount on their own orders
+    // Factory users can update factory_status and factory_amount on their own items
     if (isFactoryUser) {
       const factoryStatusInput = payload?.factoryStatus;
       const factoryAmountInput = payload?.factoryAmount;
+      const orderItemId = payload?.orderItemId;
 
       if (!factoryStatusInput && factoryAmountInput === undefined) {
         return NextResponse.json({ error: '변경할 항목이 없습니다.' }, { status: 400 });
@@ -152,66 +158,98 @@ export async function PATCH(request: Request) {
         }
       }
 
-      // Verify order belongs to this factory
-      const { data: existingOrder, error: orderCheckError } = await adminClient
-        .from('orders')
-        .select('id, assigned_manufacturer_id, order_status, customer_name, customer_email')
-        .eq('id', orderId)
-        .single();
+      // Verify this factory has items assigned in this order
+      const { data: factoryItems, error: itemCheckError } = await adminClient
+        .from('order_items')
+        .select('id, assigned_manufacturer_id')
+        .eq('order_id', orderId)
+        .eq('assigned_manufacturer_id', profile.manufacturer_id);
 
-      if (orderCheckError || !existingOrder) {
-        return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
-      }
-
-      if (existingOrder.assigned_manufacturer_id !== profile.manufacturer_id) {
+      if (itemCheckError || !factoryItems || factoryItems.length === 0) {
         return NextResponse.json({ error: '이 주문에 대한 권한이 없습니다.' }, { status: 403 });
       }
 
-      const updateData: Record<string, unknown> = {
+      const itemUpdateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
 
       if (factoryStatusInput) {
-        updateData.factory_status = factoryStatusInput;
-        updateData.order_status = factoryStatusInput === 'shipped' ? 'shipping' : 'in_production';
+        itemUpdateData.factory_status = factoryStatusInput;
       }
-
       if (factoryAmountInput !== undefined) {
-        updateData.factory_amount = factoryAmountInput;
+        itemUpdateData.factory_amount = factoryAmountInput;
       }
 
-      const { data, error } = await adminClient
+      // Update specific item or all items assigned to this factory in this order
+      let itemQuery = adminClient
+        .from('order_items')
+        .update(itemUpdateData)
+        .eq('order_id', orderId)
+        .eq('assigned_manufacturer_id', profile.manufacturer_id);
+
+      if (orderItemId) {
+        itemQuery = itemQuery.eq('id', orderItemId);
+      }
+
+      const { error: itemUpdateError } = await itemQuery;
+
+      if (itemUpdateError) {
+        return NextResponse.json({ error: itemUpdateError.message }, { status: 500 });
+      }
+
+      // Sync order-level status based on all items' factory statuses
+      const { data: allItems } = await adminClient
+        .from('order_items')
+        .select('factory_status')
+        .eq('order_id', orderId);
+
+      const { data: existingOrder } = await adminClient
         .from('orders')
-        .update(updateData)
+        .select('id, order_status, customer_name, customer_email, total_amount, payment_method')
         .eq('id', orderId)
-        .select()
         .single();
 
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+      if (existingOrder && allItems) {
+        const allShipped = allItems.every((i) => i.factory_status === 'shipped');
+        const anyInProgress = allItems.some((i) => ['assigned', 'in_progress', 'completed'].includes(i.factory_status || ''));
+        let newOrderStatus: string | null = null;
+        if (allShipped) {
+          newOrderStatus = 'shipping';
+        } else if (anyInProgress || factoryStatusInput) {
+          newOrderStatus = 'in_production';
+        }
+
+        if (newOrderStatus && newOrderStatus !== existingOrder.order_status) {
+          await adminClient.from('orders').update({ order_status: newOrderStatus, updated_at: new Date().toISOString() }).eq('id', orderId);
+
+          if (existingOrder.customer_email) {
+            const { data: orderItems } = await adminClient
+              .from('order_items')
+              .select('product_title, quantity, price_per_item')
+              .eq('order_id', orderId);
+
+            sendOrderStatusNotification({
+              orderId,
+              customerName: existingOrder.customer_name || '고객',
+              customerEmail: existingOrder.customer_email,
+              newStatus: newOrderStatus as any,
+              previousStatus: existingOrder.order_status,
+              items: orderItems?.map(i => ({ product_title: i.product_title, quantity: i.quantity, price_per_item: i.price_per_item })) || [],
+              totalAmount: existingOrder.total_amount ?? undefined,
+              paymentMethod: existingOrder.payment_method ?? undefined,
+            }).catch((err) => console.error('Order status notification (factory) failed:', err));
+          }
+        }
       }
 
-      // Notify customer when factory changes status (e.g. shipped -> shipping)
-      const newOrderStatus = updateData.order_status as string | undefined;
-      if (newOrderStatus && newOrderStatus !== existingOrder.order_status && existingOrder.customer_email) {
-        const { data: orderItems } = await adminClient
-          .from('order_items')
-          .select('product_title, quantity, price_per_item')
-          .eq('order_id', orderId);
+      // Return updated order with items
+      const { data: updatedOrder } = await adminClient
+        .from('orders')
+        .select('*, order_items(id, design_title, thumbnail_url, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)')
+        .eq('id', orderId)
+        .single();
 
-        sendOrderStatusNotification({
-          orderId,
-          customerName: existingOrder.customer_name || '고객',
-          customerEmail: existingOrder.customer_email,
-          newStatus: newOrderStatus as any,
-          previousStatus: existingOrder.order_status,
-          items: orderItems?.map(i => ({ product_title: i.product_title, quantity: i.quantity, price_per_item: i.price_per_item })) || [],
-          totalAmount: data?.total_amount ?? undefined,
-          paymentMethod: data?.payment_method ?? undefined,
-        }).catch((err) => console.error('Order status notification (factory) failed:', err));
-      }
-
-      return NextResponse.json({ data });
+      return NextResponse.json({ data: updatedOrder });
     }
 
     // Admin flow below
@@ -264,12 +302,9 @@ export async function PATCH(request: Request) {
 
     const { data: existingOrder } = await adminClient
       .from('orders')
-      .select('assigned_manufacturer_id, customer_note, share_token, order_status, payment_status, customer_name, customer_email')
+      .select('customer_note, share_token, order_status, payment_status, customer_name, customer_email')
       .eq('id', orderId)
       .single();
-
-    const previousManufacturerId = existingOrder?.assigned_manufacturer_id ?? null;
-    const isNewFactoryAssignment = manufacturerId !== null && manufacturerId !== previousManufacturerId;
 
     // Handle payment_status update (manual payment confirmation)
     const paymentStatusInput = payload?.payment_status ?? null;
@@ -294,10 +329,6 @@ export async function PATCH(request: Request) {
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-
-    if ('factoryId' in payload) {
-      updateData.assigned_manufacturer_id = manufacturerId;
-    }
 
     if (trackingNumberInput !== null) {
       updateData.tracking_number = trackingNumberInput;
@@ -419,35 +450,61 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Add factory-specific fields if provided
-    if (deadlineInput !== undefined) {
-      if (deadlineInput) {
-        const date = new Date(deadlineInput);
-        updateData.deadline = isNaN(date.getTime()) ? null : date.toISOString();
-      } else {
-        updateData.deadline = null;
+    // Factory-specific fields now go to order_items, not orders
+    const hasFactoryItemUpdates = deadlineInput !== undefined || factoryAmountInput !== undefined ||
+      factoryPaymentDateInput !== undefined || factoryPaymentStatusInput !== undefined ||
+      factoryStatusInput !== null || manufacturerId !== null;
+
+    if (hasFactoryItemUpdates) {
+      const itemUpdateData: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (manufacturerId !== null) {
+        itemUpdateData.assigned_manufacturer_id = manufacturerId;
+        if (!factoryStatusInput) {
+          itemUpdateData.factory_status = 'assigned';
+        }
       }
-    }
-    if (factoryAmountInput !== undefined) {
-      updateData.factory_amount = factoryAmountInput;
-    }
-    if (factoryPaymentDateInput !== undefined) {
-      if (factoryPaymentDateInput) {
-        const date = new Date(factoryPaymentDateInput);
-        updateData.factory_payment_date = isNaN(date.getTime()) ? null : date.toISOString();
-      } else {
-        updateData.factory_payment_date = null;
+
+      if (deadlineInput !== undefined) {
+        if (deadlineInput) {
+          const date = new Date(deadlineInput);
+          itemUpdateData.deadline = isNaN(date.getTime()) ? null : date.toISOString();
+        } else {
+          itemUpdateData.deadline = null;
+        }
       }
+      if (factoryAmountInput !== undefined) {
+        itemUpdateData.factory_amount = factoryAmountInput;
+      }
+      if (factoryPaymentDateInput !== undefined) {
+        if (factoryPaymentDateInput) {
+          const date = new Date(factoryPaymentDateInput);
+          itemUpdateData.factory_payment_date = isNaN(date.getTime()) ? null : date.toISOString();
+        } else {
+          itemUpdateData.factory_payment_date = null;
+        }
+      }
+      if (factoryPaymentStatusInput !== undefined) {
+        itemUpdateData.factory_payment_status = factoryPaymentStatusInput;
+      }
+      if (factoryStatusInput !== null) {
+        itemUpdateData.factory_status = factoryStatusInput;
+      }
+
+      // Update all order_items for this order
+      await adminClient
+        .from('order_items')
+        .update(itemUpdateData)
+        .eq('order_id', orderId);
     }
-    if (factoryPaymentStatusInput !== undefined) {
-      updateData.factory_payment_status = factoryPaymentStatusInput;
-    }
+
+    // Handle order_status updates
     if (factoryStatusInput !== null) {
-      updateData.factory_status = factoryStatusInput;
       if (orderStatusInput !== null) {
         updateData.order_status = orderStatusInput;
       } else {
-        // Auto-sync order_status when only factoryStatus is provided
         if (factoryStatusInput === 'shipped') {
           updateData.order_status = 'shipping';
         } else if (['assigned', 'in_progress', 'completed'].includes(factoryStatusInput)) {
@@ -469,63 +526,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (isNewFactoryAssignment && manufacturerInfo?.email) {
-      const { data: items } = await adminClient
-        .from('order_items')
-        .select('id, product_id, product_title, design_title, quantity, thumbnail_url')
-        .eq('order_id', orderId)
-        .order('created_at', { ascending: true });
-
-      let finalShareToken = data?.share_token ?? existingOrder?.share_token ?? null;
-      if (!finalShareToken) {
-        finalShareToken = randomBytes(16).toString('hex');
-        await adminClient.from('orders').update({ share_token: finalShareToken }).eq('id', orderId);
-      }
-
-      const emailItems = await Promise.all(
-        (items || []).map(async (item) => {
-          let publicUrl = item.thumbnail_url;
-          if (publicUrl && publicUrl.startsWith('data:')) {
-            try {
-              const res = await fetch(publicUrl);
-              const blob = await res.blob();
-              const ext = blob.type.split('/')[1] || 'png';
-              const fileName = `email-thumbnails/${orderId}/${item.id}.${ext}`;
-              const { error: upErr } = await adminClient.storage
-                .from('user-designs')
-                .upload(fileName, blob, { contentType: blob.type, upsert: true });
-              if (!upErr) {
-                const { data: urlData } = adminClient.storage.from('user-designs').getPublicUrl(fileName);
-                publicUrl = urlData.publicUrl;
-              }
-            } catch { /* keep null */ }
-          }
-          return {
-            id: item.id,
-            productId: item.product_id,
-            productTitle: item.product_title,
-            designTitle: item.design_title,
-            quantity: item.quantity,
-            thumbnailUrl: publicUrl,
-          };
-        })
-      );
-
-      const reqOrigin = new URL(request.url).origin;
-      const emailAppUrl = process.env.NEXT_PUBLIC_APP_URL || reqOrigin;
-
-      sendFactoryAssignmentEmail({
-        factoryName: manufacturerInfo.name,
-        factoryEmail: manufacturerInfo.email,
-        orderId,
-        deadline: (updateData.deadline as string | null) ?? deadlineInput ?? null,
-        factoryAmount: factoryAmountInput ?? null,
-        customerNote: existingOrder?.customer_note ?? null,
-        shareToken: finalShareToken,
-        appUrl: emailAppUrl,
-        orderItems: emailItems,
-      }).catch((err) => console.error('Factory assignment email failed:', err));
-    }
+    // Factory assignment email is now handled by the factory-allocation API endpoint
 
     // Fetch order items for notification emails
     const resolvedOrderStatus = (updateData.order_status as string) ?? existingOrder?.order_status;
@@ -576,9 +577,16 @@ export async function PATCH(request: Request) {
       }).catch((err) => console.error('Payment confirmation notification failed:', err));
     }
 
-    return NextResponse.json({ data });
+    // Re-fetch order with items to include factory fields
+    const { data: finalOrder } = await adminClient
+      .from('orders')
+      .select('*, order_items(id, purchase_order_status, design_title, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)')
+      .eq('id', orderId)
+      .single();
+
+    return NextResponse.json({ data: finalOrder || data });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '공장 배정에 실패했습니다.';
+    const message = error instanceof Error ? error.message : '주문 업데이트에 실패했습니다.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

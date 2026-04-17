@@ -5,6 +5,7 @@ import { useMemo, useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { Factory, Profile, Coupon } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatKstDateLong } from '@/lib/kst';
 
 interface PaginatedResponse {
   data: Profile[];
@@ -181,16 +182,6 @@ export default function UsersTab() {
       return currentUser.manufacturer_name || '-';
     }
     return '-';
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   // Selection helpers
@@ -489,7 +480,7 @@ export default function UsersTab() {
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1 text-xs text-gray-900">
                       <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                      {formatDate(user.created_at)}
+                      {formatKstDateLong(user.created_at)}
                     </div>
                   </td>
                   {currentUser?.role === 'admin' && (
@@ -570,7 +561,7 @@ export default function UsersTab() {
                   </div>
                   <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-0.5">
                     <Calendar className="w-3 h-3" />
-                    {formatDate(user.created_at)}
+                    {formatKstDateLong(user.created_at)}
                   </div>
                   {currentUser?.role === 'admin' && (
                     <div className="flex items-center gap-2 mt-2 flex-wrap">

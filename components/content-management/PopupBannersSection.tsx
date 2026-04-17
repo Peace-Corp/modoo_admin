@@ -13,11 +13,12 @@ import {
   sortPopupBanners,
   formatDate,
 } from './utils';
+import { formatKstDateOnly, formatDatetimeLocalKst } from '@/lib/kst';
 
 function formatDateInput(dateStr: string | null): string {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toISOString().slice(0, 16);
+    return formatDatetimeLocalKst(new Date(dateStr));
   } catch {
     return '';
   }
@@ -439,13 +440,13 @@ export default function PopupBannersSection() {
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {banner.start_date
-                                ? new Date(banner.start_date).toLocaleDateString('ko-KR')
+                                ? formatKstDateOnly(banner.start_date)
                                 : '시작일 없음'}
                             </div>
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {banner.end_date
-                                ? new Date(banner.end_date).toLocaleDateString('ko-KR')
+                                ? formatKstDateOnly(banner.end_date)
                                 : '종료일 없음'}
                             </div>
                           </>

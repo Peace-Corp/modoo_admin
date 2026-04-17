@@ -16,11 +16,9 @@ import {
   BarChart3,
   Factory,
 } from 'lucide-react';
+import { formatKstDateTimeMedium, formatKstMonthDay } from '@/lib/kst';
 
-type OrderWithManufacturer = Pick<Order, 'id' | 'customer_name' | 'customer_email' | 'order_status' | 'created_at'> & {
-  assigned_manufacturer_id: string | null;
-  manufacturers?: { id: string; name: string; address: string | null } | null;
-};
+type OrderWithManufacturer = Pick<Order, 'id' | 'customer_name' | 'customer_email' | 'order_status' | 'created_at'>;
 
 type PurchaseOrderItemWithOrder = OrderItem & {
   orders: OrderWithManufacturer;
@@ -262,21 +260,10 @@ export default function PurchaseOrdersTab() {
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      month: 'short',
-      day: 'numeric',
-    });
+    return formatKstMonthDay(dateString);
   };
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDateTime = (dateString: string) => formatKstDateTimeMedium(dateString);
 
   if (isLoading) {
     return (
@@ -556,15 +543,25 @@ function OrdersView({
                   {formatDate(order.created_at)}
                 </span>
                 <span className="text-[11px] text-gray-400">{items.length}개 아이템</span>
-                <span className={`inline-flex items-center gap-1 text-[11px] ${order.assigned_manufacturer_id ? 'text-indigo-600' : 'text-red-500'}`}>
-                  <Factory className="w-3 h-3" />
-                  {order.manufacturers?.name || (order.assigned_manufacturer_id ? '공장' : '공장배정전')}
-                  {order.manufacturers?.address && (
-                    <span className="text-gray-400 font-normal truncate max-w-[180px]" title={order.manufacturers.address}>
-                      ({order.manufacturers.address})
+                {(() => {
+                  const factoryIds = [...new Set(items.map((i) => i.assigned_manufacturer_id).filter(Boolean))] as string[];
+                  const factoryNames = items
+                    .filter((i) => i.assigned_manufacturer_id && i.manufacturers)
+                    .map((i) => i.manufacturers!.name);
+                  const uniqueNames = [...new Set(factoryNames)];
+                  const hasFactory = factoryIds.length > 0;
+                  const label = uniqueNames.length === 0
+                    ? (hasFactory ? '공장' : '공장배정전')
+                    : uniqueNames.length === 1
+                    ? uniqueNames[0]
+                    : `${uniqueNames[0]} 외 ${uniqueNames.length - 1}곳`;
+                  return (
+                    <span className={`inline-flex items-center gap-1 text-[11px] ${hasFactory ? 'text-indigo-600' : 'text-red-500'}`}>
+                      <Factory className="w-3 h-3" />
+                      {label}
                     </span>
-                  )}
-                </span>
+                  );
+                })()}
               </div>
               <span
                 className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${

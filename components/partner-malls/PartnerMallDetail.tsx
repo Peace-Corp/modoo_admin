@@ -21,6 +21,7 @@ import { PartnerMall, PartnerMallProduct } from '@/types/types';
 import PartnerMallInfoEditor from './PartnerMallInfoEditor';
 import SingleProductPlacementEditor from './SingleProductPlacementEditor';
 import AddProductsModal from './AddProductsModal';
+import { formatKstDateLong } from '@/lib/kst';
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modoouniform.com';
 
@@ -404,7 +405,7 @@ export default function PartnerMallDetail({
                 </label>
                 <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-gray-800">
                   <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span>{new Date(partnerMall.created_at).toLocaleDateString('ko-KR')}</span>
+                  <span>{formatKstDateLong(partnerMall.created_at)}</span>
                 </div>
               </div>
               <div>
@@ -413,7 +414,7 @@ export default function PartnerMallDetail({
                 </label>
                 <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-gray-800">
                   <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span>{new Date(partnerMall.updated_at).toLocaleDateString('ko-KR')}</span>
+                  <span>{formatKstDateLong(partnerMall.updated_at)}</span>
                 </div>
               </div>
             </div>

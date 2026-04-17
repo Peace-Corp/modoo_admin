@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { randomBytes } from 'crypto';
+import { getKstYYYYMMDD } from '@/lib/kst';
 
 interface CreateOrderVariant {
   sizeLabel: string;
@@ -90,12 +91,9 @@ const requireAdmin = async () => {
 };
 
 const buildOrderId = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const ymd = getKstYYYYMMDD();
   const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `ORDER-${year}${month}${day}-${random}`;
+  return `ORDER-${ymd}-${random}`;
 };
 
 const toNumber = (value: unknown) => {

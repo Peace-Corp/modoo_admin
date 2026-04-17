@@ -8,6 +8,7 @@ import { saveDesign, updateDesign, SaveDesignData } from '@/lib/designService';
 import { parseCanvasState } from '@/lib/downloadUtils';
 import { calculateAllSidesPricing } from '@/app/utils/canvasPricing';
 import { EditorMode } from './useEditorMode';
+import { formatKstDateTimeFull } from '@/lib/kst';
 
 interface UseEditorSaveParams {
   mode: EditorMode;
@@ -103,7 +104,7 @@ export function useEditorSave({
     // Update existing design or create new one
     if (savedDesign?.id) {
       const updateData: Partial<SaveDesignData> = {
-        title: designTitle || savedDesign.title || `디자인 ${new Date().toLocaleString('ko-KR')}`,
+        title: designTitle || savedDesign.title || `디자인 ${formatKstDateTimeFull(new Date())}`,
         productColor,
         canvasState,
         previewImage,
@@ -119,7 +120,7 @@ export function useEditorSave({
     } else {
       const designData: SaveDesignData = {
         productId: product!.id,
-        title: designTitle || `디자인 ${new Date().toLocaleString('ko-KR')}`,
+        title: designTitle || `디자인 ${formatKstDateTimeFull(new Date())}`,
         productColor,
         canvasState,
         previewImage,

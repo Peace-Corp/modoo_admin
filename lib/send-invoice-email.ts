@@ -4,6 +4,7 @@ import { renderInvoicePdfBuffer } from '@/lib/invoice-html-to-pdf';
 import { fetchCompanySealBuffer } from '@/lib/company-seal';
 import { INVOICE_SUPPLIER, type InvoiceEmailParams } from '@/lib/invoice-email';
 import type { InvoiceItem } from '@/types/types';
+import { formatKstDateOnly } from '@/lib/kst';
 
 export type SendInvoiceEmailInput = {
   invoiceNumber: string;
@@ -46,11 +47,7 @@ export async function sendInvoiceEmail(
     attach_bank_account,
   } = input;
 
-  const dateStr = statementDate.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const dateStr = formatKstDateOnly(statementDate);
 
   const pdfParams: InvoiceEmailParams = {
     invoiceNumber,

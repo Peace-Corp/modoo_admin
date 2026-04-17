@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { ChevronLeft, MessageSquare, ExternalLink, Link2, Eye, CheckCircle, XCircle, Send, Copy, Check, Download, FileText } from 'lucide-react';
 import { CoBuyRequest, CoBuyRequestComment, CoBuyRequestStatus, CoBuyRequestAdminStatus } from '@/types/types';
 import '@/lib/curvedText';
+import { formatKstDateTimeMedium, formatKstDateShort } from '@/lib/kst';
 
 const statusLabels: Record<CoBuyRequestStatus, string> = {
   draft: '작성중',
@@ -52,12 +53,8 @@ const fetcher = (url: string) => fetch(url).then(r => {
   return r.json();
 });
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('ko-KR', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-};
+const formatDate = (dateString?: string | null) =>
+  dateString ? formatKstDateTimeMedium(dateString) : '-';
 
 // ============================================================================
 // Freeform Sketch Preview
@@ -410,7 +407,7 @@ export default function CoBuyRequestDetailPage() {
               <div>
                 <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1">희망 수령일</p>
                 <p className="text-sm text-gray-600">
-                  {new Date((request.schedule_preferences as any).receiveByDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {formatKstDateShort((request.schedule_preferences as any).receiveByDate)}
                 </p>
               </div>
             )}

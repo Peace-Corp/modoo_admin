@@ -4,11 +4,19 @@ import { createAdminClient } from '@/lib/supabase-admin';
 import { sendFactoryAssignmentEmail } from '@/lib/gmail';
 import { randomBytes } from 'crypto';
 
+interface ItemAllocation {
+  orderItemId: string;
+  assigned_manufacturer_id: string;
+  factory_amount?: number | null;
+  deadline?: string | null;
+  factory_payment_date?: string | null;
+  factory_payment_status?: string | null;
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const {
       data: { user },
       error: authError,
@@ -18,7 +26,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user profile to check role
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -30,132 +37,159 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      orderId,
-      assigned_manufacturer_id,
-      factory_amount,
-      deadline,
-      factory_payment_date,
-      factory_payment_status,
-    } = body;
+    const { orderId, items } = body as { orderId: string; items: ItemAllocation[] };
 
-    if (!orderId || !assigned_manufacturer_id) {
+    if (!orderId || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
-        { error: 'Order ID and factory ID are required' },
+        { error: 'Order ID and items array are required' },
         { status: 400 }
       );
     }
 
     const adminClient = createAdminClient();
 
-    const { data: existingOrder } = await adminClient
+    // Group items by manufacturer for email notifications
+    const manufacturerItemsMap = new Map<string, ItemAllocation[]>();
+    for (const item of items) {
+      if (!item.orderItemId || !item.assigned_manufacturer_id) continue;
+      const existing = manufacturerItemsMap.get(item.assigned_manufacturer_id) || [];
+      existing.push(item);
+      manufacturerItemsMap.set(item.assigned_manufacturer_id, existing);
+    }
+
+    // Fetch current assignments to detect new assignments
+    const itemIds = items.map((i) => i.orderItemId);
+    const { data: existingItems } = await adminClient
+      .from('order_items')
+      .select('id, assigned_manufacturer_id')
+      .in('id', itemIds);
+
+    const previousAssignments = new Map<string, string | null>();
+    for (const ei of existingItems || []) {
+      previousAssignments.set(ei.id, ei.assigned_manufacturer_id);
+    }
+
+    // Update each item
+    for (const item of items) {
+      const updateData: Record<string, unknown> = {
+        assigned_manufacturer_id: item.assigned_manufacturer_id,
+        factory_status: 'assigned',
+        updated_at: new Date().toISOString(),
+      };
+
+      if (item.factory_amount !== undefined) {
+        updateData.factory_amount = item.factory_amount;
+      }
+      if (item.deadline !== undefined) {
+        updateData.deadline = item.deadline;
+      }
+      if (item.factory_payment_date !== undefined) {
+        updateData.factory_payment_date = item.factory_payment_date;
+      }
+      if (item.factory_payment_status !== undefined) {
+        updateData.factory_payment_status = item.factory_payment_status || 'pending';
+      }
+
+      await adminClient
+        .from('order_items')
+        .update(updateData)
+        .eq('id', item.orderItemId);
+    }
+
+    // Also update order status to in_production if not already
+    await adminClient
       .from('orders')
-      .select('assigned_manufacturer_id, customer_note, share_token')
+      .update({ order_status: 'in_production', updated_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .in('order_status', ['payment_completed']);
+
+    // Send email notifications per manufacturer (only for new assignments)
+    const { data: orderData } = await adminClient
+      .from('orders')
+      .select('customer_note, share_token')
       .eq('id', orderId)
       .single();
 
-    const previousManufacturerId = existingOrder?.assigned_manufacturer_id ?? null;
-    const isNewFactoryAssignment = assigned_manufacturer_id !== previousManufacturerId;
-
-    const updateData: Record<string, unknown> = {
-      assigned_manufacturer_id,
-      factory_payment_status: factory_payment_status || 'pending',
-    };
-
-    if (factory_amount !== undefined && factory_amount !== null) {
-      updateData.factory_amount = factory_amount;
-    }
-
-    if (deadline) {
-      updateData.deadline = deadline;
-    }
-
-    if (factory_payment_date) {
-      updateData.factory_payment_date = factory_payment_date;
-    }
-
-    const { data, error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error allocating factory:', error);
-      return NextResponse.json(
-        { error: 'Failed to allocate factory' },
-        { status: 500 }
+    for (const [manufacturerId, allocItems] of manufacturerItemsMap.entries()) {
+      const hasNewAssignment = allocItems.some(
+        (ai) => previousAssignments.get(ai.orderItemId) !== manufacturerId
       );
-    }
+      if (!hasNewAssignment) continue;
 
-    if (isNewFactoryAssignment) {
       const { data: manufacturer } = await adminClient
         .from('manufacturers')
         .select('id, name, email')
-        .eq('id', assigned_manufacturer_id)
+        .eq('id', manufacturerId)
         .single();
 
-      if (manufacturer?.email) {
-        const { data: items } = await adminClient
-          .from('order_items')
-          .select('id, product_id, product_title, design_title, quantity, thumbnail_url')
-          .eq('order_id', orderId)
-          .order('created_at', { ascending: true });
+      if (!manufacturer?.email) continue;
 
-        let finalShareToken = data?.share_token ?? existingOrder?.share_token ?? null;
-        if (!finalShareToken) {
-          finalShareToken = randomBytes(16).toString('hex');
-          await adminClient.from('orders').update({ share_token: finalShareToken }).eq('id', orderId);
-        }
+      const assignedItemIds = allocItems.map((ai) => ai.orderItemId);
+      const { data: itemDetails } = await adminClient
+        .from('order_items')
+        .select('id, product_id, product_title, design_title, quantity, thumbnail_url')
+        .in('id', assignedItemIds)
+        .order('created_at', { ascending: true });
 
-        const emailItems = await Promise.all(
-          (items || []).map(async (item) => {
-            let publicUrl = item.thumbnail_url;
-            if (publicUrl && publicUrl.startsWith('data:')) {
-              try {
-                const res = await fetch(publicUrl);
-                const blob = await res.blob();
-                const ext = blob.type.split('/')[1] || 'png';
-                const fileName = `email-thumbnails/${orderId}/${item.id}.${ext}`;
-                const { error: upErr } = await adminClient.storage
-                  .from('user-designs')
-                  .upload(fileName, blob, { contentType: blob.type, upsert: true });
-                if (!upErr) {
-                  const { data: urlData } = adminClient.storage.from('user-designs').getPublicUrl(fileName);
-                  publicUrl = urlData.publicUrl;
-                }
-              } catch { /* keep null */ }
-            }
-            return {
-              id: item.id,
-              productId: item.product_id,
-              productTitle: item.product_title,
-              designTitle: item.design_title,
-              quantity: item.quantity,
-              thumbnailUrl: publicUrl,
-            };
-          })
-        );
-
-        const reqOrigin = new URL(request.url).origin;
-        const emailAppUrl = process.env.NEXT_PUBLIC_APP_URL || reqOrigin;
-
-        sendFactoryAssignmentEmail({
-          factoryName: manufacturer.name,
-          factoryEmail: manufacturer.email,
-          orderId,
-          deadline: deadline ?? null,
-          factoryAmount: factory_amount ?? null,
-          customerNote: existingOrder?.customer_note ?? null,
-          shareToken: finalShareToken,
-          appUrl: emailAppUrl,
-          orderItems: emailItems,
-        }).catch((err) => console.error('Factory assignment email failed:', err));
+      let finalShareToken = orderData?.share_token ?? null;
+      if (!finalShareToken) {
+        finalShareToken = randomBytes(16).toString('hex');
+        await adminClient.from('orders').update({ share_token: finalShareToken }).eq('id', orderId);
       }
+
+      const emailItems = await Promise.all(
+        (itemDetails || []).map(async (item) => {
+          let publicUrl = item.thumbnail_url;
+          if (publicUrl && publicUrl.startsWith('data:')) {
+            try {
+              const res = await fetch(publicUrl);
+              const blob = await res.blob();
+              const ext = blob.type.split('/')[1] || 'png';
+              const fileName = `email-thumbnails/${orderId}/${item.id}.${ext}`;
+              const { error: upErr } = await adminClient.storage
+                .from('user-designs')
+                .upload(fileName, blob, { contentType: blob.type, upsert: true });
+              if (!upErr) {
+                const { data: urlData } = adminClient.storage.from('user-designs').getPublicUrl(fileName);
+                publicUrl = urlData.publicUrl;
+              }
+            } catch { /* keep original */ }
+          }
+          return {
+            id: item.id,
+            productId: item.product_id,
+            productTitle: item.product_title,
+            designTitle: item.design_title,
+            quantity: item.quantity,
+            thumbnailUrl: publicUrl,
+          };
+        })
+      );
+
+      const firstAlloc = allocItems[0];
+      const reqOrigin = new URL(request.url).origin;
+      const emailAppUrl = process.env.NEXT_PUBLIC_APP_URL || reqOrigin;
+
+      sendFactoryAssignmentEmail({
+        factoryName: manufacturer.name,
+        factoryEmail: manufacturer.email,
+        orderId,
+        deadline: firstAlloc.deadline ?? null,
+        factoryAmount: firstAlloc.factory_amount ?? null,
+        customerNote: orderData?.customer_note ?? null,
+        shareToken: finalShareToken,
+        appUrl: emailAppUrl,
+        orderItems: emailItems,
+      }).catch((err) => console.error('Factory assignment email failed:', err));
     }
 
-    return NextResponse.json({ data });
+    // Fetch updated items to return
+    const { data: updatedItems } = await adminClient
+      .from('order_items')
+      .select('id, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status')
+      .eq('order_id', orderId);
+
+    return NextResponse.json({ data: updatedItems });
   } catch (error) {
     console.error('Factory allocation error:', error);
     return NextResponse.json(

@@ -70,10 +70,6 @@ export async function GET() {
     const ordersCountQuery = (status?: string) => {
       let query = adminClient.from('orders').select('id', { count: 'exact', head: true });
 
-      if (profile.role === 'factory') {
-        query = query.eq('assigned_manufacturer_id', profile.manufacturer_id);
-      }
-
       if (status) {
         query = query.eq('order_status', status);
       }
@@ -81,37 +77,74 @@ export async function GET() {
       return query;
     };
 
-    const [
-      ordersTotal,
-      ordersPaymentCompleted,
-      ordersInProduction,
-      ordersShipping,
-      ordersDelivered,
-      ordersCancelled,
-      ordersUnassigned,
-    ] = await Promise.all([
-      countQuery(ordersCountQuery()),
-      countQuery(ordersCountQuery('payment_completed')),
-      countQuery(ordersCountQuery('in_production')),
-      countQuery(ordersCountQuery('shipping')),
-      countQuery(ordersCountQuery('delivered')),
-      countQuery(ordersCountQuery('cancelled')),
-      profile.role === 'admin'
-        ? countQuery(adminClient.from('orders').select('id', { count: 'exact', head: true }).is('assigned_manufacturer_id', null))
-        : Promise.resolve(0),
-    ]);
+    // For factory users, count orders that have items assigned to them
+    let ordersTotal = 0;
+    let ordersPaymentCompleted = 0;
+    let ordersInProduction = 0;
+    let ordersShipping = 0;
+    let ordersDelivered = 0;
+    let ordersCancelled = 0;
+    let ordersUnassigned = 0;
 
-    const recentOrdersQuery =
-      profile.role === 'factory'
-        ? adminClient
-            .from('orders')
-            .select('id, created_at, customer_name, total_amount, order_status, payment_status')
-            .eq('assigned_manufacturer_id', profile.manufacturer_id)
-        : adminClient
-            .from('orders')
-            .select('id, created_at, customer_name, total_amount, order_status, payment_status');
+    if (profile.role === 'factory') {
+      // Get distinct order_ids for this factory's items
+      const { data: factoryOrderIds } = await adminClient
+        .from('order_items')
+        .select('order_id')
+        .eq('assigned_manufacturer_id', profile.manufacturer_id);
+      const uniqueOrderIds = [...new Set((factoryOrderIds || []).map((i) => i.order_id))];
+      ordersTotal = uniqueOrderIds.length;
 
-    const { data: recentOrders, error: recentOrdersError } = await recentOrdersQuery
+      if (uniqueOrderIds.length > 0) {
+        const { data: factoryOrders } = await adminClient
+          .from('orders')
+          .select('order_status')
+          .in('id', uniqueOrderIds);
+        for (const o of factoryOrders || []) {
+          if (o.order_status === 'payment_completed') ordersPaymentCompleted++;
+          else if (o.order_status === 'in_production') ordersInProduction++;
+          else if (o.order_status === 'shipping') ordersShipping++;
+          else if (o.order_status === 'delivered') ordersDelivered++;
+          else if (o.order_status === 'cancelled') ordersCancelled++;
+        }
+      }
+    } else {
+      [ordersTotal, ordersPaymentCompleted, ordersInProduction, ordersShipping, ordersDelivered, ordersCancelled, ordersUnassigned] = await Promise.all([
+        countQuery(ordersCountQuery()),
+        countQuery(ordersCountQuery('payment_completed')),
+        countQuery(ordersCountQuery('in_production')),
+        countQuery(ordersCountQuery('shipping')),
+        countQuery(ordersCountQuery('delivered')),
+        countQuery(ordersCountQuery('cancelled')),
+        // Unassigned = orders that have at least one item without assigned_manufacturer_id
+        (async () => {
+          const { data: unassignedItems } = await adminClient
+            .from('order_items')
+            .select('order_id')
+            .is('assigned_manufacturer_id', null);
+          return new Set((unassignedItems || []).map((i) => i.order_id)).size;
+        })(),
+      ]);
+    }
+
+    let recentOrdersBuilder = adminClient
+      .from('orders')
+      .select('id, created_at, customer_name, total_amount, order_status, payment_status');
+
+    if (profile.role === 'factory') {
+      const { data: factoryOrderIds } = await adminClient
+        .from('order_items')
+        .select('order_id')
+        .eq('assigned_manufacturer_id', profile.manufacturer_id);
+      const ids = [...new Set((factoryOrderIds || []).map((i) => i.order_id))];
+      if (ids.length === 0) {
+        recentOrdersBuilder = recentOrdersBuilder.eq('id', 'none');
+      } else {
+        recentOrdersBuilder = recentOrdersBuilder.in('id', ids);
+      }
+    }
+
+    const { data: recentOrders, error: recentOrdersError } = await recentOrdersBuilder
       .order('created_at', { ascending: false })
       .limit(6);
 

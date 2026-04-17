@@ -9,6 +9,7 @@ import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import AddOrderItemModal from '@/components/orders/AddOrderItemModal';
 import { extractVariants } from '@/lib/orderUtils';
+import { formatKstDateLong, formatKstDateTimeMedium, getKstYYYYMMDD } from '@/lib/kst';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -50,21 +51,15 @@ export default function OrderDetail({
   const router = useRouter();
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFactoryId, setSelectedFactoryId] = useState<string>(order.assigned_manufacturer_id || '');
   const [showAddItemModal, setShowAddItemModal] = useState(!!initialAddItemDesignId);
+  const [expandedFactoryItemId, setExpandedFactoryItemId] = useState<string | null>(null);
+  const [itemAlloc, setItemAlloc] = useState<Record<string, { factory_id: string; amount: string; deadline: string; pay_date: string; pay_status: string }>>({});
+  const [savingItemAlloc, setSavingItemAlloc] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [editingOrderItem, setEditingOrderItem] = useState<OrderItem | null>(null);
   const [editingSummaryField, setEditingSummaryField] = useState<'discount' | 'surcharge' | null>(null);
   const [editingSummaryValue, setEditingSummaryValue] = useState('');
   const [savingSummaryField, setSavingSummaryField] = useState(false);
-  const [assigning, setAssigning] = useState(false);
-  const [assignError, setAssignError] = useState<string | null>(null);
-
-  // Factory-specific fields (admin can set these)
-  const [deadline, setDeadline] = useState<string>(order.deadline ? order.deadline.split('T')[0] : '');
-  const [factoryAmount, setFactoryAmount] = useState<string>(order.factory_amount?.toString() || '');
-  const [factoryPaymentDate, setFactoryPaymentDate] = useState<string>(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
-  const [factoryPaymentStatus, setFactoryPaymentStatus] = useState<string>(order.factory_payment_status || 'pending');
   const [cobuySession, setCobuySession] = useState<{ id: string; title: string } | null>(null);
   const [cobuyError, setCobuyError] = useState<string | null>(null);
   const [downloadingCobuyExcel, setDownloadingCobuyExcel] = useState(false);
@@ -83,8 +78,14 @@ export default function OrderDetail({
   const [generatingShareLink, setGeneratingShareLink] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
-  const [updatingFactoryStatus, setUpdatingFactoryStatus] = useState(false);
   const [sendingDesignItemId, setSendingDesignItemId] = useState<string | null>(null);
+
+  // Logen shipping state
+  const [showLogenModal, setShowLogenModal] = useState(false);
+  const [logenLoading, setLogenLoading] = useState(false);
+  const [logenError, setLogenError] = useState<string | null>(null);
+  const [trackingHistory, setTrackingHistory] = useState<any[] | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   const handleSendDesign = useCallback(async (itemId: string) => {
     if (!confirm('고객에게 시안 확인 이메일을 발송하시겠습니까?')) return;
@@ -134,9 +135,7 @@ export default function OrderDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id, order.order_category]);
 
-  useEffect(() => {
-    setSelectedFactoryId(order.assigned_manufacturer_id || '');
-  }, [order.assigned_manufacturer_id]);
+  // No longer syncing order-level factory fields — they are now on order_items
 
   // Fetch existing share token on mount
   useEffect(() => {
@@ -213,13 +212,7 @@ export default function OrderDetail({
     }
   };
 
-  // Sync factory fields when order changes
-  useEffect(() => {
-    setDeadline(order.deadline ? order.deadline.split('T')[0] : '');
-    setFactoryAmount(order.factory_amount?.toString() || '');
-    setFactoryPaymentDate(order.factory_payment_date ? order.factory_payment_date.split('T')[0] : '');
-    setFactoryPaymentStatus(order.factory_payment_status || 'pending');
-  }, [order.factory_status, order.deadline, order.factory_amount, order.factory_payment_date, order.factory_payment_status]);
+  // No sync needed — factory fields are managed per order_item
 
   const fetchOrderItems = async () => {
     setLoading(true);
@@ -384,16 +377,6 @@ export default function OrderDetail({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const cobuyPaymentStatusLabel: Record<CoBuyParticipant['payment_status'], string> = {
     pending: '대기',
     completed: '완료',
@@ -417,76 +400,137 @@ export default function OrderDetail({
     return map;
   }, [factories]);
 
-  const currentFactoryLabel = order.assigned_manufacturer_id
-    ? factoryMap.get(order.assigned_manufacturer_id)?.name ||
-      factoryMap.get(order.assigned_manufacturer_id)?.email ||
-      order.assigned_manufacturer_id
-    : '미배정';
+  const getItemFactoryIds = (): string[] => {
+    return [...new Set(orderItems.map((i) => i.assigned_manufacturer_id).filter(Boolean))] as string[];
+  };
 
-  const handleAssignFactory = async () => {
-    if (!canAssign) return;
+  const getFactoryNameById = (id: string) => {
+    return factoryMap.get(id)?.name || factoryMap.get(id)?.email || id;
+  };
 
-    setAssigning(true);
-    setAssignError(null);
+  const getItemsFactoryLabel = (): string => {
+    const ids = getItemFactoryIds();
+    if (ids.length === 0) return '미배정';
+    if (ids.length === 1) return getFactoryNameById(ids[0]);
+    return `${getFactoryNameById(ids[0])} 외 ${ids.length - 1}곳`;
+  };
+
+  const getItemsFactoryStatus = (): string | null => {
+    const statuses = orderItems.map((i) => i.factory_status).filter(Boolean) as string[];
+    if (statuses.length === 0) return null;
+    if (statuses.every((s) => s === statuses[0])) return statuses[0];
+    return 'mixed';
+  };
+
+  const toggleItemAlloc = (item: OrderItem) => {
+    if (expandedFactoryItemId === item.id) {
+      setExpandedFactoryItemId(null);
+      return;
+    }
+    setExpandedFactoryItemId(item.id);
+    setItemAlloc((prev) => ({
+      ...prev,
+      [item.id]: prev[item.id] || {
+        factory_id: item.assigned_manufacturer_id || '',
+        amount: item.factory_amount != null ? String(item.factory_amount) : '',
+        deadline: item.deadline ? item.deadline.split('T')[0] : '',
+        pay_date: item.factory_payment_date ? item.factory_payment_date.split('T')[0] : '',
+        pay_status: item.factory_payment_status || 'pending',
+      },
+    }));
+  };
+
+  const updateItemAllocField = (itemId: string, field: string, value: string) => {
+    setItemAlloc((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], [field]: value },
+    }));
+  };
+
+  const applyAllocToAll = (sourceItemId: string) => {
+    const source = itemAlloc[sourceItemId];
+    if (!source) return;
+    const updated: typeof itemAlloc = {};
+    for (const item of orderItems) {
+      updated[item.id] = { ...source };
+    }
+    setItemAlloc(updated);
+  };
+
+  const saveItemAlloc = async (itemId: string) => {
+    const alloc = itemAlloc[itemId];
+    if (!alloc || !alloc.factory_id) return;
+
+    setSavingItemAlloc(itemId);
     try {
-      // Auto-set statuses when assigning a factory for the first time
-      const isNewAssignment = selectedFactoryId && !order.assigned_manufacturer_id;
-
-      const response = await fetch('/api/admin/orders', {
+      const response = await fetch('/api/admin/orders/factory-allocation', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: order.id,
-          factoryId: selectedFactoryId || null,
-          deadline: deadline || null,
-          factoryAmount: factoryAmount ? parseFloat(factoryAmount) : null,
-          factoryPaymentDate: factoryPaymentDate || null,
-          factoryPaymentStatus: factoryPaymentStatus || null,
-          ...(isNewAssignment ? {
-            factoryStatus: 'assigned',
-            orderStatus: 'in_production',
-          } : {}),
+          items: [{
+            orderItemId: itemId,
+            assigned_manufacturer_id: alloc.factory_id,
+            factory_amount: alloc.amount ? Number(alloc.amount) : null,
+            deadline: alloc.deadline || null,
+            factory_payment_date: alloc.pay_date || null,
+            factory_payment_status: alloc.pay_status || 'pending',
+          }],
         }),
       });
-
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '공장 배정에 실패했습니다.');
+        throw new Error(payload?.error || '저장에 실패했습니다.');
       }
-
-      const payload = await response.json();
-      if (payload?.data) {
-        onOrderUpdate(payload.data as Order);
-        onUpdate();
-      }
+      await fetchOrderItems();
+      onUpdate();
+      setExpandedFactoryItemId(null);
     } catch (error) {
-      console.error('Error assigning factory:', error);
-      setAssignError(error instanceof Error ? error.message : '공장 배정에 실패했습니다.');
+      alert(error instanceof Error ? error.message : '저장에 실패했습니다.');
     } finally {
-      setAssigning(false);
+      setSavingItemAlloc(null);
     }
   };
 
-  const handleFactoryStatusChange = async (newStatus: string) => {
-    setUpdatingFactoryStatus(true);
+  const saveAllItemAllocs = async () => {
+    const validItems = orderItems
+      .map((item) => itemAlloc[item.id])
+      .filter((a) => a?.factory_id);
+    if (validItems.length === 0) return;
+
+    setSavingItemAlloc('all');
     try {
-      const response = await fetch('/api/admin/orders', {
+      const response = await fetch('/api/admin/orders/factory-allocation', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
+        body: JSON.stringify({
+          orderId: order.id,
+          items: orderItems
+            .filter((item) => itemAlloc[item.id]?.factory_id)
+            .map((item) => {
+              const a = itemAlloc[item.id];
+              return {
+                orderItemId: item.id,
+                assigned_manufacturer_id: a.factory_id,
+                factory_amount: a.amount ? Number(a.amount) : null,
+                deadline: a.deadline || null,
+                factory_payment_date: a.pay_date || null,
+                factory_payment_status: a.pay_status || 'pending',
+              };
+            }),
+        }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+        throw new Error(payload?.error || '저장에 실패했습니다.');
       }
-      const { data } = await response.json();
-      onOrderUpdate(data as Order);
+      await fetchOrderItems();
       onUpdate();
+      setExpandedFactoryItemId(null);
     } catch (error) {
-      console.error('Error updating factory status:', error);
-      setAssignError(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+      alert(error instanceof Error ? error.message : '저장에 실패했습니다.');
     } finally {
-      setUpdatingFactoryStatus(false);
+      setSavingItemAlloc(null);
     }
   };
 
@@ -537,6 +581,7 @@ export default function OrderDetail({
     const map: Record<string, string> = {
       pending: '대기중', assigned: '배정완료', in_progress: '작업중',
       completed: '작업완료', shipped: '출고완료', cancelled: '취소',
+      mixed: '혼합',
     };
     return map[status] || '대기중';
   };
@@ -549,12 +594,147 @@ export default function OrderDetail({
       completed: 'bg-green-100 text-green-800',
       shipped: 'bg-indigo-100 text-indigo-800',
       cancelled: 'bg-red-100 text-red-800',
+      mixed: 'bg-purple-100 text-purple-800',
     };
     return map[status] || 'bg-gray-100 text-gray-800';
   };
 
+  const senderInfo = {
+    name: '모두의굿즈',
+    addr: '경기도 성남시 수정구 창업로57번길7 5층',
+    tel: '02-3415-8969',
+  };
+
+  const totalQty = (orderItems || []).reduce((sum, item) => sum + (item.quantity || 1), 0);
+  const goodsNm = (orderItems || []).map((item) => item.product_title).join(', ').slice(0, 80) || '상품';
+
+  const handleLogenRegister = async () => {
+    setLogenLoading(true);
+    setLogenError(null);
+    try {
+      const res = await fetch('/api/admin/shipping/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [order.id] }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setShowLogenModal(false);
+        onOrderUpdate({
+          ...order,
+          logen_registered_at: new Date().toISOString(),
+          tracking_carrier: 'logen',
+        } as Order);
+      } else {
+        setLogenError(json.error || '접수에 실패했습니다.');
+      }
+    } catch (err: any) {
+      setLogenError('서버 연결에 실패했습니다. 로젠 API 설정을 확인해주세요.');
+    } finally {
+      setLogenLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Logen Registration Modal */}
+      {showLogenModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">택배 접수 확인</h3>
+              <button onClick={() => setShowLogenModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {/* Sender */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">보내는 분</p>
+                <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
+                  <p className="font-medium text-gray-900">{senderInfo.name}</p>
+                  <p className="text-gray-600">{senderInfo.addr}</p>
+                  <p className="text-gray-600">{senderInfo.tel}</p>
+                </div>
+              </div>
+
+              {/* Receiver */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">받는 분</p>
+                <div className="bg-blue-50 rounded-lg p-3 space-y-1 text-sm">
+                  <p className="font-medium text-gray-900">{order.customer_name || '-'}</p>
+                  <p className="text-gray-700">
+                    {order.postal_code && `[${order.postal_code}] `}
+                    {order.address_line_1 || '주소 미입력'}
+                    {order.address_line_2 && ` ${order.address_line_2}`}
+                  </p>
+                  <p className="text-gray-600">{order.customer_phone || '연락처 없음'}</p>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">물품 정보</p>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">물품명</span>
+                    <span className="font-medium text-gray-900 text-right max-w-[60%] truncate">{goodsNm}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">수량</span>
+                    <span className="font-medium text-gray-900">{totalQty}개</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">운임</span>
+                    <span className="font-medium text-gray-900">{(order.delivery_fee || 0).toLocaleString()}원</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">운임타입</span>
+                    <span className="font-medium text-gray-900">본사신용</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Validation warnings */}
+              {(!order.address_line_1 || !order.customer_phone) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  <p className="font-medium mb-1">주의: 배송 정보가 불완전합니다</p>
+                  {!order.address_line_1 && <p>- 주소가 입력되지 않았습니다.</p>}
+                  {!order.customer_phone && <p>- 연락처가 입력되지 않았습니다.</p>}
+                </div>
+              )}
+
+              {logenError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">
+                  {logenError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 px-5 py-4 border-t border-gray-200 bg-gray-50/50">
+              <button
+                onClick={() => setShowLogenModal(false)}
+                className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleLogenRegister}
+                disabled={logenLoading || !order.address_line_1}
+                className="flex-1 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {logenLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 접수 중...</>
+                ) : (
+                  '접수하기'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -571,7 +751,7 @@ export default function OrderDetail({
         </div>
 
         {/* Share Link Button - Admin only, requires factory assignment */}
-        {canAssign && order.assigned_manufacturer_id && (
+        {canAssign && getItemFactoryIds().length > 0 && (
           <div className="flex items-center gap-2">
             {shareUrl ? (
               <>
@@ -630,22 +810,12 @@ export default function OrderDetail({
               {paymentStatusLabel(order.payment_status)}
             </span>
           </div>
-          {order.assigned_manufacturer_id && (
+          {getItemFactoryIds().length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">공장</span>
-              <select
-                value={order.factory_status || 'pending'}
-                onChange={(e) => handleFactoryStatusChange(e.target.value)}
-                disabled={updatingFactoryStatus}
-                className={`px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${factoryStatusColor(order.factory_status)}`}
-              >
-                <option value="pending">대기중</option>
-                <option value="assigned">배정완료</option>
-                <option value="in_progress">작업중</option>
-                <option value="completed">작업완료</option>
-                <option value="shipped">출고완료</option>
-                <option value="cancelled">취소</option>
-              </select>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(getItemsFactoryStatus())}`}>
+                {getItemsFactoryLabel()} - {factoryStatusLabel(getItemsFactoryStatus())}
+              </span>
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -655,7 +825,7 @@ export default function OrderDetail({
             </span>
           </div>
           <div className="ml-auto text-xs text-gray-400">
-            {formatDate(order.created_at)}
+            {formatKstDateLong(order.created_at)}
           </div>
         </div>
       )}
@@ -1157,105 +1327,155 @@ export default function OrderDetail({
               <div className="flex items-center gap-2">
                 <FactoryIcon className="w-4 h-4 text-gray-500" />
                 <h3 className="text-sm font-semibold text-gray-900">공장 배정</h3>
-                {order.assigned_manufacturer_id && (
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(order.factory_status)}`}>
-                    {factoryStatusLabel(order.factory_status)}
+                {getItemFactoryIds().length > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${factoryStatusColor(getItemsFactoryStatus())}`}>
+                    {factoryStatusLabel(getItemsFactoryStatus())}
                   </span>
                 )}
               </div>
               <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${factoryAccordionOpen ? 'rotate-180' : ''}`} />
             </button>
             {factoryAccordionOpen && (
-              <div className="p-4 space-y-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-500 mb-0.5">현재 배정</p>
-                  <p className="font-medium text-gray-900">{currentFactoryLabel}</p>
-                </div>
-
-                {canAssign && (
-                  <>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">공장 선택</label>
-                      <select
-                        value={selectedFactoryId}
-                        onChange={(event) => setSelectedFactoryId(event.target.value)}
-                        disabled={loadingFactories || assigning}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
+              <div className="p-4 space-y-2 text-sm">
+                {orderItems.map((item) => {
+                  const isExpanded = expandedFactoryItemId === item.id;
+                  const alloc = itemAlloc[item.id];
+                  return (
+                    <div key={item.id} className="border border-gray-200 rounded-md overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => canAssign ? toggleItemAlloc(item) : undefined}
+                        className={`w-full flex items-center gap-2 p-2 text-left transition-colors ${canAssign ? 'hover:bg-gray-50 cursor-pointer' : ''} ${isExpanded ? 'bg-blue-50/50' : 'bg-gray-50/50'}`}
                       >
-                        <option value="">미배정</option>
-                        {factories.map((factory) => (
-                          <option key={factory.id} value={factory.id}>
-                            {factory.name || factory.email || factory.id}
-                          </option>
-                        ))}
-                      </select>
+                        <div className="w-8 h-8 bg-white rounded shrink-0 overflow-hidden border border-gray-200">
+                          {item.thumbnail_url ? (
+                            <img src={item.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="w-3 h-3 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-900 truncate">{item.product_title}</div>
+                          <div className="text-[10px] text-gray-500">x{item.quantity}</div>
+                        </div>
+                        <div className="text-xs text-right shrink-0 flex items-center gap-2">
+                          <div>
+                            <div className={item.assigned_manufacturer_id ? 'text-blue-600' : 'text-red-500'}>
+                              {item.assigned_manufacturer_id ? getFactoryNameById(item.assigned_manufacturer_id) : '미배정'}
+                            </div>
+                            {item.factory_status && (
+                              <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium mt-0.5 ${factoryStatusColor(item.factory_status)}`}>
+                                {factoryStatusLabel(item.factory_status)}
+                              </span>
+                            )}
+                          </div>
+                          {canAssign && (
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          )}
+                        </div>
+                      </button>
+
+                      {isExpanded && alloc && (
+                        <div className="p-3 space-y-2 border-t border-gray-100 bg-white">
+                          <div>
+                            <label className="block text-[11px] text-gray-500 mb-0.5">공장 선택</label>
+                            <select
+                              value={alloc.factory_id}
+                              onChange={(e) => updateItemAllocField(item.id, 'factory_id', e.target.value)}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                            >
+                              <option value="">선택하세요</option>
+                              {factories.map((f) => (
+                                <option key={f.id} value={f.id}>{f.name || f.email || f.id}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[11px] text-gray-500 mb-0.5">금액</label>
+                              <input
+                                type="number"
+                                value={alloc.amount}
+                                onChange={(e) => updateItemAllocField(item.id, 'amount', e.target.value)}
+                                placeholder="0"
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-gray-500 mb-0.5">마감일</label>
+                              <input
+                                type="date"
+                                value={alloc.deadline}
+                                onChange={(e) => updateItemAllocField(item.id, 'deadline', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-gray-500 mb-0.5">결제 예정일</label>
+                              <input
+                                type="date"
+                                value={alloc.pay_date}
+                                onChange={(e) => updateItemAllocField(item.id, 'pay_date', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-gray-500 mb-0.5">결제 상태</label>
+                              <select
+                                value={alloc.pay_status}
+                                onChange={(e) => updateItemAllocField(item.id, 'pay_status', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                              >
+                                <option value="pending">대기</option>
+                                <option value="completed">완료</option>
+                                <option value="cancelled">취소</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            {orderItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => applyAllocToAll(item.id)}
+                                className="px-2 py-1 text-[11px] text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                              >
+                                전체 적용
+                              </button>
+                            )}
+                            <div className="flex-1" />
+                            <button
+                              type="button"
+                              onClick={() => setExpandedFactoryItemId(null)}
+                              className="px-3 py-1 text-[11px] text-gray-600 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
+                            >
+                              취소
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => saveItemAlloc(item.id)}
+                              disabled={!alloc.factory_id || savingItemAlloc === item.id}
+                              className="px-3 py-1 text-[11px] text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                              {savingItemAlloc === item.id ? '저장 중...' : '저장'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  );
+                })}
 
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">마감일</label>
-                      <input
-                        type="date"
-                        value={deadline}
-                        onChange={(event) => setDeadline(event.target.value)}
-                        disabled={assigning}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">금액 (공장 배정 금액)</label>
-                      <input
-                        type="number"
-                        value={factoryAmount}
-                        onChange={(event) => setFactoryAmount(event.target.value)}
-                        disabled={assigning}
-                        placeholder="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">결제 예정일</label>
-                      <input
-                        type="date"
-                        value={factoryPaymentDate}
-                        onChange={(event) => setFactoryPaymentDate(event.target.value)}
-                        disabled={assigning}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                      />
-                    </div>
-
-                    {/* 결제 상태 — only shown after factory is assigned */}
-                    {order.assigned_manufacturer_id && (
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">결제 상태</label>
-                        <select
-                          value={factoryPaymentStatus}
-                          onChange={(event) => setFactoryPaymentStatus(event.target.value)}
-                          disabled={assigning}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 disabled:bg-gray-50"
-                        >
-                          <option value="pending">대기</option>
-                          <option value="completed">완료</option>
-                          <option value="cancelled">취소</option>
-                        </select>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleAssignFactory}
-                      disabled={assigning || loadingFactories}
-                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
-                    >
-                      {assigning ? '저장 중...' : '저장'}
-                    </button>
-                  </>
-                )}
-
-                {assignError && (
-                  <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                    {assignError}
-                  </div>
+                {canAssign && orderItems.length > 1 && Object.values(itemAlloc).some((a) => a.factory_id) && (
+                  <button
+                    type="button"
+                    onClick={saveAllItemAllocs}
+                    disabled={savingItemAlloc === 'all'}
+                    className="w-full px-3 py-2 text-xs text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingItemAlloc === 'all' ? '저장 중...' : '전체 저장'}
+                  </button>
                 )}
               </div>
             )}
@@ -1332,8 +1552,172 @@ export default function OrderDetail({
                     </p>
                   </div>
                 )}
-                {/* Tracking Number */}
-                {order.shipping_method !== 'pickup' && (
+                {/* Logen Shipping Integration */}
+                {order.shipping_method === 'domestic' && (
+                  <div className="border-t border-gray-100 pt-3 mt-3 space-y-3">
+                    {/* Status Steps */}
+                    <div className="flex items-center gap-1 text-[10px]">
+                      {[
+                        { key: 'register', label: '접수', done: !!order.logen_registered_at },
+                        { key: 'print', label: '송장출력', done: !!order.logen_slip_printed },
+                        { key: 'shipping', label: '배송중', done: order.order_status === 'shipping' || order.order_status === 'delivered' },
+                        { key: 'delivered', label: '배송완료', done: order.order_status === 'delivered' },
+                      ].map((step, i, arr) => (
+                        <div key={step.key} className="flex items-center gap-1">
+                          <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-medium ${
+                            step.done
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {step.done ? <Check className="w-2.5 h-2.5" /> : <span className="w-2.5 h-2.5 inline-flex items-center justify-center">{i + 1}</span>}
+                            {step.label}
+                          </div>
+                          {i < arr.length - 1 && <span className="text-gray-300">›</span>}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action Buttons */}
+                    {!order.logen_registered_at && (
+                      <button
+                        onClick={() => { setLogenError(null); setShowLogenModal(true); }}
+                        className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+                      >
+                        택배 접수
+                      </button>
+                    )}
+
+                    {order.logen_registered_at && !order.logen_slip_printed && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            const takeDt = getKstYYYYMMDD();
+                            const res = await fetch(`/api/admin/shipping/print?takeDt=${takeDt}`);
+                            const json = await res.json();
+                            if (res.ok && json.data?.url) {
+                              window.open(json.data.url, 'logen_print', 'width=900,height=700');
+                            } else {
+                              alert(json.error || '출력 URL 생성 실패');
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors"
+                        >
+                          송장 출력
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setLogenLoading(true);
+                            try {
+                              const res = await fetch('/api/admin/shipping/slip-no', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderIds: [order.id] }),
+                              });
+                              const json = await res.json();
+                              if (res.ok && json.data?.updated?.length > 0) {
+                                onOrderUpdate({
+                                  ...order,
+                                  tracking_number: json.data.updated[0].slipNo,
+                                  logen_slip_printed: true,
+                                  order_status: 'shipping',
+                                } as Order);
+                              } else {
+                                alert(json.error || '아직 송장번호가 없습니다. 출력 후 다시 시도해주세요.');
+                              }
+                            } finally {
+                              setLogenLoading(false);
+                            }
+                          }}
+                          disabled={logenLoading}
+                          className="flex-1 px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                        >
+                          {logenLoading ? '조회중...' : '송장번호 동기화'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Tracking Number & History */}
+                    {order.tracking_number && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-gray-500">운송장 번호</p>
+                            <p className="text-sm font-semibold text-gray-900 font-mono">{order.tracking_number}</p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              setTrackingLoading(true);
+                              setTrackingHistory(null);
+                              try {
+                                const res = await fetch('/api/admin/shipping/tracking', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ slipNos: [order.tracking_number] }),
+                                });
+                                const json = await res.json();
+                                if (res.ok && json.data?.tracking?.[0]?.data1) {
+                                  setTrackingHistory(json.data.tracking[0].data1);
+                                  if (json.data.deliveredCount > 0) {
+                                    onOrderUpdate({ ...order, order_status: 'delivered' } as Order);
+                                  }
+                                } else {
+                                  setTrackingHistory([]);
+                                }
+                              } catch {
+                                setTrackingHistory([]);
+                              } finally {
+                                setTrackingLoading(false);
+                              }
+                            }}
+                            disabled={trackingLoading}
+                            className="px-2.5 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                          >
+                            {trackingLoading ? '조회중...' : '배송추적'}
+                          </button>
+                        </div>
+
+                        {/* Tracking History Timeline */}
+                        {trackingHistory && (
+                          <div className="border border-gray-100 rounded bg-gray-50/50 max-h-48 overflow-y-auto">
+                            {trackingHistory.length === 0 ? (
+                              <p className="p-3 text-xs text-gray-400 text-center">추적 정보가 없습니다.</p>
+                            ) : (
+                              <div className="divide-y divide-gray-100">
+                                {[...trackingHistory].reverse().map((s: any, i: number) => {
+                                  const dt = s.scanDt ? `${s.scanDt.slice(0, 4)}.${s.scanDt.slice(4, 6)}.${s.scanDt.slice(6, 8)}` : '';
+                                  const tm = s.scanTm ? `${s.scanTm.slice(0, 2)}:${s.scanTm.slice(2, 4)}` : '';
+                                  const isDelivered = s.statNm?.includes('배송완료');
+                                  return (
+                                    <div key={i} className="flex gap-2 px-3 py-2 text-xs">
+                                      <div className="w-20 shrink-0 text-gray-400">{dt}<br />{tm}</div>
+                                      <div className="flex-1">
+                                        <span className={`font-medium ${isDelivered ? 'text-green-700' : 'text-gray-800'}`}>
+                                          {s.statNm}
+                                        </span>
+                                        {(s.salesNm || s.branNm) && (
+                                          <span className="text-gray-400 ml-1">({s.salesNm || s.branNm})</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {order.logen_registered_at && (
+                      <p className="text-[10px] text-gray-400">
+                        접수: {formatKstDateTimeMedium(order.logen_registered_at)}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual tracking for non-domestic or non-logen */}
+                {order.shipping_method !== 'pickup' && order.shipping_method !== 'domestic' && (
                   <div className="border-t border-gray-100 pt-3 mt-3">
                     <p className="text-xs text-gray-500 mb-1.5">운송장 번호</p>
                     <div className="flex gap-2">
@@ -1397,7 +1781,7 @@ export default function OrderDetail({
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">주문 일시</p>
-                  <p className="text-sm font-medium text-gray-900">{formatDate(order.created_at)}</p>
+                  <p className="text-sm font-medium text-gray-900">{formatKstDateLong(order.created_at)}</p>
                 </div>
                 {/* Pricing adjustments info */}
                 {(order.original_amount != null && order.original_amount !== order.total_amount) && (
@@ -1551,64 +1935,65 @@ export default function OrderDetail({
                     {order.order_category === 'cobuy' ? '공동구매' : '일반'}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">공장 배정 상태</p>
-                  <select
-                    value={order.factory_status || 'assigned'}
-                    onChange={async (e) => {
-                      const newStatus = e.target.value;
-                      try {
-                        const response = await fetch('/api/admin/orders', {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ orderId: order.id, factoryStatus: newStatus }),
-                        });
-                        if (!response.ok) {
-                          const payload = await response.json().catch(() => ({}));
-                          throw new Error(payload?.error || '상태 변경에 실패했습니다.');
-                        }
-                        const { data } = await response.json();
-                        onOrderUpdate(data as Order);
-                        onUpdate();
-                      } catch (error) {
-                        alert(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
-                      }
-                    }}
-                    disabled={order.factory_status === 'shipped'}
-                    className={`w-full px-3 py-2 rounded-md text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${factoryStatusColor(order.factory_status)}`}
-                  >
-                    <option value="assigned">배정완료</option>
-                    <option value="in_progress">작업중</option>
-                    <option value="completed">작업완료</option>
-                    <option value="shipped">출고완료</option>
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">마감일</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {order.deadline ? formatDate(order.deadline) : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">금액</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {order.factory_amount ? `${order.factory_amount.toLocaleString()}원` : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">결제 예정일</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {order.factory_payment_date ? formatDate(order.factory_payment_date) : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">결제 상태</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {order.factory_payment_status === 'pending' ? '대기' :
-                     order.factory_payment_status === 'completed' ? '완료' :
-                     order.factory_payment_status === 'cancelled' ? '취소' : '-'}
-                  </p>
-                </div>
+
+                {/* Per-item factory info for factory users */}
+                {orderItems.filter((i) => i.assigned_manufacturer_id).map((item) => (
+                  <div key={item.id} className="border-t border-gray-100 pt-3 space-y-2">
+                    <div className="text-xs font-medium text-gray-700 truncate">{item.product_title}</div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">배정 상태</p>
+                      <select
+                        value={item.factory_status || 'assigned'}
+                        onChange={async (e) => {
+                          try {
+                            const response = await fetch('/api/admin/orders', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ orderId: order.id, orderItemId: item.id, factoryStatus: e.target.value }),
+                            });
+                            if (!response.ok) {
+                              const payload = await response.json().catch(() => ({}));
+                              throw new Error(payload?.error || '상태 변경에 실패했습니다.');
+                            }
+                            await fetchOrderItems();
+                            onUpdate();
+                          } catch (error) {
+                            alert(error instanceof Error ? error.message : '상태 변경에 실패했습니다.');
+                          }
+                        }}
+                        disabled={item.factory_status === 'shipped'}
+                        className={`w-full px-3 py-2 rounded-md text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60 ${factoryStatusColor(item.factory_status)}`}
+                      >
+                        <option value="assigned">배정완료</option>
+                        <option value="in_progress">작업중</option>
+                        <option value="completed">작업완료</option>
+                        <option value="shipped">출고완료</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-gray-500">마감일</p>
+                        <p className="font-medium text-gray-900">{item.deadline ? formatKstDateLong(item.deadline) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">금액</p>
+                        <p className="font-medium text-gray-900">{item.factory_amount ? `${item.factory_amount.toLocaleString()}원` : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">결제 예정일</p>
+                        <p className="font-medium text-gray-900">{item.factory_payment_date ? formatKstDateLong(item.factory_payment_date) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">결제 상태</p>
+                        <p className="font-medium text-gray-900">
+                          {item.factory_payment_status === 'pending' ? '대기' :
+                           item.factory_payment_status === 'completed' ? '완료' :
+                           item.factory_payment_status === 'cancelled' ? '취소' : '-'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

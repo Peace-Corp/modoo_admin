@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendInvoiceEmail } from '@/lib/send-invoice-email';
 import type { InvoiceItem } from '@/types/types';
+import { getKstYYYYMMDD } from '@/lib/kst';
 
 export const maxDuration = 60;
 
@@ -31,12 +32,9 @@ async function requireAdmin() {
 }
 
 function generateInvoiceNumber(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+  const ymd = getKstYYYYMMDD();
   const rand = String(Math.floor(Math.random() * 9000) + 1000);
-  return `INV-${y}${m}${d}-${rand}`;
+  return `INV-${ymd}-${rand}`;
 }
 
 export async function GET(request: Request) {
