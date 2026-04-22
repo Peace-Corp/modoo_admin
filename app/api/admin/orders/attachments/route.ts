@@ -124,7 +124,7 @@ export async function POST(request: Request) {
 
     const { data: existing, error: fetchError } = await adminClient
       .from('orders')
-      .select('attachment_urls, assigned_manufacturer_id')
+      .select('attachment_urls')
       .eq('id', orderId)
       .single();
 
@@ -133,7 +133,17 @@ export async function POST(request: Request) {
     }
 
     if (profile.role === 'factory') {
-      if (existing.assigned_manufacturer_id !== profile.manufacturer_id) {
+      if (!profile.manufacturer_id) {
+        return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
+      }
+      const { data: factoryItems, error: factoryItemsError } = await adminClient
+        .from('order_items')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('assigned_manufacturer_id', profile.manufacturer_id)
+        .limit(1);
+
+      if (factoryItemsError || !factoryItems || factoryItems.length === 0) {
         return NextResponse.json({ error: '이 주문에 대한 권한이 없습니다.' }, { status: 403 });
       }
     }

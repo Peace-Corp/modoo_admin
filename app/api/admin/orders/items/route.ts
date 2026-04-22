@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     const adminClient = createAdminClient();
     const { data: order, error: orderError } = await adminClient
       .from('orders')
-      .select('id, assigned_manufacturer_id')
+      .select('id')
       .eq('id', orderId)
       .single();
 
@@ -124,20 +124,35 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: orderError?.message || '주문을 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    if (authResult.profile.role === 'factory') {
+    const isFactory = authResult.profile.role === 'factory';
+
+    if (isFactory) {
       if (!authResult.profile.manufacturer_id) {
         return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
       }
-      if (order.assigned_manufacturer_id !== authResult.profile.manufacturer_id) {
-        return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 });
+      const { data: factoryItems, error: factoryItemsError } = await adminClient
+        .from('order_items')
+        .select('id')
+        .eq('order_id', orderId)
+        .eq('assigned_manufacturer_id', authResult.profile.manufacturer_id)
+        .limit(1);
+
+      if (factoryItemsError || !factoryItems || factoryItems.length === 0) {
+        return NextResponse.json({ error: '이 주문에 대한 권한이 없습니다.' }, { status: 403 });
       }
     }
 
-    const { data, error } = await adminClient
+    let itemsQuery = adminClient
       .from('order_items')
       .select('*, products(product_code)')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true });
+
+    if (isFactory) {
+      itemsQuery = itemsQuery.eq('assigned_manufacturer_id', authResult.profile.manufacturer_id!);
+    }
+
+    const { data, error } = await itemsQuery;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

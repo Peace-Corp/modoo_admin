@@ -81,14 +81,16 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     if (profile.role === 'factory') {
+      if (!profile.manufacturer_id) {
+        return NextResponse.json({ error: '공장 정보가 필요합니다.' }, { status: 403 });
+      }
       const { data: orderItem } = await adminClient
         .from('order_items')
-        .select('order_id, orders!inner(assigned_manufacturer_id)')
+        .select('id, assigned_manufacturer_id')
         .eq('id', orderItemId)
         .single();
 
-      const order = orderItem?.orders as unknown as { assigned_manufacturer_id: string | null };
-      if (!order || order.assigned_manufacturer_id !== profile.manufacturer_id) {
+      if (!orderItem || orderItem.assigned_manufacturer_id !== profile.manufacturer_id) {
         return NextResponse.json({ error: '해당 주문에 대한 권한이 없습니다.' }, { status: 403 });
       }
     }
