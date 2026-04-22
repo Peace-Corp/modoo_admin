@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import useSWR from 'swr';
 import { createClient } from '@/lib/supabase-client';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
-import { Edit2, Eye, EyeOff, ImageIcon, Plus, Trash2, X } from 'lucide-react';
+import { Check, Copy, Edit2, Eye, EyeOff, ImageIcon, Plus, Trash2, X } from 'lucide-react';
 import type { AnnouncementRecord, AnnouncementFormState, AnnouncementCategory } from './types';
 import {
   ANNOUNCEMENT_IMAGE_BUCKET,
@@ -32,6 +32,7 @@ export default function AnnouncementsSection() {
   const [announcementFormError, setAnnouncementFormError] = useState<string | null>(null);
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
   const handleAnnouncementFormToggle = () => {
@@ -158,6 +159,23 @@ export default function AnnouncementsSection() {
       console.error('Error deleting announcement:', err);
       setError(err instanceof Error ? err.message : '삭제에 실패했습니다.');
     }
+  };
+
+  const handleCopyLink = async (announcementId: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || 'https://modoogoods.com';
+    const url = `${baseUrl}/support/notices/${announcementId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const el = document.createElement('input');
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setCopiedId(announcementId);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleAnnouncementToggle = async (announcement: AnnouncementRecord) => {
@@ -418,14 +436,29 @@ export default function AnnouncementsSection() {
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => handleCopyLink(announcement.id)}
+                          title="링크 복사"
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md transition-colors text-sm ${
+                            copiedId === announcement.id
+                              ? 'text-green-700 bg-green-50'
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                        >
+                          {copiedId === announcement.id ? (
+                            <><Check className="w-4 h-4" />복사됨</>
+                          ) : (
+                            <><Copy className="w-4 h-4" />링크</>
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleAnnouncementEdit(announcement)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-gray-700 hover:bg-gray-100 rounded-md transition-colors text-sm"
                         >
                           <Edit2 className="w-4 h-4" />편집
                         </button>
                         <button
                           onClick={() => handleAnnouncementDelete(announcement.id)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-md transition-colors text-sm"
                         >
                           <Trash2 className="w-4 h-4" />삭제
                         </button>
