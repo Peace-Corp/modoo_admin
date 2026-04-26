@@ -8,7 +8,7 @@ import { isCurvedText } from '@/lib/curvedText';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
 import { createClient } from '@/lib/supabase-client';
-import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage } from '@/lib/cloudconvert';
+import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage, MAX_UPLOAD_BYTES } from '@/lib/cloudconvert';
 import LoadingModal from '@/components/LoadingModal';
 
 interface ToolbarProps {
@@ -156,6 +156,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   };
 
   const addSingleImageToCanvas = async (file: File, canvas: fabric.Canvas) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      alert(`파일이 너무 큽니다.\n현재 파일: ${mb}MB / 최대 허용: 50MB\n\n더 작은 파일로 다시 시도해주세요.`);
+      return;
+    }
+
     const supabase = createClient();
 
     let displayUrl: string;
@@ -165,10 +171,19 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
       console.log('AI/PSD file detected, converting to PNG...');
 
       setLoadingMessage('파일 변환 중...');
-      setLoadingSubmessage(`${file.name} - AI/PSD 파일을 PNG로 변환하고 있습니다.`);
+      setLoadingSubmessage(`${file.name} - AI/PSD 파일을 PNG로 변환하고 있습니다. (최대 수 분 소요)`);
       setIsLoadingModalOpen(true);
 
-      const conversionResult = await convertToPNG(file);
+      // Conversion + original-file upload run in parallel.
+      const [conversionResult, origUploadResult] = await Promise.all([
+        convertToPNG(file),
+        uploadFileToStorage(
+          supabase,
+          file,
+          STORAGE_BUCKETS.USER_DESIGNS,
+          STORAGE_FOLDERS.IMAGES
+        ),
+      ]);
 
       if (!conversionResult.success || !conversionResult.pngBlob) {
         setIsLoadingModalOpen(false);
@@ -178,22 +193,21 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
         return;
       }
 
-      setLoadingMessage('파일 업로드 중...');
-      setLoadingSubmessage(`${file.name} - 변환된 파일을 저장하고 있습니다.`);
-
-      originalFileUploadResult = await uploadFileToStorage(
-        supabase,
-        file,
-        STORAGE_BUCKETS.USER_DESIGNS,
-        STORAGE_FOLDERS.IMAGES
-      );
-
-      if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
+      if (!origUploadResult.success || !origUploadResult.url) {
         setIsLoadingModalOpen(false);
-        console.error('Failed to upload original file:', originalFileUploadResult.error);
-        alert('원본 파일 업로드에 실패했습니다. 다시 시도해주세요.');
+        const rawErr = origUploadResult.error || '';
+        console.error('Failed to upload original file:', rawErr);
+        const friendly = rawErr.includes('exceeded the maximum')
+          ? '파일 용량이 서버 한도를 초과했습니다 (최대 50MB). 더 작은 파일로 다시 시도해주세요.'
+          : `원본 파일 업로드에 실패했습니다.\n사유: ${rawErr || '알 수 없음'}`;
+        alert(friendly);
         return;
       }
+
+      originalFileUploadResult = origUploadResult;
+
+      setLoadingMessage('파일 업로드 중...');
+      setLoadingSubmessage(`${file.name} - 변환된 PNG를 저장하고 있습니다.`);
 
       const pngFile = new File([conversionResult.pngBlob], `${file.name.split('.')[0]}.png`, {
         type: 'image/png',
@@ -208,8 +222,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
       if (!pngUploadResult.success || !pngUploadResult.url) {
         setIsLoadingModalOpen(false);
-        console.error('Failed to upload PNG:', pngUploadResult.error);
-        alert('변환된 이미지 업로드에 실패했습니다.');
+        const rawErr = pngUploadResult.error || '';
+        console.error('Failed to upload PNG:', rawErr);
+        const friendly = rawErr.includes('exceeded the maximum')
+          ? '변환된 PNG가 서버 한도를 초과했습니다 (최대 50MB). 더 작은 파일로 다시 시도해주세요.'
+          : `변환된 이미지 업로드에 실패했습니다.\n사유: ${rawErr || '알 수 없음'}`;
+        alert(friendly);
         return;
       }
 
@@ -223,8 +241,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
       );
 
       if (!originalFileUploadResult.success || !originalFileUploadResult.url) {
-        console.error('Failed to upload image:', originalFileUploadResult.error);
-        alert(`이미지 업로드에 실패했습니다: ${file.name}`);
+        const rawErr = originalFileUploadResult.error || '';
+        console.error('Failed to upload image:', rawErr);
+        const friendly = rawErr.includes('exceeded the maximum')
+          ? '파일 용량이 서버 한도를 초과했습니다 (최대 50MB). 더 작은 파일로 다시 시도해주세요.'
+          : `이미지 업로드에 실패했습니다: ${file.name}\n사유: ${rawErr || '알 수 없음'}`;
+        alert(friendly);
         return;
       }
 
