@@ -8,7 +8,7 @@ import { isCurvedText } from '@/lib/curvedText';
 import { uploadFileToStorage } from '@/lib/supabase-storage';
 import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
 import { createClient } from '@/lib/supabase-client';
-import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage, MAX_UPLOAD_BYTES } from '@/lib/cloudconvert';
+import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage, MAX_UPLOAD_BYTES } from '@/lib/imageConvert';
 import LoadingModal from '@/components/LoadingModal';
 
 interface ToolbarProps {
@@ -182,15 +182,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
       // Conversion + original-file upload run in parallel.
       const [conversionResult, origUploadResult] = await Promise.all([
-        convertToPNG(file, (jobStatus) => {
-          if (jobStatus === 'waiting') {
-            setLoadingSubmessage(`${file.name} - 대기열에서 차례를 기다리고 있어요…`);
-          } else if (jobStatus === 'processing') {
-            setLoadingSubmessage(`${file.name} - 파일을 변환하고 있어요…`);
-          } else {
-            setLoadingSubmessage(`${file.name} - 거의 다 됐어요…`);
-          }
-        }),
+        convertToPNG(file, (msg) => setLoadingSubmessage(`${file.name} - ${msg}`)),
         uploadFileToStorage(
           supabase,
           file,
