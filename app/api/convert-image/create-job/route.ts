@@ -44,27 +44,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (inputFormat === 'ai') {
-      jobConfig.tasks = {
-        'upload-file': { operation: 'import/upload' },
-        'convert-to-pdf': {
-          operation: 'convert',
-          input: 'upload-file',
-          input_format: 'ai',
-          output_format: 'pdf',
-        },
-        'convert-file': {
-          operation: 'convert',
-          input: 'convert-to-pdf',
-          input_format: 'pdf',
-          output_format: 'png',
-          pixel_density: 150,
-          alpha: true,
-        },
-        'export-file': {
-          operation: 'export/url',
-          input: 'convert-file',
-        },
-      };
+      jobConfig.tasks['convert-file'].input_format = 'pdf';
+      jobConfig.tasks['convert-file'].pixel_density = 150;
+      jobConfig.tasks['convert-file'].alpha = true;
     }
 
     let job;
