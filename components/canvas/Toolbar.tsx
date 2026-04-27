@@ -182,7 +182,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
       // Conversion + original-file upload run in parallel.
       const [conversionResult, origUploadResult] = await Promise.all([
-        convertToPNG(file),
+        convertToPNG(file, (jobStatus) => {
+          if (jobStatus === 'waiting') {
+            setLoadingSubmessage(`${file.name} - 대기열에서 차례를 기다리고 있어요…`);
+          } else if (jobStatus === 'processing') {
+            setLoadingSubmessage(`${file.name} - 파일을 변환하고 있어요…`);
+          } else {
+            setLoadingSubmessage(`${file.name} - 거의 다 됐어요…`);
+          }
+        }),
         uploadFileToStorage(
           supabase,
           file,

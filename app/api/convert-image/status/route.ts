@@ -48,6 +48,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const failedTask = job.tasks?.find((t) =>
+      ['error', 'cancelled'].includes(t.status as string)
+    );
+    if (failedTask) {
+      return NextResponse.json({
+        success: false,
+        status: 'error',
+        error: failedTask.message || `Task ${failedTask.name} failed`,
+        code: failedTask.code || null,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       status: 'processing',
