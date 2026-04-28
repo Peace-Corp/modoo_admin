@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { TrendingUp, TrendingDown, Users, ShoppingCart, MessageSquare, BadgeDollarSign } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, ShoppingCart, MessageSquare, BadgeDollarSign, Ban } from 'lucide-react';
 import { fetcher } from '@/lib/fetcher';
 
 type RangePreset = 'this_week' | 'this_month' | 'q1' | 'q2' | 'q3' | 'q4' | 'custom';
@@ -16,6 +16,8 @@ type AnalyticsPayload = {
     paid_revenue: number;
     refunded_count: number;
     refunded_amount: number;
+    cancelled_count: number;
+    cancelled_amount: number;
     confirmed_revenue: number;
   };
   orders_by_source: {
@@ -29,6 +31,7 @@ type AnalyticsPayload = {
     visitors: number;
     paid_revenue: number;
     refunded_amount: number;
+    cancelled_amount: number;
     confirmed_revenue: number;
     order_count: number;
   }>;
@@ -101,12 +104,13 @@ export default function AnalyticsDashboard() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <KpiCard icon={Users} label="유입자수" value={num(data.visitors.unique_sessions)} hint={data.visitors.note ? '수집 시작 후' : `PV ${num(data.visitors.pageviews)}`} accent="border-l-purple-500" />
-            <KpiCard icon={ShoppingCart} label="주문 건수" value={num(data.orders.total_count)} hint={`결제 ${num(data.orders.paid_count)}`} accent="border-l-blue-500" />
-            <KpiCard icon={BadgeDollarSign} label="주문 매출액" value={krw(data.orders.paid_revenue)} hint="결제완료 합계" accent="border-l-green-500" />
+            <KpiCard icon={ShoppingCart} label="주문 건수" value={num(data.orders.total_count)} hint={`결제 ${num(data.orders.paid_count)} · 취소 ${num(data.orders.cancelled_count)}`} accent="border-l-blue-500" />
+            <KpiCard icon={BadgeDollarSign} label="주문 매출액" value={krw(data.orders.paid_revenue)} hint="결제완료 (취소 제외)" accent="border-l-green-500" />
+            <KpiCard icon={Ban} label="취소액" value={krw(data.orders.cancelled_amount)} hint={`${num(data.orders.cancelled_count)}건 (주문상태 취소)`} accent="border-l-rose-500" />
             <KpiCard icon={TrendingDown} label="환불액" value={krw(data.orders.refunded_amount)} hint={`${num(data.orders.refunded_count)}건`} accent="border-l-red-500" />
-            <KpiCard icon={TrendingUp} label="확정매출액" value={krw(data.orders.confirmed_revenue)} hint="발생 - 환불" accent="border-l-emerald-600" />
+            <KpiCard icon={TrendingUp} label="확정매출액" value={krw(data.orders.confirmed_revenue)} hint="결제 - 환불 (취소 제외)" accent="border-l-emerald-600" />
             <KpiCard icon={MessageSquare} label="문의 합계" value={num(data.inquiries_by_source.dashboard + data.inquiries_by_source.chatbot + data.inquiries_by_source.kakao)} hint="대시+챗봇+카톡" accent="border-l-orange-500" />
           </div>
 
@@ -192,6 +196,8 @@ function TrendChart({ series }: { series: AnalyticsPayload['daily_series'] }) {
   const H = 220;
   const PAD = { l: 50, r: 12, t: 10, b: 28 };
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const { paths, ticks, dates } = useMemo(() => {
     if (series.length === 0) return { paths: null, ticks: [] as number[], dates: [] as string[] };
@@ -226,10 +232,15 @@ function TrendChart({ series }: { series: AnalyticsPayload['daily_series'] }) {
   const labelEvery = Math.max(1, Math.ceil(dates.length / 8));
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width === 0) return;
-    const xRatio = (e.clientX - rect.left) / rect.width;
-    const xInSvg = xRatio * W;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const svgPt = pt.matrixTransform(ctm.inverse());
+    const xInSvg = svgPt.x;
     const relX = xInSvg - PAD.l;
     const rawIdx = Math.round(relX / paths.xStep);
     const clamped = Math.max(0, Math.min(series.length - 1, rawIdx));
@@ -238,7 +249,21 @@ function TrendChart({ series }: { series: AnalyticsPayload['daily_series'] }) {
 
   const hoverPoint = hoverIdx !== null ? series[hoverIdx] : null;
   const hoverX = hoverIdx !== null ? PAD.l + hoverIdx * paths.xStep : null;
-  const tooltipLeftPct = hoverX !== null ? (hoverX / W) * 100 : 0;
+
+  let tooltipLeftPct = 0;
+  if (hoverX !== null && svgRef.current && containerRef.current) {
+    const ctm = svgRef.current.getScreenCTM();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    if (ctm && containerRect.width > 0) {
+      const pt = svgRef.current.createSVGPoint();
+      pt.x = hoverX;
+      pt.y = 0;
+      const screenPt = pt.matrixTransform(ctm);
+      tooltipLeftPct = ((screenPt.x - containerRect.left) / containerRect.width) * 100;
+    } else {
+      tooltipLeftPct = (hoverX / W) * 100;
+    }
+  }
   const tooltipAlignClass =
     tooltipLeftPct < 12
       ? 'translate-x-0'
@@ -247,8 +272,9 @@ function TrendChart({ series }: { series: AnalyticsPayload['daily_series'] }) {
         : '-translate-x-1/2';
 
   return (
-    <div className="overflow-x-auto relative">
+    <div className="overflow-x-auto relative" ref={containerRef}>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="w-full h-56 cursor-crosshair"
         onMouseMove={handleMove}

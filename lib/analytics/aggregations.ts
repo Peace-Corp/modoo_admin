@@ -92,6 +92,8 @@ export type AnalyticsPayload = {
     paid_revenue: number;
     refunded_count: number;
     refunded_amount: number;
+    cancelled_count: number;
+    cancelled_amount: number;
     confirmed_revenue: number;
   };
   orders_by_source: {
@@ -109,6 +111,7 @@ export type AnalyticsPayload = {
     visitors: number;
     paid_revenue: number;
     refunded_amount: number;
+    cancelled_amount: number;
     confirmed_revenue: number;
     order_count: number;
   }>;
@@ -118,6 +121,7 @@ type ListedOrder = {
   id: string;
   total_amount: number | null;
   payment_status: string | null;
+  order_status: string | null;
   created_at: string;
 };
 
@@ -128,7 +132,7 @@ async function fetchOrdersInRange(admin: SupabaseClient, range: DateRange): Prom
   while (true) {
     const { data, error } = await admin
       .from('orders')
-      .select('id, total_amount, payment_status, created_at')
+      .select('id, total_amount, payment_status, order_status, created_at')
       .gte('created_at', range.fromIso)
       .lt('created_at', range.toIso)
       .order('created_at', { ascending: true })
@@ -220,23 +224,30 @@ export async function buildAnalyticsPayload(
     countInquiriesByTable(admin, 'chatbot_inquiries', range),
   ]);
 
-  const sumPaid = orders.filter((o) => o.payment_status === 'completed').reduce((s, o) => s + Number(o.total_amount ?? 0), 0);
-  const paidCount = orders.filter((o) => o.payment_status === 'completed').length;
-  const refunded = orders.filter((o) => o.payment_status === 'refunded');
+  const isCancelled = (o: ListedOrder) => o.order_status === 'cancelled';
+  const isPaid = (o: ListedOrder) => o.payment_status === 'completed' && !isCancelled(o);
+  const isRefunded = (o: ListedOrder) => o.payment_status === 'refunded';
+
+  const paidOrders = orders.filter(isPaid);
+  const sumPaid = paidOrders.reduce((s, o) => s + Number(o.total_amount ?? 0), 0);
+  const paidCount = paidOrders.length;
+  const refunded = orders.filter(isRefunded);
   const refundedAmount = refunded.reduce((s, o) => s + Number(o.total_amount ?? 0), 0);
+  const cancelled = orders.filter(isCancelled);
+  const cancelledAmount = cancelled.reduce((s, o) => s + Number(o.total_amount ?? 0), 0);
 
   const bySource = { homepage: { count: 0, paid_revenue: 0 }, external: { count: 0, paid_revenue: 0 }, other: { count: 0, paid_revenue: 0 } };
   for (const o of orders) {
     const cls = classifyOrderSource(o.id);
     bySource[cls].count += 1;
-    if (o.payment_status === 'completed') bySource[cls].paid_revenue += Number(o.total_amount ?? 0);
+    if (isPaid(o)) bySource[cls].paid_revenue += Number(o.total_amount ?? 0);
   }
 
   const uniqueSessions = new Set(visitorEvents.map((e) => e.session_id).filter((s): s is string => !!s)).size;
 
   const keys = buildDailyKeys(range);
-  const daily = new Map<string, { visitors: Set<string>; paid_revenue: number; refunded_amount: number; order_count: number }>();
-  keys.forEach((k) => daily.set(k, { visitors: new Set(), paid_revenue: 0, refunded_amount: 0, order_count: 0 }));
+  const daily = new Map<string, { visitors: Set<string>; paid_revenue: number; refunded_amount: number; cancelled_amount: number; order_count: number }>();
+  keys.forEach((k) => daily.set(k, { visitors: new Set(), paid_revenue: 0, refunded_amount: 0, cancelled_amount: 0, order_count: 0 }));
 
   for (const e of visitorEvents) {
     const k = kstDayKey(e.occurred_at);
@@ -248,8 +259,9 @@ export async function buildAnalyticsPayload(
     const slot = daily.get(k);
     if (!slot) continue;
     slot.order_count += 1;
-    if (o.payment_status === 'completed') slot.paid_revenue += Number(o.total_amount ?? 0);
-    if (o.payment_status === 'refunded') slot.refunded_amount += Number(o.total_amount ?? 0);
+    if (isPaid(o)) slot.paid_revenue += Number(o.total_amount ?? 0);
+    if (isRefunded(o)) slot.refunded_amount += Number(o.total_amount ?? 0);
+    if (isCancelled(o)) slot.cancelled_amount += Number(o.total_amount ?? 0);
   }
 
   const daily_series = keys.map((k) => {
@@ -259,6 +271,7 @@ export async function buildAnalyticsPayload(
       visitors: s.visitors.size,
       paid_revenue: s.paid_revenue,
       refunded_amount: s.refunded_amount,
+      cancelled_amount: s.cancelled_amount,
       confirmed_revenue: s.paid_revenue - s.refunded_amount,
       order_count: s.order_count,
     };
@@ -277,6 +290,8 @@ export async function buildAnalyticsPayload(
       paid_revenue: sumPaid,
       refunded_count: refunded.length,
       refunded_amount: refundedAmount,
+      cancelled_count: cancelled.length,
+      cancelled_amount: cancelledAmount,
       confirmed_revenue: sumPaid - refundedAmount,
     },
     orders_by_source: bySource,
