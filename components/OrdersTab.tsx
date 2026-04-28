@@ -82,6 +82,18 @@ export default function OrdersTab() {
     return [];
   }, [user, fetchedFactories]);
 
+  const getOrderSourceInfo = (id: string): { label: string; color: string } => {
+    if (id.startsWith('ORDER-')) {
+      return { label: '관리자생성주문', color: 'bg-purple-100 text-purple-800' };
+    }
+    return { label: '고객직접주문', color: 'bg-sky-100 text-sky-800' };
+  };
+
+  const getShortOrderId = (id: string): string => {
+    const parts = id.split('-');
+    return parts[parts.length - 1] || id;
+  };
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       payment_pending: 'bg-amber-100 text-amber-800',
@@ -250,6 +262,8 @@ export default function OrdersTab() {
         return getDesignTitles(order).toLowerCase() || null;
       case 'id':
         return order.id;
+      case 'order_source':
+        return order.id.startsWith('ORDER-') ? '관리자생성주문' : '고객직접주문';
       case 'order_category':
         return order.order_category || '';
       case 'item_count': {
@@ -633,6 +647,7 @@ export default function OrdersTab() {
                   {([
                     { key: 'design_title', label: '디자인 제목' },
                     { key: 'id', label: '주문 ID' },
+                    { key: 'order_source', label: '주문 경로' },
                     { key: 'customer_name', label: '고객 정보' },
                     { key: 'created_at', label: '주문 일시' },
                     { key: 'total_amount', label: '금액' },
@@ -712,7 +727,7 @@ export default function OrdersTab() {
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-mono text-blue-600">{order.id}</div>
+                        <div className="text-sm font-mono text-blue-600" title={order.id}>{getShortOrderId(order.id)}</div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm text-gray-900">
@@ -829,7 +844,17 @@ export default function OrdersTab() {
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-mono text-blue-600">{order.id}</div>
+                        <div className="text-sm font-mono text-blue-600" title={order.id}>{getShortOrderId(order.id)}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(() => {
+                          const src = getOrderSourceInfo(order.id);
+                          return (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${src.color}`}>
+                              {src.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{order.customer_name}</div>
@@ -992,7 +1017,7 @@ export default function OrdersTab() {
                           <div className="text-xs font-medium text-gray-900 truncate" title={getDesignTitles(order)}>
                             {getDesignTitles(order) || '-'}
                           </div>
-                          <div className="text-[11px] font-mono text-blue-600 truncate">{order.id}</div>
+                          <div className="text-[11px] font-mono text-blue-600 truncate" title={order.id}>{getShortOrderId(order.id)}</div>
                         </div>
                         {(() => {
                           const mSummary = getMyFactorySummary(order);
@@ -1082,7 +1107,17 @@ export default function OrdersTab() {
                 <>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-xs font-medium text-gray-900 truncate">{order.customer_name}</div>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <div className="text-xs font-medium text-gray-900 truncate">{order.customer_name}</div>
+                        {(() => {
+                          const src = getOrderSourceInfo(order.id);
+                          return (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${src.color}`}>
+                              {src.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
                       <div className="text-[11px] text-gray-400 truncate">{order.customer_email}</div>
                     </div>
                     <div onClick={(e) => e.stopPropagation()}>
