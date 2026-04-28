@@ -111,7 +111,7 @@ export default function AnalyticsDashboard() {
             <KpiCard icon={Ban} label="취소액" value={krw(data.orders.cancelled_amount)} hint={`${num(data.orders.cancelled_count)}건 (주문상태 취소)`} accent="border-l-rose-500" />
             <KpiCard icon={TrendingDown} label="환불액" value={krw(data.orders.refunded_amount)} hint={`${num(data.orders.refunded_count)}건`} accent="border-l-red-500" />
             <KpiCard icon={TrendingUp} label="확정매출액" value={krw(data.orders.confirmed_revenue)} hint="결제 - 환불 (취소 제외)" accent="border-l-emerald-600" />
-            <KpiCard icon={MessageSquare} label="문의 합계" value={num(data.inquiries_by_source.dashboard + data.inquiries_by_source.chatbot + data.inquiries_by_source.kakao)} hint="대시+챗봇+카톡" accent="border-l-orange-500" />
+            <KpiCard icon={MessageSquare} label="문의 합계" value={num(data.inquiries_by_source.dashboard + data.inquiries_by_source.chatbot + data.inquiries_by_source.kakao)} hint="실제 대시+챗봇+카톡" accent="border-l-orange-500" />
           </div>
 
           <section className="bg-white border border-gray-200 rounded-md p-4">
@@ -125,7 +125,7 @@ export default function AnalyticsDashboard() {
               <h2 className="text-sm font-semibold text-gray-800 mb-3">경로별 문의수</h2>
               <table className="w-full text-sm">
                 <tbody>
-                  <tr className="border-b border-gray-100"><td className="py-2 text-gray-700">대시보드 문의</td><td className="text-right font-semibold">{num(data.inquiries_by_source.dashboard)}</td></tr>
+                  <tr className="border-b border-gray-100"><td className="py-2 text-gray-700">대시보드 실제 문의</td><td className="text-right font-semibold">{num(data.inquiries_by_source.dashboard)}</td></tr>
                   <tr className="border-b border-gray-100"><td className="py-2 text-gray-700">챗봇 문의</td><td className="text-right font-semibold">{num(data.inquiries_by_source.chatbot)}</td></tr>
                   <tr><td className="py-2 text-gray-700">카카오톡</td><td className="text-right font-semibold text-gray-400">{num(data.inquiries_by_source.kakao)} <span className="text-[10px]">(연동 예정)</span></td></tr>
                 </tbody>

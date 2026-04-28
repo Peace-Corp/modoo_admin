@@ -180,6 +180,17 @@ async function countInquiriesByTable(admin: SupabaseClient, table: string, range
   return count ?? 0;
 }
 
+async function countRealDashboardInquiries(admin: SupabaseClient, range: DateRange) {
+  const { count, error } = await admin
+    .from('inquiries')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', range.fromIso)
+    .lt('created_at', range.toIso)
+    .or('is_admin.is.null,is_admin.eq.false');
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 function classifyOrderSource(id: string): 'homepage' | 'external' | 'other' {
   if (id.startsWith('ORD-') || id.startsWith('COBUY-')) return 'homepage';
   if (id.startsWith('ORDER-')) return 'external';
@@ -220,7 +231,7 @@ export async function buildAnalyticsPayload(
   const [orders, visitorEvents, dashboardInquiries, chatbotInquiries] = await Promise.all([
     fetchOrdersInRange(admin, range),
     fetchVisitorEvents(admin, range),
-    countInquiriesByTable(admin, 'inquiries', range),
+    countRealDashboardInquiries(admin, range),
     countInquiriesByTable(admin, 'chatbot_inquiries', range),
   ]);
 
