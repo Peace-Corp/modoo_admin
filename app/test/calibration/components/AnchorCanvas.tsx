@@ -99,7 +99,7 @@ export function AnchorCanvas({
         });
         canvas.add(img);
         canvas.sendObjectToBack(img);
-        drawAnchors(canvas, anchors, mockup, displayScale, selectedAnchorId);
+        drawAnchors(canvas, anchors, mockup, displayScale, selectedAnchorId, customAnchors);
         canvas.requestRenderAll();
       },
     );
@@ -166,6 +166,7 @@ function drawAnchors(
   mockup: MockupCalibration,
   displayScale: number,
   selectedAnchorId: string | null,
+  customAnchors: CustomAnchorDef[] = [],
 ) {
   const mmPerPx = activeNativeMmPerPx(mockup);
   if (!mmPerPx) return;
