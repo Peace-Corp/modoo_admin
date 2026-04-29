@@ -280,8 +280,9 @@ export default function OrderDetail({
   };
 
   const handleSummaryUpdate = async (field: 'discount' | 'surcharge') => {
-    const v = parseFloat(editingSummaryValue);
-    if (!v || v <= 0) return;
+    const parsed = parseFloat(editingSummaryValue);
+    if (!parsed || isNaN(parsed)) return;
+    const v = Math.abs(parsed);
     setSavingSummaryField(true);
     try {
       const mode = field === 'discount' ? 'update_discount' : 'update_surcharge';
@@ -1280,9 +1281,12 @@ export default function OrderDetail({
                     + (order.admin_surcharge ?? 0);
                   const diff = (order.total_amount ?? 0) - computedTotal;
                   if (diff === 0) return null;
+                  // 할인이 소계를 초과하여 total_amount가 0으로 클램프된 경우엔
+                  // 실제 추가 비용이 아니라 클램프 아티팩트이므로 라인을 숨김.
+                  if (computedTotal < 0 && (order.total_amount ?? 0) === 0) return null;
                   return (
                     <div className={`flex justify-between text-sm ${diff > 0 ? 'text-indigo-600' : 'text-green-600'}`}>
-                      <span>작업비용</span>
+                      <span>기타 조정</span>
                       <span>{diff > 0 ? '+' : ''}{diff.toLocaleString()}원</span>
                     </div>
                   );
@@ -1293,6 +1297,11 @@ export default function OrderDetail({
                     {(order.total_amount ?? 0).toLocaleString()}원
                   </span>
                 </div>
+                {(order.admin_discount ?? 0) > 0 && subtotal === 0 && (
+                  <p className="text-xs text-gray-500 -mt-1">
+                    고객이 수량을 입력하면 할인이 자동 적용됩니다.
+                  </p>
+                )}
                 {/* Add discount / surcharge buttons */}
                 {editingSummaryField === null && (
                   <div className="flex gap-2 pt-2">
