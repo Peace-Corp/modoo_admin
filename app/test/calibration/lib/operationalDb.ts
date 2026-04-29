@@ -89,7 +89,7 @@ const SIDE_NAME_TO_ANCHORS: { match: RegExp; anchors: AnchorId[] }[] = [
 ];
 
 export interface CalibPayloadRow {
-  operational_product_id: string;
+  product_id: string;
   side_id: string;
   payload: any;
   updated_at: string;
@@ -98,8 +98,8 @@ export interface CalibPayloadRow {
 export async function loadAllCalibPayloads(): Promise<CalibPayloadRow[]> {
   const supabase = getClient();
   const { data, error } = await supabase
-    .from('calibration_test_data')
-    .select('operational_product_id, side_id, payload, updated_at');
+    .from('product_calibrations')
+    .select('product_id, side_id, payload, updated_at');
   if (error) {
     console.error('[CALIB-TEST] loadAllCalibPayloads error', error);
     throw error;
@@ -114,10 +114,10 @@ export async function upsertCalibPayload(
 ): Promise<void> {
   const supabase = getClient();
   const { error } = await supabase
-    .from('calibration_test_data')
+    .from('product_calibrations')
     .upsert(
-      { operational_product_id: operationalProductId, side_id: sideId, payload },
-      { onConflict: 'operational_product_id,side_id' },
+      { product_id: operationalProductId, side_id: sideId, payload },
+      { onConflict: 'product_id,side_id' },
     );
   if (error) {
     console.error('[CALIB-TEST] upsertCalibPayload error', error);

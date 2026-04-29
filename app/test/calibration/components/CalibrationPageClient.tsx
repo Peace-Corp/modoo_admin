@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCalibrationState, parseOperationalIds } from '../hooks/useCalibrationState';
 import { CalibrationTab } from './CalibrationTab';
 import { AnchorRegistrar } from './AnchorRegistrar';
@@ -50,6 +50,28 @@ export function CalibrationPageClient() {
   const [tab, setTab] = useState<Tab>('calibration');
   const [loadingOp, setLoadingOp] = useState(false);
   const [opStatus, setOpStatus] = useState<string | null>(null);
+  const autoLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoLoadedRef.current) return;
+    autoLoadedRef.current = true;
+    (async () => {
+      setLoadingOp(true);
+      setOpStatus('운영 DB에서 제품 목록 불러오는 중...');
+      try {
+        const products = await fetchOperationalProducts();
+        await importOperationalProducts(products);
+        setOpStatus(`제품 ${products.length}개 로드 완료. 캘리브 데이터 동기화 중...`);
+        const rows = await loadAllCalibPayloads();
+        applyCalibPayloads(rows);
+        setOpStatus(`✅ 제품 ${products.length}개 · 저장된 캘리브 ${rows.length}건 로드`);
+      } catch (e: any) {
+        setOpStatus(`❌ 자동 로드 실패: ${e?.message ?? e}`);
+      } finally {
+        setLoadingOp(false);
+      }
+    })();
+  }, [importOperationalProducts, applyCalibPayloads]);
 
   const handleAddProduct = () => {
     const name = window.prompt('새 제품 이름', '신규 제품');
@@ -62,16 +84,16 @@ export function CalibrationPageClient() {
     if (name) addSide(selectedProduct.id, name);
   };
 
-  const handleLoadOperational = async () => {
+  const handleRefresh = async () => {
     if (loadingOp) return;
-    if (!window.confirm('운영 DB에서 활성 제품 목록을 read-only로 불러옵니다. (운영 데이터 변경 없음)')) return;
     setLoadingOp(true);
     setOpStatus('운영 DB 조회 중...');
     try {
       const products = await fetchOperationalProducts();
-      setOpStatus(`${products.length}개 제품 매핑 + mockup 이미지 로드 중...`);
       await importOperationalProducts(products);
-      setOpStatus(`✅ ${products.length}개 제품 불러옴`);
+      const rows = await loadAllCalibPayloads();
+      applyCalibPayloads(rows);
+      setOpStatus(`✅ 제품 ${products.length}개 · 캘리브 ${rows.length}건 동기화`);
     } catch (e: any) {
       setOpStatus(`❌ 실패: ${e?.message ?? e}`);
     } finally {
@@ -103,17 +125,6 @@ export function CalibrationPageClient() {
     }
   };
 
-  const handleLoadAllFromDb = async () => {
-    setOpStatus('DB에서 캘리브 데이터 불러오는 중...');
-    try {
-      const rows = await loadAllCalibPayloads();
-      applyCalibPayloads(rows);
-      setOpStatus(`✅ DB에서 ${rows.length}건 적용됨`);
-    } catch (e: any) {
-      setOpStatus(`❌ 불러오기 실패: ${e?.message ?? e}`);
-    }
-  };
-
   const handleResetAll = () => {
     if (!window.confirm('테스트 페이지의 모든 localStorage 데이터를 삭제할까요? (운영 데이터 영향 없음)')) return;
     clearState();
@@ -125,12 +136,12 @@ export function CalibrationPageClient() {
       <div className="min-h-screen bg-yellow-50/40 p-4">
         <header className="mb-4 border-2 border-yellow-400 bg-yellow-100 p-3 rounded">
           <h1 className="text-lg font-bold text-yellow-900">
-            🧪 캘리브레이션 테스트 페이지 (격리됨)
+            📐 제품 캘리브레이션 관리
           </h1>
           <p className="text-xs text-yellow-800 mt-1">
-            이 페이지는 운영 시스템·DB·스토어·라우트와 완전히 격리되어 있습니다.
-            모든 데이터는 브라우저 localStorage(<code>__calib_test__/*</code>)에만
-            저장되며, 어떤 운영 흐름에도 영향을 주지 않습니다.
+            운영 제품(<code>products</code>)을 자동 로드하고, 면별 환산비·앵커·자주
+            쓰는 위치를 <code>product_calibrations</code> 테이블(jsonb)에 저장합니다.
+            로컬 캐시는 작업 중 임시 보관용이며, "현재 면 DB 저장" 버튼이 진실원입니다.
           </p>
         </header>
 
@@ -186,27 +197,19 @@ export function CalibrationPageClient() {
           {opStatus && <span className="text-xs text-gray-600">{opStatus}</span>}
           <button
             type="button"
-            onClick={handleLoadOperational}
+            onClick={handleRefresh}
             disabled={loadingOp}
             className="px-2 py-1 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 rounded disabled:opacity-50"
-            title="운영 DB의 활성 제품을 read-only로 불러옴 (DB 변경 없음)"
+            title="운영 제품 + DB 저장된 캘리브를 다시 불러옴"
           >
-            {loadingOp ? '불러오는 중...' : '운영 제품 불러오기'}
-          </button>
-          <button
-            type="button"
-            onClick={handleLoadAllFromDb}
-            className="px-2 py-1 text-xs bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded"
-            title="calibration_test_data 테이블에서 저장된 캘리브/앵커를 모두 적용"
-          >
-            DB 캘리브 불러오기
+            {loadingOp ? '불러오는 중...' : '🔄 새로고침'}
           </button>
           <button
             type="button"
             onClick={handleSaveSideToDb}
             disabled={!selectedProduct?.id.startsWith('op-')}
             className="px-2 py-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded disabled:opacity-40"
-            title="현재 면의 캘리브/앵커/시나리오를 DB에 저장 (운영 제품만)"
+            title="현재 면의 캘리브/앵커/시나리오를 DB에 저장"
           >
             현재 면 DB 저장
           </button>
@@ -214,8 +217,9 @@ export function CalibrationPageClient() {
             type="button"
             onClick={handleResetAll}
             className="px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded"
+            title="브라우저 localStorage만 초기화 (DB 무영향)"
           >
-            전체 초기화
+            로컬 캐시 초기화
           </button>
         </div>
 

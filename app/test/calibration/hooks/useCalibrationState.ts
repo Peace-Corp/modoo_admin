@@ -30,45 +30,6 @@ function loadImageSize(url: string): Promise<{ width: number; height: number }> 
   });
 }
 
-const SEED_PRODUCTS: TestProduct[] = [
-  {
-    id: 'seed-tee',
-    name: '반팔티',
-    sides: [
-      makeSeedSide('front'),
-      makeSeedSide('back'),
-      makeSeedSide('left-sleeve'),
-      makeSeedSide('right-sleeve'),
-    ],
-  },
-  {
-    id: 'seed-hoodie',
-    name: '후드티(긴팔)',
-    sides: [
-      makeSeedSide('front'),
-      makeSeedSide('back'),
-      makeSeedSide('left-sleeve'),
-      makeSeedSide('right-sleeve'),
-      makeSeedSide('hood'),
-    ],
-  },
-  {
-    id: 'seed-varsity',
-    name: '바시티자켓',
-    sides: [
-      makeSeedSide('front'),
-      makeSeedSide('back'),
-      makeSeedSide('left-sleeve'),
-      makeSeedSide('right-sleeve'),
-    ],
-  },
-  {
-    id: 'seed-longpadding',
-    name: '롱패딩',
-    sides: [makeSeedSide('front'), makeSeedSide('back'), makeSeedSide('hood')],
-  },
-];
-
 function makeSeedSide(name: string): TestSide {
   return {
     id: `${name}-${Math.random().toString(36).slice(2, 8)}`,
@@ -80,9 +41,9 @@ function makeSeedSide(name: string): TestSide {
 }
 
 const initialState: CalibrationState = {
-  products: SEED_PRODUCTS,
-  selectedProductId: SEED_PRODUCTS[0]?.id ?? null,
-  selectedSideId: SEED_PRODUCTS[0]?.sides[0]?.id ?? null,
+  products: [],
+  selectedProductId: null,
+  selectedSideId: null,
   customAnchors: [],
   schemaVersion: 1,
 };
@@ -328,22 +289,15 @@ export function useCalibrationState() {
     );
 
     setState((prev) => {
-      const existingIds = new Set(prev.products.map((x) => x.id));
-      const merged = [...prev.products];
-      for (const np of builtProducts) {
-        if (existingIds.has(np.id)) {
-          const idx = merged.findIndex((x) => x.id === np.id);
-          merged[idx] = np;
-        } else {
-          merged.push(np);
-        }
-      }
-      const first = builtProducts[0];
+      const stillSelectedProduct = builtProducts.find((p) => p.id === prev.selectedProductId);
+      const firstProduct = stillSelectedProduct ?? builtProducts[0];
+      const stillSelectedSide = firstProduct?.sides.find((s) => s.id === prev.selectedSideId);
+      const firstSide = stillSelectedSide ?? firstProduct?.sides[0];
       return {
         ...prev,
-        products: merged,
-        selectedProductId: first?.id ?? prev.selectedProductId,
-        selectedSideId: first?.sides[0]?.id ?? prev.selectedSideId,
+        products: builtProducts,
+        selectedProductId: firstProduct?.id ?? null,
+        selectedSideId: firstSide?.id ?? null,
       };
     });
   }, []);
@@ -374,7 +328,7 @@ export function useCalibrationState() {
             const realSideId = s.id.replace(`op-${realProductId}-`, '');
             const row = rows.find(
               (r) =>
-                r.operational_product_id === realProductId &&
+                r.product_id === realProductId &&
                 r.side_id === realSideId,
             );
             if (!row || !row.payload) return s;
