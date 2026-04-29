@@ -39,6 +39,8 @@ export interface OperationalProduct {
   id: string;
   title: string;
   category: string | null;
+  productCode: string | null;
+  manufacturerName: string | null;
   sides: OperationalSide[];
 }
 
@@ -46,7 +48,7 @@ export async function fetchOperationalProducts(): Promise<OperationalProduct[]> 
   const supabase = getClient();
   const { data, error } = await supabase
     .from('products')
-    .select('id, title, category, configuration, is_active')
+    .select('id, title, category, configuration, is_active, product_code, manufacturer:manufacturers(name)')
     .eq('is_active', true)
     .order('title', { ascending: true });
 
@@ -70,10 +72,15 @@ export async function fetchOperationalProducts(): Promise<OperationalProduct[]> 
         }))
         .filter((s) => s.id);
       if (!sides.length) return null;
+      const manufacturerName = Array.isArray(row.manufacturer)
+        ? row.manufacturer[0]?.name ?? null
+        : row.manufacturer?.name ?? null;
       return {
         id: row.id,
         title: row.title,
         category: row.category ?? null,
+        productCode: row.product_code ?? null,
+        manufacturerName,
         sides,
       };
     })

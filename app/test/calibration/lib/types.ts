@@ -80,6 +80,8 @@ export interface TestSide {
 export interface TestProduct {
   id: string;
   name: string;
+  productCode?: string | null;
+  manufacturerName?: string | null;
   sides: TestSide[];
 }
 

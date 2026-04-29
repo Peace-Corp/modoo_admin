@@ -153,11 +153,14 @@ export function CalibrationPageClient() {
               value={state.selectedProductId ?? ''}
               onChange={(e) => selectProduct(e.target.value)}
             >
-              {state.products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              {state.products.map((p) => {
+                const meta = [p.manufacturerName, p.productCode].filter(Boolean).join(' · ');
+                return (
+                  <option key={p.id} value={p.id}>
+                    {meta ? `${p.name} — ${meta}` : p.name}
+                  </option>
+                );
+              })}
             </select>
           </label>
           <button
@@ -167,6 +170,17 @@ export function CalibrationPageClient() {
           >
             + 제품 추가
           </button>
+          {selectedProduct && (selectedProduct.manufacturerName || selectedProduct.productCode) && (
+            <span className="text-xs text-gray-700 bg-gray-100 border border-gray-200 rounded px-2 py-1 font-mono">
+              {selectedProduct.manufacturerName && (
+                <>제조사 <b className="text-gray-900">{selectedProduct.manufacturerName}</b></>
+              )}
+              {selectedProduct.manufacturerName && selectedProduct.productCode && ' · '}
+              {selectedProduct.productCode && (
+                <>코드 <b className="text-gray-900">{selectedProduct.productCode}</b></>
+              )}
+            </span>
+          )}
 
           <span className="text-gray-300">|</span>
 

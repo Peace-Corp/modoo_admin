@@ -283,6 +283,8 @@ export function useCalibrationState() {
         return {
           id: `op-${p.id}`,
           name: p.title,
+          productCode: p.productCode ?? null,
+          manufacturerName: p.manufacturerName ?? null,
           sides,
         };
       }),
