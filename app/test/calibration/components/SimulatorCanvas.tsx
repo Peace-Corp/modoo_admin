@@ -17,6 +17,10 @@ export interface ArtworkObject {
   angleDeg: number;
   /** natural aspect = naturalWidth / naturalHeight, used to preserve ratio on snap */
   naturalAspect: number;
+  /** True when the dataUrl was alpha-trimmed on upload. */
+  alphaTrimmed?: boolean;
+  /** Original raster size before alpha trim (for UI display only). */
+  originalRasterWh?: { w: number; h: number };
 }
 
 interface Props {

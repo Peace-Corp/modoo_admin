@@ -9,6 +9,7 @@ import {
 } from '../lib/types';
 import { activeNativeMmPerPx } from '../lib/calibrationMath';
 import { SimulatorCanvas, exceedsA3Bbox, type ArtworkObject } from './SimulatorCanvas';
+import { trimToAlphaBounds } from '../lib/imageAlphaTrim';
 
 interface Props {
   side: TestSide;
@@ -36,30 +37,57 @@ export function UserSimulator({ side, customAnchors = [] }: Props) {
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const img = new Image();
-      img.onload = () => {
+    reader.onload = async () => {
+      const rawDataUrl = reader.result as string;
+      try {
+        const trimResult = await trimToAlphaBounds(rawDataUrl);
         const id = `aw-${Date.now().toString(36)}`;
-        const aspect = img.naturalWidth / img.naturalHeight;
+        const aspect = trimResult.width / trimResult.height;
         const widthMm = 80;
         const heightMm = 80 / aspect;
         setArtworks((prev) => [
           ...prev,
           {
             id,
-            dataUrl,
+            dataUrl: trimResult.dataUrl,
             xMm: 30,
             yMm: 30,
             widthMm,
             heightMm,
             angleDeg: 0,
             naturalAspect: aspect,
+            alphaTrimmed: trimResult.trimmed,
+            originalRasterWh: trimResult.trimmed
+              ? { w: trimResult.originalWidth, h: trimResult.originalHeight }
+              : undefined,
           },
         ]);
         setSelectedId(id);
-      };
-      img.src = dataUrl;
+      } catch (e) {
+        console.error('[CALIB-TEST] alpha trim failed, falling back to raw', e);
+        const img = new Image();
+        img.onload = () => {
+          const id = `aw-${Date.now().toString(36)}`;
+          const aspect = img.naturalWidth / img.naturalHeight;
+          const widthMm = 80;
+          const heightMm = 80 / aspect;
+          setArtworks((prev) => [
+            ...prev,
+            {
+              id,
+              dataUrl: rawDataUrl,
+              xMm: 30,
+              yMm: 30,
+              widthMm,
+              heightMm,
+              angleDeg: 0,
+              naturalAspect: aspect,
+            },
+          ]);
+          setSelectedId(id);
+        };
+        img.src = rawDataUrl;
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -220,6 +248,11 @@ export function UserSimulator({ side, customAnchors = [] }: Props) {
                   크기: {selected.widthMm.toFixed(1)} × {selected.heightMm.toFixed(1)}mm
                 </div>
                 <div>회전: {selected.angleDeg.toFixed(1)}°</div>
+                {selected.alphaTrimmed && selected.originalRasterWh && (
+                  <div className="text-blue-700 mt-1">
+                    🔍 알파 트림됨 ({selected.originalRasterWh.w}×{selected.originalRasterWh.h} → 가시영역만)
+                  </div>
+                )}
                 {a3Exceeded && (
                   <div className="text-red-700 font-bold mt-1">⚠ A3(297×420mm) 외접 사각형 초과</div>
                 )}
