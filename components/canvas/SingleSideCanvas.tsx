@@ -789,9 +789,20 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
         // Get real-world product width from product data
         const realWorldProductWidth = side.realLifeDimensions?.productWidthMm || 500; // Default to 500mm for t-shirts
 
-        // Calculate pixel-to-mm ratio based on the product dimensions, not print area
-        // This matches the calculation in canvasPricing.ts for consistency
-        const pixelToMmRatio = scaledImageWidth ? realWorldProductWidth / scaledImageWidth : 0.25;
+        // Prefer calibration-based ratio (same source as anchor presets / pricing)
+        // so the displayed mm match what the user picked in 자주 쓰는 위치.
+        // @ts-expect-error - Custom property set by calibration effect
+        const calibrationNative = (canvas.calibrationNativeMmPerPx as number | undefined) ?? 0;
+        // @ts-expect-error - Custom property
+        const originalImageWidth = canvas.originalImageWidth as number | undefined;
+        const calibratedRatio =
+          calibrationNative > 0 && originalImageWidth && scaledImageWidth
+            ? calibrationNative / (scaledImageWidth / originalImageWidth)
+            : 0;
+        // Calculate pixel-to-mm ratio: calibration > legacy productWidthMm > 0.25 fallback.
+        const pixelToMmRatio = calibratedRatio > 0
+          ? calibratedRatio
+          : (scaledImageWidth ? realWorldProductWidth / scaledImageWidth : 0.25);
 
         // Get object's bounding box dimensions (includes scale and rotation)
         // These are in the SCALED canvas coordinate system
