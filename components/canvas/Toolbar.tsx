@@ -10,6 +10,11 @@ import { STORAGE_BUCKETS, STORAGE_FOLDERS } from '@/lib/storage-config';
 import { createClient } from '@/lib/supabase-client';
 import { convertToPNG, isAiOrPsdFile, getConversionErrorMessage, MAX_UPLOAD_BYTES } from '@/lib/imageConvert';
 import LoadingModal from '@/components/LoadingModal';
+import { fetchProductCalibrations, calibrationToCanvasMmPerPx } from '@/lib/calibrationFetch';
+import type { AnchorPreset } from '@/lib/anchorPresets';
+import { snapArtworkToAnchor } from '@/lib/anchorSnap';
+import { drawAnchorPreviews, clearAnchorPreviews } from './anchorPreviewLayer';
+import AnchorPresetPanel from './AnchorPresetPanel';
 
 interface ToolbarProps {
   sides?: ProductSide[];
@@ -17,9 +22,11 @@ interface ToolbarProps {
   variant?: 'mobile' | 'desktop' | 'editor';
   horizontal?: boolean;
   onSelectedObjectChange?: (obj: fabric.FabricObject | null) => void;
+  /** Operational product id for fetching anchor presets and calibration. */
+  productId?: string;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', horizontal = false, onSelectedObjectChange }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, variant = 'mobile', horizontal = false, onSelectedObjectChange, productId }) => {
   const { getActiveCanvas, activeSideId, setActiveSide, isEditMode, canvasMap, incrementCanvasVersion, zoomIn, zoomOut, getZoomLevel, undo, redo, canUndo, canRedo } = useCanvasStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +44,77 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
   const [imageUploadAgreed, setImageUploadAgreed] = useState(false);
   // const canvas = getActiveCanvas();
+
+  // Anchor preset state.
+  const [isAnchorPanelOpen, setIsAnchorPanelOpen] = useState(false);
+  const [sideAnchors, setSideAnchors] = useState<AnchorPreset[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!productId || !activeSideId) {
+      setSideAnchors([]);
+      return;
+    }
+    fetchProductCalibrations(productId).then((map) => {
+      if (cancelled) return;
+      const cal = map.get(activeSideId);
+      setSideAnchors(cal?.anchors ?? []);
+    }).catch(() => {
+      if (!cancelled) setSideAnchors([]);
+    });
+    return () => { cancelled = true; };
+  }, [productId, activeSideId]);
+
+  const resolveCanvasMmPerPx = (): number | null => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return null;
+    // @ts-expect-error - Custom property
+    const native = canvas.calibrationNativeMmPerPx as number | undefined;
+    // @ts-expect-error - Custom property
+    const sw = canvas.scaledImageWidth as number | undefined;
+    // @ts-expect-error - Custom property
+    const ow = canvas.originalImageWidth as number | undefined;
+    if (native && native > 0 && sw && ow) {
+      return calibrationToCanvasMmPerPx({ nativeMmPerPx: native, scaledImageWidth: sw, originalImageWidth: ow });
+    }
+    // @ts-expect-error - Custom property
+    const realW = (canvas.realWorldProductWidth as number | undefined) ?? 500;
+    if (sw && sw > 0 && realW > 0) return realW / sw;
+    return null;
+  };
+
+  useEffect(() => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    if (isAnchorPanelOpen && sideAnchors.length > 0) {
+      const ratio = resolveCanvasMmPerPx();
+      if (ratio) drawAnchorPreviews(canvas, sideAnchors, { canvasMmPerPx: ratio });
+    } else {
+      clearAnchorPreviews(canvas);
+    }
+    return () => {
+      clearAnchorPreviews(canvas);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnchorPanelOpen, sideAnchors, activeSideId]);
+
+  const handlePickAnchor = (anchor: AnchorPreset) => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const target = canvas.getActiveObject();
+    if (!target) return;
+    const ratio = resolveCanvasMmPerPx();
+    if (!ratio) return;
+    const ok = snapArtworkToAnchor({ obj: target, anchor, canvasMmPerPx: ratio });
+    if (ok) {
+      canvas.requestRenderAll();
+      incrementCanvasVersion();
+      setIsAnchorPanelOpen(false);
+    }
+  };
+
+  const hasAnchors = sideAnchors.length > 0;
+  const hasSelectedArtwork = !!selectedObject;
 
   const handleObjectSelection = (object : fabric.FabricObject | null) => {
     // console.log('handleObjectSelection called with:', object?.type);
@@ -552,6 +630,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
           <button onClick={handleAddImageClick} className={`${editorBtnBase} ${editorBtnIdle}`} title="이미지 추가">
             <FileImage className="w-3.5 h-3.5" />
           </button>
+          {hasAnchors && (
+            <button
+              onClick={() => setIsAnchorPanelOpen(true)}
+              disabled={!selectedObject}
+              className={`${editorBtnBase} ${selectedObject ? editorBtnIdle : editorBtnDisabled}`}
+              title="자주 쓰는 위치"
+            >
+              <span className="text-sm leading-none">📍</span>
+            </button>
+          )}
 
           <div className={horizontal ? "h-5 border-l border-neutral-600 mx-1" : "w-5 border-t border-neutral-600 my-1"} />
 
@@ -589,6 +677,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             <RefreshCcw className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        <AnchorPresetPanel
+          open={isAnchorPanelOpen}
+          onClose={() => setIsAnchorPanelOpen(false)}
+          anchors={sideAnchors}
+          hasSelectedArtwork={hasSelectedArtwork}
+          onPick={handlePickAnchor}
+          variant="desktop"
+        />
 
         {/* Loading Modal for file conversion */}
         <LoadingModal

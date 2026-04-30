@@ -740,6 +740,7 @@ export default function UnifiedEditor({
         customFonts={editorData.customFonts.length > 0 ? editorData.customFonts : undefined}
         rightPanelWidth={rightPanelWidth}
         leftToolbarWidth={leftToolbarWidth}
+        productId={productId}
       />
 
       {/* Floating UI overlay */}
@@ -771,6 +772,7 @@ export default function UnifiedEditor({
               handleExitEditMode={handleExitEditMode}
               variant="editor"
               horizontal
+              productId={productId}
               onSelectedObjectChange={handleSelectedObjectChange}
             />
           )}
@@ -785,6 +787,7 @@ export default function UnifiedEditor({
                 sides={sides}
                 handleExitEditMode={handleExitEditMode}
                 variant="editor"
+                productId={productId}
                 onSelectedObjectChange={handleSelectedObjectChange}
               />
             </div>

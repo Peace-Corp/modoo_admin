@@ -28,6 +28,8 @@ interface EditorCanvasProps {
   rightPanelWidth?: number;
   /** Width of the left toolbar overlay (px) */
   leftToolbarWidth?: number;
+  /** Operational product id — propagated to SingleSideCanvas for calibration fetch. */
+  productId?: string;
 }
 
 export default function EditorCanvas({
@@ -39,6 +41,7 @@ export default function EditorCanvas({
   onCanvasReady,
   rightPanelWidth = 0,
   leftToolbarWidth = 0,
+  productId,
 }: EditorCanvasProps) {
   const { activeSideId, setActiveSide } = useCanvasStore();
   const hasCanvasStates = canvasStates && Object.keys(canvasStates).length > 0;
@@ -328,6 +331,7 @@ export default function EditorCanvas({
                 >
                   <SingleSideCanvas
                     side={side}
+                    productId={productId}
                     width={CANVAS_W}
                     height={CANVAS_H}
                     isEdit={isEditing}

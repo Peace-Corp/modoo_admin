@@ -9,6 +9,7 @@ import { formatMm } from '@/lib/canvasUtils';
 // Import CurvedText to register the class with fabric.js for deserialization
 import '@/lib/curvedText';
 import { setupCurvedTextEditing, loadCustomFonts, isCurvedText } from '@/lib/curvedText';
+import { fetchProductCalibrations } from '@/lib/calibrationFetch';
 
 // Stable empty array to avoid creating a new reference on every render
 // (prevents unnecessary effect re-fires when no custom fonts are provided)
@@ -16,6 +17,8 @@ const EMPTY_CUSTOM_FONTS: CustomFont[] = [];
 
 interface SingleSideCanvasProps {
   side: ProductSide;
+  /** Operational product id. When given, calibration mmPerPx is fetched and used for px↔mm. */
+  productId?: string;
   width?: number; // these are optional because there will be a default value
   height?: number; // ''
   isEdit?: boolean; // whether canvas is in edit mode
@@ -31,6 +34,7 @@ interface SingleSideCanvasProps {
 
 const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   side,
+  productId,
   width = 500,
   height = 500,
   isEdit = false,
@@ -54,8 +58,34 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
   const suppressObjectAddedRef = useRef(false);
   const lastCanvasStateRef = useRef<string | null>(null);
   const lastCanvasSideRef = useRef<string | null>(null);
+  /** Native mmPerPx fetched from product_calibrations. 0 = no calibration → legacy fallback. */
+  const calibrationNativeMmPerPxRef = useRef<number>(0);
 
   const { registerCanvas, unregisterCanvas, productColor: productColorFromStore, markImageLoaded, incrementCanvasVersion, initializeLayerColors, layerColors, resetZoom, saveHistory, resetHistory } = useCanvasStore();
+
+  // Fetch product calibration once per (productId, side.id). Stored on canvas
+  // for downstream features (anchor preset snap, mm labels) — no destructive change.
+  useEffect(() => {
+    let cancelled = false;
+    if (!productId) {
+      calibrationNativeMmPerPxRef.current = 0;
+      return;
+    }
+    fetchProductCalibrations(productId).then((map) => {
+      if (cancelled) return;
+      const cal = map.get(side.id);
+      calibrationNativeMmPerPxRef.current = cal?.nativeMmPerPx ?? 0;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // @ts-expect-error - Custom property
+        canvas.calibrationNativeMmPerPx = calibrationNativeMmPerPxRef.current;
+        canvas.requestRenderAll();
+      }
+    }).catch(() => {
+      if (!cancelled) calibrationNativeMmPerPxRef.current = 0;
+    });
+    return () => { cancelled = true; };
+  }, [productId, side.id]);
 
   // Loading state to track when all images are loaded
   const [isLoading, setIsLoading] = useState(true);
