@@ -160,6 +160,10 @@ const FALLBACK_PIXEL_TO_MM_RATIO = 0.25;
 
 type CanvasWithScale = fabric.Canvas & {
   scaledImageWidth?: number;
+  /** Native (original mockup px) mm/px from product_calibrations. Set by renderers when calibration available. */
+  calibrationNativeMmPerPx?: number;
+  /** Original (pre-display-scale) mockup width. */
+  originalImageWidth?: number;
 };
 
 const getUserObjects = (canvas: fabric.Canvas) =>
@@ -170,9 +174,23 @@ const getUserObjects = (canvas: fabric.Canvas) =>
     return true;
   });
 
+/**
+ * Resolves canvas-pixel mm/px ratio.
+ * Priority: calibration (per-side product_calibrations) > legacy productWidthMm / scaledImageWidth > FALLBACK.
+ */
 const getPixelToMmRatio = (canvas: fabric.Canvas, side: ProductSide) => {
+  const c = canvas as CanvasWithScale;
+  const scaledImageWidth = c.scaledImageWidth;
+  const originalImageWidth = c.originalImageWidth;
+  const calibrationNative = c.calibrationNativeMmPerPx;
+  if (
+    calibrationNative && calibrationNative > 0 &&
+    originalImageWidth && originalImageWidth > 0 &&
+    scaledImageWidth && scaledImageWidth > 0
+  ) {
+    return calibrationNative / (scaledImageWidth / originalImageWidth);
+  }
   const realWorldProductWidth = side.realLifeDimensions?.productWidthMm || DEFAULT_PRODUCT_WIDTH_MM;
-  const scaledImageWidth = (canvas as CanvasWithScale).scaledImageWidth;
   if (scaledImageWidth && scaledImageWidth > 0) {
     return realWorldProductWidth / scaledImageWidth;
   }
@@ -205,7 +223,16 @@ export async function calculateSidePricing(
   // @ts-expect-error - Custom property
   const scaledImageWidth = canvas.scaledImageWidth || imageWidthPixels || 500;
   const realWorldProductWidth = productWidthMm || 500;
-  const pixelToMmRatio = realWorldProductWidth / scaledImageWidth;
+  // Calibration-aware ratio. Falls back to legacy when canvas lacks calibration.
+  // @ts-expect-error - Custom property
+  const calibrationNativeMmPerPx = (canvas.calibrationNativeMmPerPx as number | undefined) ?? 0;
+  // @ts-expect-error - Custom property
+  const originalImageWidth = canvas.originalImageWidth as number | undefined;
+  const calibratedRatio =
+    calibrationNativeMmPerPx > 0 && originalImageWidth && originalImageWidth > 0
+      ? calibrationNativeMmPerPx / (scaledImageWidth / originalImageWidth)
+      : 0;
+  const pixelToMmRatio = calibratedRatio > 0 ? calibratedRatio : realWorldProductWidth / scaledImageWidth;
 
   // All objects use DTF — calculate combined bounding box for the entire side
   const combinedDimensions = calculateCombinedBoundingBox(userObjects, pixelToMmRatio);

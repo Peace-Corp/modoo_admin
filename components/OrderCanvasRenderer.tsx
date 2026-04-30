@@ -701,6 +701,17 @@ const SingleCanvasRenderer: React.FC<SingleCanvasRendererProps> = ({
 
     if (!parsedState || !parsedState.objects) return;
 
+    // Restore calibration mmPerPx from saved canvas_state so admin pricing /
+    // dimension calculations match what the user saw at design time. Absent
+    // for legacy designs → falls back to legacy productWidthMm ratio.
+    const embeddedCalibration =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (parsedState as any).__mmPerPxCalibrationNative;
+    if (typeof embeddedCalibration === 'number' && embeddedCalibration > 0) {
+      // @ts-expect-error - Custom property
+      canvas.calibrationNativeMmPerPx = embeddedCalibration;
+    }
+
     const existingObjects = canvas.getObjects().filter((obj) => {
       if (obj.excludeFromExport) return false;
       const objData = obj as { data?: { id?: string } };
