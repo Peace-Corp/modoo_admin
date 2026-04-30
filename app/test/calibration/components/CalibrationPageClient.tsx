@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useCalibrationState, parseOperationalIds } from '../hooks/useCalibrationState';
+import { getAnchorLabel } from '../lib/types';
 import { CalibrationTab } from './CalibrationTab';
 import { AnchorRegistrar } from './AnchorRegistrar';
 import { UserSimulator } from './UserSimulator';
@@ -110,13 +111,20 @@ export function CalibrationPageClient() {
     }
     setOpStatus('DB 저장 중...');
     try {
+      // Embed human-readable label per anchor so user/admin canvases can
+      // display custom anchor labels without access to the test page's
+      // customAnchors localStorage.
+      const registeredAnchorsWithLabels = selectedSide.registeredAnchors.map((a) => ({
+        ...a,
+        label: getAnchorLabel(a.id, state.customAnchors),
+      }));
       await upsertCalibPayload(ids.productId, ids.sideId, {
         mockup: {
           legacyProductWidthMm: selectedSide.mockup.legacyProductWidthMm,
           lines: selectedSide.mockup.lines,
         },
         applicableAnchors: selectedSide.applicableAnchors,
-        registeredAnchors: selectedSide.registeredAnchors,
+        registeredAnchors: registeredAnchorsWithLabels,
         scenarios: selectedSide.scenarios ?? [],
       });
       setOpStatus(`✅ "${selectedProduct.name} / ${selectedSide.name}" 저장됨`);

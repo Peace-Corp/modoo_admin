@@ -56,6 +56,12 @@ export interface AnchorPlacement {
   yMm: number;
   recommendedWidthMm: number;
   recommendedHeightMm: number;
+  /**
+   * Human-readable label snapshot at save time (resolved via getAnchorLabel).
+   * Embedded so user/admin canvases can render labels without access to the
+   * test page's customAnchors localStorage. Optional for backwards compat.
+   */
+  label?: string;
 }
 
 export interface ComparisonScenario {
