@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.9",
+    "@imgly/background-removal": "^1.7.0",
     "@sparticuz/chromium": "^143.0.4",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.89.0",

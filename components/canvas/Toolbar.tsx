@@ -15,6 +15,20 @@ import type { AnchorPreset } from '@/lib/anchorPresets';
 import { snapArtworkToAnchor } from '@/lib/anchorSnap';
 import { drawAnchorPreviews, clearAnchorPreviews } from './anchorPreviewLayer';
 import AnchorPresetPanel from './AnchorPresetPanel';
+import {
+  BackgroundRemovalFlow,
+  type DesignerRequestPayload,
+  type FlowResult,
+} from '@/components/background-removal/BackgroundRemovalFlow';
+import {
+  addDesignerPendingBadge,
+  removeDesignerPendingBadge,
+} from './designerPendingBadge';
+import {
+  submitDesignerRequest,
+  markDesignerRequestCompleted,
+} from '@/lib/designerRequest';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface ToolbarProps {
   sides?: ProductSide[];
@@ -43,6 +57,22 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
   // Image upload popup state
   const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
   const [imageUploadAgreed, setImageUploadAgreed] = useState(false);
+
+  // Background-removal modal state. Single-file uploads route through this
+  // flow; batch (multi-file) uploads bypass it and use the existing path.
+  type BgPending = {
+    pngFile: File;
+    sourceFile: File;
+    sourceUrl: string | null;
+    sourcePath: string | null;
+  };
+  const [bgPending, setBgPending] = useState<BgPending | null>(null);
+  const [bgModalOpen, setBgModalOpen] = useState(false);
+  const [designerPayload, setDesignerPayload] = useState<DesignerRequestPayload | null>(null);
+
+  // Admin role gate for the "이미지 교체" button on designer-pending objects.
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isAdmin = userRole === 'admin';
   // const canvas = getActiveCanvas();
 
   // Anchor preset state.
@@ -434,6 +464,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
       if (!files || files.length === 0) return;
 
       const fileList = Array.from(files);
+
+      // Single-file upload → background-removal flow (lets the user choose
+      // bg removal / keep / delegate to designer). Batch uploads bypass the
+      // modal to keep the existing "drop many files at once" workflow snappy.
+      if (fileList.length === 1) {
+        await routeSingleFileThroughBgRemoval(fileList[0]);
+        return;
+      }
+
       const totalCount = fileList.length;
       const hasConvertible = fileList.some(isAiOrPsdFile);
 
@@ -467,6 +506,271 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
       }
     };
 
+    input.click();
+  };
+
+  // Single-file path: convert AI/PSD if needed, then open BackgroundRemovalFlow.
+  // Result is uploaded + placed via handleBgComplete.
+  const routeSingleFileThroughBgRemoval = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      alert(
+        `파일이 너무 큽니다 (현재 ${mb}MB / 최대 50MB)\n\n` +
+        `아래 방법 중 하나로 진행해주세요:\n` +
+        `1) 더 작은 파일(최대 50MB)로 다시 업로드\n` +
+        `2) 디자인을 완료한 뒤 [주문 요청사항] 탭에서 첨부파일로 추가\n` +
+        `3) modoo.contact@gmail.com 으로 원본 파일 전달`,
+      );
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      if (isAiOrPsdFile(file)) {
+        setLoadingMessage('파일 변환 중...');
+        setLoadingSubmessage(`${file.name} - AI/PSD 파일을 PNG로 변환하고 있습니다. (최대 수 분 소요)`);
+        setIsLoadingModalOpen(true);
+
+        const [conversionResult, origUploadResult] = await Promise.all([
+          convertToPNG(file, (msg) => setLoadingSubmessage(`${file.name} - ${msg}`)),
+          uploadFileToStorage(supabase, file, STORAGE_BUCKETS.USER_DESIGNS, STORAGE_FOLDERS.IMAGES),
+        ]);
+        setIsLoadingModalOpen(false);
+
+        if (!conversionResult.success || !conversionResult.pngBlob) {
+          alert(getConversionErrorMessage(conversionResult.error));
+          return;
+        }
+        if (!origUploadResult.success || !origUploadResult.url) {
+          alert(`원본 파일 업로드에 실패했습니다.\n사유: ${origUploadResult.error || '알 수 없음'}`);
+          return;
+        }
+
+        const pngFile = new File(
+          [conversionResult.pngBlob],
+          `${file.name.split('.')[0]}.png`,
+          { type: 'image/png' },
+        );
+        setBgPending({
+          pngFile,
+          sourceFile: file,
+          sourceUrl: origUploadResult.url,
+          sourcePath: origUploadResult.path ?? null,
+        });
+        setDesignerPayload(null);
+        setBgModalOpen(true);
+      } else {
+        setBgPending({
+          pngFile: file,
+          sourceFile: file,
+          sourceUrl: null,
+          sourcePath: null,
+        });
+        setDesignerPayload(null);
+        setBgModalOpen(true);
+      }
+    } catch (error) {
+      setIsLoadingModalOpen(false);
+      console.error('Error preparing image for bg-removal:', error);
+      alert('이미지 추가 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleBgCancel = () => {
+    setBgModalOpen(false);
+    setBgPending(null);
+    setDesignerPayload(null);
+  };
+
+  const handleBgComplete = async (result: FlowResult) => {
+    if (!bgPending) return;
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const pending = bgPending;
+    setBgModalOpen(false);
+
+    setLoadingMessage('이미지 업로드 중...');
+    setLoadingSubmessage('이미지를 저장하고 있습니다.');
+    setIsLoadingModalOpen(true);
+
+    try {
+      const supabase = createClient();
+      const finalFile = new File(
+        [result.blob],
+        `image-${Date.now()}.png`,
+        { type: result.blob.type || 'image/png' },
+      );
+      const upload = await uploadFileToStorage(
+        supabase,
+        finalFile,
+        STORAGE_BUCKETS.USER_DESIGNS,
+        STORAGE_FOLDERS.IMAGES,
+      );
+      if (!upload.success || !upload.url) {
+        setIsLoadingModalOpen(false);
+        alert(`이미지 업로드에 실패했습니다.\n사유: ${upload.error || '알 수 없음'}`);
+        setBgPending(null);
+        setDesignerPayload(null);
+        return;
+      }
+
+      let designerJobId: string | null = null;
+      if (result.designerPending) {
+        designerJobId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const payload = designerPayload;
+        const baseInput = {
+          jobId: designerJobId,
+          designId: productId ?? null,
+          requesterName: payload?.name ?? '',
+          requesterContact: payload?.contact ?? '',
+          requestNote: payload?.note,
+        };
+        const submission = await submitDesignerRequest(
+          supabase,
+          pending.sourceUrl
+            ? { ...baseInput, sourceUrl: pending.sourceUrl }
+            : { ...baseInput, sourceFile: pending.sourceFile },
+        );
+        if (!submission.success) {
+          console.error('Designer request submit failed:', submission.error);
+        }
+      }
+
+      const displayUrl = upload.url;
+      setLoadingMessage('이미지 불러오는 중...');
+      setLoadingSubmessage('캔버스에 이미지를 추가하고 있습니다.');
+
+      const img = await fabric.FabricImage.fromURL(displayUrl, { crossOrigin: 'anonymous' });
+      const maxWidth = canvas.width * 0.5;
+      const maxHeight = canvas.height * 0.5;
+      if (img.width > maxWidth || img.height > maxHeight) {
+        const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+        img.scale(scale);
+      }
+      img.set({
+        left: canvas.width / 2,
+        top: canvas.height / 2,
+        originX: 'center',
+        originY: 'center',
+      });
+      // @ts-expect-error - Adding custom data property to FabricImage
+      img.data = {
+        // @ts-expect-error - Reading data property
+        ...(img.data || {}),
+        supabaseUrl: displayUrl,
+        supabasePath: upload.path,
+        originalFileUrl: pending.sourceUrl ?? displayUrl,
+        originalFileName: pending.sourceFile.name,
+        fileType: pending.sourceFile.type || 'unknown',
+        isConverted: isAiOrPsdFile(pending.sourceFile),
+        uploadedAt: new Date().toISOString(),
+        ...(designerJobId
+          ? { designerJobId, designerPending: true }
+          : { bgRemoved: result.usedRemoval }),
+      };
+
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      if (designerJobId) {
+        addDesignerPendingBadge(canvas, img);
+      }
+      canvas.renderAll();
+      incrementCanvasVersion();
+
+      setIsLoadingModalOpen(false);
+      if (isAiOrPsdFile(pending.sourceFile)) {
+        setLoadingMessage('완료!');
+        setLoadingSubmessage('파일이 성공적으로 추가되었습니다.');
+        setIsLoadingModalOpen(true);
+        setTimeout(() => setIsLoadingModalOpen(false), 1500);
+      }
+    } catch (error) {
+      setIsLoadingModalOpen(false);
+      console.error('Error placing image on canvas:', error);
+      alert('이미지를 캔버스에 추가하는 데 실패했습니다.');
+    } finally {
+      setBgPending(null);
+      setDesignerPayload(null);
+    }
+  };
+
+  // Admin-only: replace a designer-pending placeholder image while keeping
+  // its position/size/rotation. Updates the designer_requests row to
+  // 'completed' so the work is logged.
+  const handleReplaceDesignerImage = async () => {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    const obj = canvas.getActiveObject();
+    if (!obj || obj.type !== 'image') return;
+    // @ts-expect-error - Reading custom data
+    const jobId = obj.data?.designerJobId as string | undefined;
+    // @ts-expect-error - Reading custom data
+    const isPending = obj.data?.designerPending as boolean | undefined;
+    if (!jobId || !isPending) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png';
+    input.onchange = async (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        alert('파일이 너무 큽니다 (최대 50MB).');
+        return;
+      }
+      setLoadingMessage('교체 이미지 업로드 중...');
+      setLoadingSubmessage(file.name);
+      setIsLoadingModalOpen(true);
+      try {
+        const supabase = createClient();
+        const upload = await uploadFileToStorage(
+          supabase,
+          file,
+          STORAGE_BUCKETS.USER_DESIGNS,
+          STORAGE_FOLDERS.IMAGES,
+        );
+        if (!upload.success || !upload.url) {
+          alert(`업로드 실패: ${upload.error || '알 수 없음'}`);
+          return;
+        }
+        // setSrc preserves position/scale/rotation.
+        await new Promise<void>((resolve, reject) => {
+          const fabricImg = obj as fabric.FabricImage;
+          fabricImg
+            .setSrc(upload.url!, { crossOrigin: 'anonymous' })
+            .then(() => resolve())
+            .catch(reject);
+        });
+        // @ts-expect-error - Update custom data
+        obj.data = {
+          // @ts-expect-error - Read custom data
+          ...(obj.data || {}),
+          supabaseUrl: upload.url,
+          supabasePath: upload.path,
+          designerPending: false,
+          completedUrl: upload.url,
+          replacedAt: new Date().toISOString(),
+        };
+        removeDesignerPendingBadge(canvas, obj);
+        canvas.renderAll();
+        incrementCanvasVersion();
+
+        const result = await markDesignerRequestCompleted(supabase, jobId, upload.url);
+        if (!result.success) {
+          console.error('markDesignerRequestCompleted failed:', result.error);
+        }
+        setLoadingMessage('완료!');
+        setLoadingSubmessage('교체된 이미지가 적용되었습니다.');
+        setTimeout(() => setIsLoadingModalOpen(false), 1200);
+      } catch (err) {
+        console.error('Replace designer image error:', err);
+        alert('교체 중 오류가 발생했습니다.');
+        setIsLoadingModalOpen(false);
+      }
+    };
     input.click();
   };
 
@@ -642,6 +946,69 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
   const currentSide = sides.find(side => side.id === activeSideId);
 
+  // Shared modal element rendered once at the end of every variant return.
+  const bgRemovalModal =
+    bgModalOpen && bgPending ? (
+      <div
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-200 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) handleBgCancel();
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="이미지 추가하기"
+      >
+        <div
+          className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={handleBgCancel}
+            aria-label="닫기"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+          <h2 className="text-lg font-bold mb-4 pr-8">이미지 추가하기</h2>
+          <BackgroundRemovalFlow
+            initialFile={bgPending.pngFile}
+            onComplete={handleBgComplete}
+            onCancel={handleBgCancel}
+            onDesignerRequest={async (payload) => {
+              setDesignerPayload(payload);
+            }}
+          />
+        </div>
+      </div>
+    ) : null;
+
+  // Designer-pending status of the currently selected object — used to gate
+  // the admin-only "이미지 교체" button.
+  // @ts-expect-error - reading custom data field
+  const selectedIsDesignerPending = !!selectedObject?.data?.designerPending;
+  const showReplaceDesignerButton = isAdmin && selectedIsDesignerPending;
+
+  // Floating "이미지 교체" CTA shown only when an admin selects a designer-
+  // pending placeholder. Lives outside the toolbar layout so it doesn't
+  // disturb existing variant designs.
+  const replaceDesignerButton = showReplaceDesignerButton ? (
+    <div className="fixed bottom-6 right-6 z-100">
+      <button
+        type="button"
+        onClick={handleReplaceDesignerImage}
+        className="flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-600 transition"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        디자이너 작업 이미지로 교체
+      </button>
+    </div>
+  ) : null;
+
   // Compact editor variant – dark vertical tool sidebar (Photoshop-like)
   if (variant === 'editor') {
     const editorBtnBase = 'p-1.5 rounded transition-colors flex items-center justify-center';
@@ -767,6 +1134,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             </div>
           </div>
         )}
+        {bgRemovalModal}
+        {replaceDesignerButton}
       </>
     );
   }
@@ -925,6 +1294,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
             </div>
           </div>
         )}
+        {bgRemovalModal}
+        {replaceDesignerButton}
       </>
     );
   }
@@ -1142,6 +1513,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
         </div>
       )}
 
+      {bgRemovalModal}
+        {replaceDesignerButton}
     </>
   );
 }

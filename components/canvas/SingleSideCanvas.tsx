@@ -1302,6 +1302,12 @@ const SingleSideCanvas: React.FC<SingleSideCanvasProps> = ({
       });
 
       normalizeStacking(canvas, side);
+      try {
+        const { restoreDesignerPendingBadges } = await import('./designerPendingBadge');
+        restoreDesignerPendingBadges(canvas);
+      } catch (err) {
+        console.error('[SingleSideCanvas] Failed to restore designer-pending badges:', err);
+      }
       canvas.requestRenderAll();
 
       // Additional render pass after a short delay to ensure fonts are applied

@@ -14,6 +14,7 @@ import EditorCanvas from './EditorCanvas';
 
 import EditorRightPanel from './EditorRightPanel';
 import Toolbar from '@/components/canvas/Toolbar';
+import { preloadBackgroundRemoval } from '@/components/background-removal/BackgroundRemovalFlow';
 import DesignModePanel from './panels/DesignModePanel';
 import OrderModePanel from './panels/OrderModePanel';
 import OrderEditPanel from './panels/OrderEditPanel';
@@ -91,6 +92,28 @@ export default function UnifiedEditor({
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
+
+  // Background-removal model prefetch on editor mount.
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const conn = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (conn?.saveData) return;
+    if (conn?.effectiveType && /^(2g|slow-2g)$/.test(conn.effectiveType)) return;
+    const start = () => {
+      void preloadBackgroundRemoval();
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      w.requestIdleCallback(start, { timeout: 3000 });
+    } else {
+      const t = setTimeout(start, 1500);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   // Selected text object for text style panel
   const [selectedTextObject, setSelectedTextObject] = useState<fabric.FabricObject | null>(null);

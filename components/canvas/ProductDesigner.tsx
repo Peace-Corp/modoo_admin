@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { ProductConfig } from "@/types/types";
 import Toolbar from "./Toolbar";
 import { useCanvasStore } from '@/store/useCanvasStore';
+import { preloadBackgroundRemoval } from '@/components/background-removal/BackgroundRemovalFlow';
 
 
 const SingleSideCanvas = dynamic(() => import('./SingleSideCanvas'), {
@@ -43,6 +44,28 @@ const ProductDesigner: React.FC<ProductDesignerProps> = ({ config, layout = 'mob
     updateWidth();
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Background-removal model prefetch (idle, courteous on slow networks).
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const conn = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (conn?.saveData) return;
+    if (conn?.effectiveType && /^(2g|slow-2g)$/.test(conn.effectiveType)) return;
+    const start = () => {
+      void preloadBackgroundRemoval();
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      w.requestIdleCallback(start, { timeout: 3000 });
+    } else {
+      const t = setTimeout(start, 1500);
+      return () => clearTimeout(t);
+    }
   }, []);
 
   const handleTouchStart = (e: React.TouchEvent) => {
