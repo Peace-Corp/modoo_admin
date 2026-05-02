@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
-import { normalizeProfileRole, isBackofficeOperatorRole } from '@/lib/auth-helpers';
+import { normalizeProfileRole, assertBackofficeProfileRole, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { useAuthStore, type AuthStatus, type UserData } from '@/store/useAuthStore';
 
 type AdminRole = 'admin' | 'factory' | 'super_admin';
@@ -89,10 +89,18 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
           .from('profiles')
           .select('role, email, phone_number, manufacturer_id')
           .eq('id', supabaseUser.id)
-          .single();
+          .maybeSingle();
 
-        if (error || !profile) {
-          console.error('Error fetching profile:', error);
+        if (error) {
+          console.error('프로필 조회 오류:', error);
+          logout();
+          if (isActive) setAuthStatus('unauthenticated');
+          router.push('/login');
+          return;
+        }
+
+        if (!profile) {
+          console.error('profiles 행 없음 또는 RLS로 조회 차단 가능 (user id:', supabaseUser.id, ')');
           logout();
           if (isActive) setAuthStatus('unauthenticated');
           router.push('/login');
@@ -100,8 +108,13 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
         }
 
         const canonicalRole = normalizeProfileRole(profile.role);
-        if (!canonicalRole || !isBackofficeOperatorRole(canonicalRole)) {
-          console.error('User does not have admin, factory, or super_admin role:', profile.role, '→', canonicalRole);
+        if (!assertBackofficeProfileRole(canonicalRole)) {
+          console.error(
+            '[모두관리] 허용되지 않은 역할입니다. 필요: admin · factory · super_admin (표준 문자열 또는 super-admin 형태). 현재값:',
+            profile.role,
+            '→ 정규화:',
+            canonicalRole
+          );
           logout();
           if (isActive) setAuthStatus('unauthenticated');
           router.push('/login');
