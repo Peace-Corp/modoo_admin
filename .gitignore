@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Cursor MCP 로컬 설정(시크릿 포함 가능 — 레포 절대 커밋 금지)
+.mcp.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
