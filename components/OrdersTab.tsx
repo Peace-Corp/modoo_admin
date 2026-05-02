@@ -10,6 +10,7 @@ import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 import RefundModal from '@/components/orders/RefundModal';
 import { formatKstDateLong, formatKstDateShort, formatKstMonthDay } from '@/lib/kst';
+import { orderCategoryLabel } from '@/lib/order-category';
 import { isAdminLike } from '@/lib/auth-helpers';
 
 // Extended order type with items from API (now includes factory fields)
@@ -28,6 +29,16 @@ type OrderItemSummary = {
 type OrderWithItemCount = Order & {
   order_items?: { count: number }[] | OrderItemSummary[];
 };
+
+function getOrderSourceInfo(order: Pick<Order, 'id' | 'order_category'>): { label: string; color: string } {
+  if (order.id.startsWith('ORDER-')) {
+    return { label: '관리자생성주문', color: 'bg-purple-100 text-purple-800' };
+  }
+  if (order.order_category === 'salesman_direct') {
+    return { label: '영업직접주문', color: 'bg-emerald-100 text-emerald-800' };
+  }
+  return { label: '고객직접주문', color: 'bg-sky-100 text-sky-800' };
+}
 
 export default function OrdersTab() {
   const router = useRouter();
@@ -82,13 +93,6 @@ export default function OrdersTab() {
     }
     return [];
   }, [user, fetchedFactories]);
-
-  const getOrderSourceInfo = (id: string): { label: string; color: string } => {
-    if (id.startsWith('ORDER-')) {
-      return { label: '관리자생성주문', color: 'bg-purple-100 text-purple-800' };
-    }
-    return { label: '고객직접주문', color: 'bg-sky-100 text-sky-800' };
-  };
 
   const getShortOrderId = (id: string): string => {
     const parts = id.split('-');
@@ -264,7 +268,7 @@ export default function OrdersTab() {
       case 'id':
         return order.id;
       case 'order_source':
-        return order.id.startsWith('ORDER-') ? '관리자생성주문' : '고객직접주문';
+        return getOrderSourceInfo(order).label;
       case 'order_category':
         return order.order_category || '';
       case 'item_count': {
@@ -732,7 +736,7 @@ export default function OrdersTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="text-sm text-gray-900">
-                          {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                          {orderCategoryLabel(order.order_category)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -849,7 +853,7 @@ export default function OrdersTab() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {(() => {
-                          const src = getOrderSourceInfo(order.id);
+                          const src = getOrderSourceInfo(order);
                           return (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${src.color}`}>
                               {src.label}
@@ -1047,7 +1051,7 @@ export default function OrdersTab() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span>{orderCategoryLabel(order.order_category)}</span>
                     <span>수량: {getOrderItemCount(order)}</span>
                     {(() => {
                       const mfa = getMyFactorySummary(order).amount;
@@ -1111,7 +1115,7 @@ export default function OrdersTab() {
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <div className="text-xs font-medium text-gray-900 truncate">{order.customer_name}</div>
                         {(() => {
-                          const src = getOrderSourceInfo(order.id);
+                          const src = getOrderSourceInfo(order);
                           return (
                             <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${src.color}`}>
                               {src.label}
@@ -1139,7 +1143,7 @@ export default function OrdersTab() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                    <span>{order.order_category === 'cobuy' ? '공동구매' : '일반'}</span>
+                    <span>{orderCategoryLabel(order.order_category)}</span>
                     <span className="font-medium text-gray-700">{order.total_amount.toLocaleString()}원</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getPaymentStatusColor(order.payment_status)}`}>{{pending:'입금대기',completed:'결제완료',failed:'결제실패',refunded:'환불'}[order.payment_status] || order.payment_status}</span>
                     {(() => {

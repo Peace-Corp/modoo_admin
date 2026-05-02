@@ -9,6 +9,7 @@ import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import { extractVariants } from '@/lib/orderUtils';
 import { formatKstDateShort } from '@/lib/kst';
+import { orderCategoryLabel } from '@/lib/order-category';
 import { isAdminLike } from '@/lib/auth-helpers';
 
 interface FactoryOrderInfoPanelProps {
@@ -141,7 +142,7 @@ export default function FactoryOrderInfoPanel({
             <div className="flex items-start gap-1.5">
               <span className="text-[11px] text-gray-400 shrink-0 w-16">주문 구분</span>
               <span className="text-[11px] font-medium text-gray-800">
-                {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                {orderCategoryLabel(order.order_category)}
               </span>
             </div>
 

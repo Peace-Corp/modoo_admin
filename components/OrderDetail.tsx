@@ -11,6 +11,7 @@ import AddOrderItemModal from '@/components/orders/AddOrderItemModal';
 import OrderProfitSection from '@/components/orders/OrderProfitSection';
 import { extractVariants } from '@/lib/orderUtils';
 import { formatKstDateLong, formatKstDateTimeMedium, getKstYYYYMMDD } from '@/lib/kst';
+import { orderCategoryBadgeClass, orderCategoryLabel } from '@/lib/order-category';
 
 type CoBuyParticipantSummary = Pick<
   CoBuyParticipant,
@@ -822,8 +823,8 @@ export default function OrderDetail({
           )}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">구분</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${order.order_category === 'cobuy' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700'}`}>
-              {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${orderCategoryBadgeClass(order.order_category)}`}>
+              {orderCategoryLabel(order.order_category)}
             </span>
           </div>
           <div className="ml-auto text-xs text-gray-400">
@@ -1942,7 +1943,7 @@ export default function OrderDetail({
                 <div>
                   <p className="text-xs text-gray-500">주문 구분</p>
                   <p className="text-sm font-medium text-gray-900">
-                    {order.order_category === 'cobuy' ? '공동구매' : '일반'}
+                    {orderCategoryLabel(order.order_category)}
                   </p>
                 </div>
 

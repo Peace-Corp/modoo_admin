@@ -8,6 +8,7 @@ import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import { extractVariantsFromOptions } from '@/lib/orderUtils';
 import type { Product, OrderItem, ProductColor, CanvasState, CustomFont } from '@/types/types';
 import { formatKstDateOnly } from '@/lib/kst';
+import { orderCategoryLabelShare } from '@/lib/order-category';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 import EditorRightPanel from '@/components/editor/EditorRightPanel';
 import OrderModePanel from '@/components/editor/panels/OrderModePanel';
@@ -556,7 +557,7 @@ export default function SharedOrderPage() {
                   <span className="text-sm">주문 구분</span>
                 </div>
                 <p className="font-medium text-gray-900">
-                  {order.order_category === 'cobuy' ? '공동구매' : '일반 주문'}
+                  {orderCategoryLabelShare(order.order_category)}
                 </p>
               </div>
             </div>
