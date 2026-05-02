@@ -9,6 +9,7 @@ import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import { extractVariants } from '@/lib/orderUtils';
 import { formatKstDateShort } from '@/lib/kst';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 interface FactoryOrderInfoPanelProps {
   orderId: string;
@@ -218,7 +219,7 @@ export default function FactoryOrderInfoPanel({
             attachmentUrls={localAttachmentUrls}
             onUrlsUpdated={setLocalAttachmentUrls}
             compact
-            isAdmin={user?.role === 'admin'}
+            isAdmin={isAdminLike(user?.role)}
           />
         </div>
       )}

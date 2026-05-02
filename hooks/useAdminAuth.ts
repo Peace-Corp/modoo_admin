@@ -3,18 +3,23 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
+import { normalizeProfileRole, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { useAuthStore, type AuthStatus, type UserData } from '@/store/useAuthStore';
 
-type AdminRole = 'admin' | 'factory';
+type AdminRole = 'admin' | 'factory' | 'super_admin';
+
+const adminRoutes = ['/dashboard', '/analytics', '/products', '/designs', '/content', '/orders', '/purchase-orders', '/factories', '/cobuy', '/partner_malls', '/coupons', '/users', '/settings', '/editor', '/print-methods', '/invoices', '/shipping', '/test', '/salespersons'];
 
 const allowedRoutesByRole: Record<AdminRole, string[]> = {
-  admin: ['/dashboard', '/analytics', '/products', '/designs', '/content', '/orders', '/purchase-orders', '/factories', '/cobuy', '/partner_malls', '/coupons', '/users', '/settings', '/editor', '/print-methods', '/invoices', '/shipping', '/test'],
+  admin: adminRoutes,
   factory: ['/orders', '/users', '/editor'],
+  super_admin: [...adminRoutes, '/finance'],
 };
 
 const defaultRouteByRole: Record<AdminRole, string> = {
   admin: '/dashboard',
   factory: '/orders',
+  super_admin: '/dashboard',
 };
 
 interface UseAdminAuthOptions {
@@ -82,7 +87,7 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
 
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('role, email, phone_number, manufacturer_id, manufacturer:manufacturers(id, name)')
+          .select('role, email, phone_number, manufacturer_id')
           .eq('id', supabaseUser.id)
           .single();
 
@@ -94,17 +99,24 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
           return;
         }
 
-        if (profile.role !== 'admin' && profile.role !== 'factory') {
-          console.error('User does not have admin or factory role:', profile.role);
+        const canonicalRole = normalizeProfileRole(profile.role);
+        if (!canonicalRole || !isBackofficeOperatorRole(canonicalRole)) {
+          console.error('User does not have admin, factory, or super_admin role:', profile.role, '→', canonicalRole);
           logout();
           if (isActive) setAuthStatus('unauthenticated');
           router.push('/login');
           return;
         }
 
-        const manufacturerRecord = Array.isArray(profile.manufacturer)
-          ? profile.manufacturer[0]
-          : profile.manufacturer;
+        let manufacturer_name: string | null = null;
+        if (profile.manufacturer_id) {
+          const { data: mfg } = await supabase
+            .from('manufacturers')
+            .select('name')
+            .eq('id', profile.manufacturer_id)
+            .maybeSingle();
+          manufacturer_name = mfg?.name ?? null;
+        }
 
         if (isActive) {
           setUser({
@@ -113,9 +125,9 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
             name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name,
             avatar_url: supabaseUser.user_metadata?.avatar_url,
             phone: supabaseUser.phone || profile.phone_number,
-            role: profile.role,
+            role: canonicalRole,
             manufacturer_id: profile.manufacturer_id ?? null,
-            manufacturer_name: manufacturerRecord?.name ?? null,
+            manufacturer_name,
           });
         }
       } catch (error) {
@@ -138,7 +150,7 @@ export function useAdminAuth(options: UseAdminAuthOptions = {}): UseAdminAuthRes
     if (skip || authStatus !== 'authenticated' || !user?.role) return;
 
     const role = user.role as AdminRole;
-    if (role !== 'admin' && role !== 'factory') return;
+    if (!isBackofficeOperatorRole(role)) return;
 
     const allowedRoutes = allowedRoutesByRole[role];
     const isAllowed = allowedRoutes.some(

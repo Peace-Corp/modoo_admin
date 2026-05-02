@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendFactoryAssignmentEmail } from '@/lib/gmail';
 import { randomBytes } from 'crypto';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 interface ItemAllocation {
   orderItemId: string;
@@ -32,7 +33,7 @@ export async function PATCH(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (!isAdminLike(profile?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2, ChevronDown, Printer, ClipboardList, FileText, Truck, LineChart } from 'lucide-react';
+import { Package, Users, BarChart3, Menu, X, ShoppingBag, MessageSquare, Factory, LayoutDashboard, Palette, Ticket, Building2, ChevronDown, Printer, ClipboardList, FileText, Truck, LineChart, UserCheck, Wallet, Receipt, TrendingUp } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
-type AdminRole = 'admin' | 'factory';
+type AdminRole = 'admin' | 'factory' | 'super_admin';
 
 type NavLink = {
   type: 'link';
@@ -42,21 +42,21 @@ const navGroups: NavGroup[] = [
   {
     label: '핵심 관리',
     items: [
-      { type: 'link', href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin'] },
-      { type: 'link', href: '/analytics', label: '분석', icon: LineChart, roles: ['admin'] },
-      { type: 'link', href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory'] },
-      { type: 'link', href: '/purchase-orders', label: '발주 관리', icon: ClipboardList, roles: ['admin'] },
-      { type: 'link', href: '/products', label: '제품 관리', icon: Package, roles: ['admin'] },
-      { type: 'link', href: '/invoices', label: '거래명세서', icon: FileText, roles: ['admin'] },
-      { type: 'link', href: '/shipping', label: '택배 관리', icon: Truck, roles: ['admin'] },
+      { type: 'link', href: '/dashboard', label: '대시보드', icon: LayoutDashboard, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/analytics', label: '분석', icon: LineChart, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/orders', label: '주문 관리', icon: BarChart3, roles: ['admin', 'factory', 'super_admin'] },
+      { type: 'link', href: '/purchase-orders', label: '발주 관리', icon: ClipboardList, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/products', label: '제품 관리', icon: Package, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/invoices', label: '거래명세서', icon: FileText, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/shipping', label: '택배 관리', icon: Truck, roles: ['admin', 'super_admin'] },
     ],
   },
   {
     label: '상품 & 생산',
     items: [
-      { type: 'link', href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin'] },
-      // { type: 'link', href: '/print-methods', label: '인쇄 방식', icon: Printer, roles: ['admin'] },
-      { type: 'link', href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin'] },
+      { type: 'link', href: '/designs', label: '디자인 관리', icon: Palette, roles: ['admin', 'super_admin'] },
+      // { type: 'link', href: '/print-methods', label: '인쇄 방식', icon: Printer, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/factories', label: '공장 관리', icon: Factory, roles: ['admin', 'super_admin'] },
     ],
   },
   {
@@ -66,15 +66,15 @@ const navGroups: NavGroup[] = [
         type: 'section',
         label: '공동구매',
         icon: ShoppingBag,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         children: [
           { href: '/cobuy/requests', label: '요청 관리' },
           { href: '/cobuy/sessions', label: '세션 관리' },
           { href: '/cobuy/presets', label: '프리셋 관리' },
         ],
       },
-      { type: 'link', href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin'] },
-      { type: 'link', href: '/coupons', label: '쿠폰 관리', icon: Ticket, roles: ['admin'] },
+      { type: 'link', href: '/partner_malls', label: '파트너몰 관리', icon: Building2, roles: ['admin', 'super_admin'] },
+      { type: 'link', href: '/coupons', label: '쿠폰 관리', icon: Ticket, roles: ['admin', 'super_admin'] },
     ],
   },
   {
@@ -84,7 +84,7 @@ const navGroups: NavGroup[] = [
         type: 'section',
         label: '콘텐츠',
         icon: MessageSquare,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         children: [
           { href: '/content/reviews', label: '리뷰' },
           { href: '/content/examples', label: '제작 사례' },
@@ -96,7 +96,23 @@ const navGroups: NavGroup[] = [
           { href: '/content/chatbot', label: '챗봇 문의' },
         ],
       },
-      { type: 'link', href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory'] },
+      { type: 'link', href: '/users', label: '사용자 관리', icon: Users, roles: ['admin', 'factory', 'super_admin'] },
+    ],
+  },
+  {
+    label: '영업 조직 (프로토타입)',
+    items: [
+      { type: 'link', href: '/salespersons', label: '영업사원 관리', icon: UserCheck, roles: ['admin', 'super_admin'] },
+    ],
+  },
+  {
+    label: '재무 (Finance)',
+    items: [
+      { type: 'link', href: '/finance', label: '재무 대시보드', icon: Wallet, roles: ['super_admin'] },
+      { type: 'link', href: '/finance/costs', label: '제품 원가표', icon: Package, roles: ['super_admin'] },
+      { type: 'link', href: '/finance/print-costs', label: '인쇄비 시세표', icon: Printer, roles: ['super_admin'] },
+      { type: 'link', href: '/finance/shipping', label: '내부 배송비', icon: Truck, roles: ['super_admin'] },
+      { type: 'link', href: '/finance/profit', label: '손익 리포트', icon: TrendingUp, roles: ['super_admin'] },
     ],
   },
 ];
@@ -141,7 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  const role = user?.role === 'admin' || user?.role === 'factory' ? user.role : null;
+  const role = (user?.role === 'admin' || user?.role === 'factory' || user?.role === 'super_admin') ? user.role : null;
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
@@ -35,7 +36,7 @@ const requireAdmin = async () => {
   if (!user) return { error: NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 }) };
   const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profileError) return { error: NextResponse.json({ error: profileError.message }, { status: 403 }) };
-  if (!profile || profile.role !== 'admin') return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
+  if (!profile || (!isAdminLike(profile.role))) return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
   return { user };
 };
 
@@ -94,7 +95,7 @@ const requireAdminOrFactory = async () => {
     return { error: NextResponse.json({ error: profileError.message }, { status: 403 }) };
   }
 
-  if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+  if (!profile || (!isBackofficeOperatorRole(profile.role))) {
     return { error: NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 }) };
   }
 
@@ -187,7 +188,7 @@ export async function PATCH(request: Request) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+    if (profileError || !profile || (!isBackofficeOperatorRole(profile.role))) {
       return NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 });
     }
 
@@ -203,7 +204,7 @@ export async function PATCH(request: Request) {
 
     // --- admin_edit mode: update quantity/price/design ---
     if (updateMode === 'admin_edit') {
-      if (profile.role !== 'admin') {
+      if ((!isAdminLike(profile.role))) {
         return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
       }
 

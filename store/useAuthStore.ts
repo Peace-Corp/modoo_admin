@@ -10,7 +10,7 @@ export interface UserData {
   name?: string;
   avatar_url?: string;
   phone?: string;
-  role?: 'admin' | 'customer' | 'factory';
+  role?: 'admin' | 'customer' | 'factory' | 'super_admin';
   manufacturer_id?: string | null;
   manufacturer_name?: string | null;
   created_at?: string;
@@ -124,6 +124,7 @@ export const useAuthStore = create<AuthState>()(
               user: userData,
               isAuthenticated: true,
               isLoading: false,
+              authStatus: 'checking',
             });
 
             return { success: true };

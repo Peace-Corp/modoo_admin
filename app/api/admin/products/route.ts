@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
@@ -27,7 +28,7 @@ const requireAdmin = async () => {
     return { error: NextResponse.json({ error: profileError.message }, { status: 403 }) };
   }
 
-  if (!profile || profile.role !== 'admin') {
+  if (!profile || (!isAdminLike(profile.role))) {
     return { error: NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 }) };
   }
 
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
     const productCode = payload?.product_code ?? null;
     const discountRates = payload?.discount_rates ?? null;
     const manufacturerId = payload?.manufacturer_id ?? null;
+    const keywordsInput = payload?.keywords;
 
     if (!title || typeof title !== 'string') {
       return NextResponse.json({ error: '제품명이 필요합니다.' }, { status: 400 });
@@ -145,6 +147,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '제조사 ID 형식이 올바르지 않습니다.' }, { status: 400 });
     }
 
+    let keywords: string[] = [];
+    if (keywordsInput !== undefined && keywordsInput !== null) {
+      if (!Array.isArray(keywordsInput) || !keywordsInput.every((k) => typeof k === 'string')) {
+        return NextResponse.json({ error: '키워드 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      keywords = Array.from(new Set(keywordsInput.map((k) => k.trim()).filter(Boolean)));
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('products')
@@ -161,6 +171,7 @@ export async function POST(request: Request) {
         product_code: productCode,
         discount_rates: discountRates,
         manufacturer_id: manufacturerId,
+        keywords,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -296,6 +307,19 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: '제조사 ID 형식이 올바르지 않습니다.' }, { status: 400 });
       }
       updateData.manufacturer_id = payload.manufacturer_id ?? null;
+    }
+
+    if (payload?.keywords !== undefined) {
+      if (payload.keywords !== null) {
+        if (!Array.isArray(payload.keywords) || !payload.keywords.every((k: unknown) => typeof k === 'string')) {
+          return NextResponse.json({ error: '키워드 형식이 올바르지 않습니다.' }, { status: 400 });
+        }
+        updateData.keywords = Array.from(
+          new Set((payload.keywords as string[]).map((k) => k.trim()).filter(Boolean))
+        );
+      } else {
+        updateData.keywords = [];
+      }
     }
 
     if (payload?.sort_order !== undefined) {

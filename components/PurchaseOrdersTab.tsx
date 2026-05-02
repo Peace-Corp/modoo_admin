@@ -17,6 +17,7 @@ import {
   Factory,
 } from 'lucide-react';
 import { formatKstDateTimeMedium, formatKstMonthDay } from '@/lib/kst';
+import ConfirmPurchaseOrderModal from '@/components/orders/ConfirmPurchaseOrderModal';
 
 type OrderWithManufacturer = Pick<Order, 'id' | 'customer_name' | 'customer_email' | 'order_status' | 'created_at'>;
 
@@ -91,6 +92,7 @@ export default function PurchaseOrdersTab() {
   const [viewMode, setViewMode] = useState<ViewMode>('orders');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
+  const [confirmItems, setConfirmItems] = useState<{ id: string; product_title: string; quantity: number }[] | null>(null);
 
   const swrKey = useMemo(() => {
     const params = new URLSearchParams();
@@ -232,6 +234,14 @@ export default function PurchaseOrdersTab() {
 
   const handleSingleStatusChange = useCallback(
     async (itemId: string, newStatus: string) => {
+      // 발주완료(ordered)로 변경 시 단가 입력 모달
+      if (newStatus === 'ordered') {
+        const item = items.find((i) => i.id === itemId);
+        if (item) {
+          setConfirmItems([{ id: item.id, product_title: item.product_title, quantity: item.quantity }]);
+          return;
+        }
+      }
       setUpdatingIds((prev) => new Set(prev).add(itemId));
       setErrorMessage(null);
       try {
@@ -255,7 +265,7 @@ export default function PurchaseOrdersTab() {
         });
       }
     },
-    [mutate]
+    [mutate, items]
   );
 
   const formatDate = (dateString: string | null) => {
@@ -401,10 +411,13 @@ export default function PurchaseOrdersTab() {
           </span>
           <div className="flex-1" />
           <button
-            onClick={() => handleBulkStatusChange('ordered')}
+            onClick={() => {
+              const selected = items.filter((i) => selectedIds.has(i.id));
+              setConfirmItems(selected.map((i) => ({ id: i.id, product_title: i.product_title, quantity: i.quantity })));
+            }}
             className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            발주완료 처리
+            발주 확정 (단가 입력)
           </button>
           <button
             onClick={() => handleBulkStatusChange('received')}
@@ -466,6 +479,18 @@ export default function PurchaseOrdersTab() {
           src={previewImage.src}
           alt={previewImage.alt}
           onClose={() => setPreviewImage(null)}
+        />
+      )}
+
+      {confirmItems && confirmItems.length > 0 && (
+        <ConfirmPurchaseOrderModal
+          items={confirmItems}
+          onClose={() => setConfirmItems(null)}
+          onSuccess={() => {
+            setConfirmItems(null);
+            setSelectedIds(new Set());
+            mutate();
+          }}
         />
       )}
     </div>

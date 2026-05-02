@@ -7,6 +7,7 @@ import type { CategoryConfig } from '@/lib/categories';
 import { useRouter } from 'next/navigation';
 import { Save, X, Plus, Trash2, Upload, ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, Check, Loader2, Layers, GripVertical } from 'lucide-react';
 import LogoPlacementPreview from './LogoPlacementPreview';
+import KeywordsInput from './KeywordsInput';
 
 interface ProductEditorProps {
   product?: Product | null;
@@ -76,6 +77,9 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
   const [productCode, setProductCode] = useState(product?.product_code ?? '');
   const [discountRates, setDiscountRates] = useState<Array<{ min_quantity: number; discount_rate: number }>>(
     Array.isArray(product?.discount_rates) ? product.discount_rates : []
+  );
+  const [keywords, setKeywords] = useState<string[]>(
+    Array.isArray(product?.keywords) ? product.keywords : []
   );
 
   // Product sides
@@ -1249,6 +1253,7 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
         product_code: productCode.trim() ? productCode.trim() : null,
         discount_rates: discountRates.length > 0 ? discountRates : null,
         manufacturer_id: linkedManufacturerId || null,
+        keywords,
       };
 
       if (!isNewProduct && !product?.id) {
@@ -1431,6 +1436,13 @@ export default function ProductEditor({ product, onSave, onCancel }: ProductEdit
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                   placeholder="예: TSHIRT-001"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">키워드 (해시태그)</label>
+                <KeywordsInput value={keywords} onChange={setKeywords} />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter 또는 쉼표로 추가, 백스페이스로 마지막 칩 삭제. 기존 키워드는 자동완성됩니다.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">연결된 제조사</label>

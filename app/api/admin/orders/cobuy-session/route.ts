@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
@@ -27,7 +28,7 @@ const requireAdminOrFactory = async () => {
     return { error: NextResponse.json({ error: profileError.message }, { status: 403 }) };
   }
 
-  if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+  if (!profile || (!isBackofficeOperatorRole(profile.role))) {
     return { error: NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 }) };
   }
 

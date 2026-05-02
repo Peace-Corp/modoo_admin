@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Factory, Order } from '@/types/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import OrderDetail from '@/components/OrderDetail';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -96,7 +97,7 @@ export default function OrderDetailPage() {
     initialFetchDone.current = true;
 
     const loadData = async () => {
-      if (user.role === 'admin') {
+      if (isAdminLike(user.role)) {
         await Promise.all([fetchOrder(), fetchFactories()]);
       } else if (user.role === 'factory') {
         await fetchOrder();
@@ -163,7 +164,7 @@ export default function OrderDetailPage() {
       onUpdate={handleUpdate}
       onOrderUpdate={handleOrderUpdate}
       factories={factories}
-      canAssign={user?.role === 'admin'}
+      canAssign={isAdminLike(user?.role)}
       loadingFactories={loadingFactories}
       isFactoryUser={isFactoryUser}
       initialAddItemDesignId={addItemDesignId}

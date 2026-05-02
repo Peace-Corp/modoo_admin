@@ -10,6 +10,7 @@ import AdminOrderCreator from '@/components/orders/AdminOrderCreator';
 import FactoryAllocationModal from '@/components/orders/FactoryAllocationModal';
 import RefundModal from '@/components/orders/RefundModal';
 import { formatKstDateLong, formatKstDateShort, formatKstMonthDay } from '@/lib/kst';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 // Extended order type with items from API (now includes factory fields)
 type OrderItemSummary = {
@@ -62,11 +63,11 @@ export default function OrdersTab() {
 
   // Factories: fetch for admin, compute from profile for factory user
   const { data: fetchedFactories = [] } = useSWR<Factory[]>(
-    user?.role === 'admin' ? '/api/admin/factories' : null
+    isAdminLike(user?.role) ? '/api/admin/factories' : null
   );
 
   const factories = useMemo(() => {
-    if (user?.role === 'admin') return fetchedFactories;
+    if (isAdminLike(user?.role)) return fetchedFactories;
     if (user?.role === 'factory' && user.manufacturer_id) {
       return [{
         id: user.manufacturer_id,

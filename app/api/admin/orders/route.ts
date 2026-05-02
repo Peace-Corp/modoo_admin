@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { sendFactoryAssignmentEmail } from '@/lib/gmail';
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+    if (!profile || (!isBackofficeOperatorRole(profile.role))) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
     }
 
@@ -67,7 +68,7 @@ export async function GET(request: Request) {
       query = query.order('created_at', { ascending: false });
     }
 
-    if (profile.role === 'admin' && factoryId) {
+    if (isAdminLike(profile.role) && factoryId) {
       // Admin filtering by a specific factory — use inner join filter
       query = adminClient.from('orders').select(
         `id, customer_name, customer_email, customer_phone, order_category, delivery_fee, created_at, total_amount, order_status, payment_status, payment_method, shipping_method, country_code, postal_code, state, city, address_line_1, address_line_2, refund_reason, customer_note, attachment_urls, notes, original_amount, custom_unit_price, admin_discount, admin_surcharge, coupon_discount, applied_coupon_id, pricing_note, payment_link_token, share_token, order_items!inner(id, purchase_order_status, design_title, assigned_manufacturer_id, factory_status, factory_amount, deadline, factory_payment_date, factory_payment_status)` as string
@@ -126,7 +127,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || (profile.role !== 'admin' && profile.role !== 'factory')) {
+    if (!profile || (!isBackofficeOperatorRole(profile.role))) {
       return NextResponse.json({ error: '권한이 필요합니다.' }, { status: 403 });
     }
 

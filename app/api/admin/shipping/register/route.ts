@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { registerOrder, type RegisterOrderInput } from '@/lib/logen';
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
       .eq('id', user.id)
       .single();
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile || (!isAdminLike(profile.role))) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
     }
 

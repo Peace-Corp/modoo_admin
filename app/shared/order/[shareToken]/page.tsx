@@ -128,6 +128,7 @@ function SharedItemView({
       sort_order: 0,
       is_active: true,
       is_featured: false,
+      keywords: [],
       created_at: item.created_at,
       updated_at: item.created_at,
       category: null,

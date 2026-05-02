@@ -7,6 +7,7 @@ import useSWR from 'swr';
 import { BarChart3, Factory, MessageSquare, Package, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { formatKstDateTimeCompact } from '@/lib/kst';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   payment_completed: '결제완료',
@@ -294,7 +295,7 @@ export default function Dashboard() {
                   주문 관리
                   <span className="text-gray-400">→</span>
                 </Link>
-                {user?.role === 'admin' && (
+                {isAdminLike(user?.role) && (
                   <>
                     <Link
                       href="/products"

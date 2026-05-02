@@ -37,6 +37,7 @@ import {
   TextSvgObjectUrlsBySide,
 } from '@/lib/downloadUtils';
 import { normalizePrintMethod, getPrintMethodDisplayName } from '@/lib/printPricingConfig';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 const printMethodColorClass = (method?: string | null): string => {
   const colorMap: Record<string, string> = {
@@ -489,7 +490,7 @@ export default function OrderModePanel({
             onUrlsUpdated={setAttachmentUrls}
             compact
             readonly={!!publicOrderData}
-            isAdmin={user?.role === 'admin'}
+            isAdmin={isAdminLike(user?.role)}
           />
         )}
       </div>

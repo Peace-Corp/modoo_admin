@@ -29,6 +29,7 @@ import {
   markDesignerRequestCompleted,
 } from '@/lib/designerRequest';
 import { useAuthStore } from '@/store/useAuthStore';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 interface ToolbarProps {
   sides?: ProductSide[];
@@ -72,7 +73,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ sides = [], handleExitEditMode, varia
 
   // Admin role gate for the "이미지 교체" button on designer-pending objects.
   const userRole = useAuthStore((s) => s.user?.role);
-  const isAdmin = userRole === 'admin';
+  const isAdmin = isAdminLike(userRole);
   // const canvas = getActiveCanvas();
 
   // Anchor preset state.

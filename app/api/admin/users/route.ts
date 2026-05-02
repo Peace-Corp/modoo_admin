@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { isAdminLike, isBackofficeOperatorRole } from '@/lib/auth-helpers';
 import { createClient } from '@/lib/supabase';
 import { createAdminClient } from '@/lib/supabase-admin';
 
-const allowedRoles = new Set(['customer', 'admin', 'factory']);
+const allowedRoles = new Set(['customer', 'admin', 'factory', 'super_admin']);
 
 export async function GET(request: Request) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || !['admin', 'factory'].includes(profile.role)) {
+    if (!profile || !isBackofficeOperatorRole(profile.role)) {
       return NextResponse.json({ error: '관리자 또는 공장 권한이 필요합니다.' }, { status: 403 });
     }
     const url = new URL(request.url);
@@ -128,7 +129,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 403 });
     }
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile || (!isAdminLike(profile.role))) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 });
     }
 

@@ -8,6 +8,7 @@ import RefundModal from '@/components/orders/RefundModal';
 import DesignChatPanel from '@/components/orders/DesignChatPanel';
 import OrderAttachmentSection from '@/components/orders/OrderAttachmentSection';
 import AddOrderItemModal from '@/components/orders/AddOrderItemModal';
+import OrderProfitSection from '@/components/orders/OrderProfitSection';
 import { extractVariants } from '@/lib/orderUtils';
 import { formatKstDateLong, formatKstDateTimeMedium, getKstYYYYMMDD } from '@/lib/kst';
 
@@ -2036,6 +2037,8 @@ export default function OrderDetail({
         initialDesignId={initialAddItemDesignId}
         editingItem={editingOrderItem}
       />
+
+      <OrderProfitSection order={order} orderItems={orderItems} />
     </div>
   );
 }

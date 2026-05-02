@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { Factory, Profile, Coupon } from '@/types/types';
 import { Users, Calendar, Shield, User as UserIcon, AlertCircle, Factory as FactoryIcon, Ticket, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatKstDateLong } from '@/lib/kst';
+import { isAdminLike } from '@/lib/auth-helpers';
 
 interface PaginatedResponse {
   data: Profile[];
@@ -73,7 +74,7 @@ export default function UsersTab() {
 
   // Factories: only fetch for admin
   const { data: factories = [], isLoading: loadingFactories } = useSWR<Factory[]>(
-    currentUser?.role === 'admin' ? '/api/admin/factories' : null
+    isAdminLike(currentUser?.role) ? '/api/admin/factories' : null
   );
 
   const updateUserRole = async (userId: string, newRole: 'customer' | 'admin' | 'factory') => {
@@ -157,13 +158,13 @@ export default function UsersTab() {
   };
 
   const getRoleColor = (role: string) => {
-    if (role === 'admin') return 'bg-purple-100 text-purple-800';
+    if (isAdminLike(role)) return 'bg-purple-100 text-purple-800';
     if (role === 'factory') return 'bg-orange-100 text-orange-800';
     return 'bg-gray-100 text-gray-800';
   };
 
   const getRoleLabel = (role: string) => {
-    if (role === 'admin') return '관리자';
+    if (isAdminLike(role)) return '관리자';
     if (role === 'factory') return '공장';
     return '일반 사용자';
   };
@@ -294,7 +295,7 @@ export default function UsersTab() {
           <h2 className="text-base font-semibold text-gray-900">사용자 관리</h2>
           <p className="text-xs text-gray-500 mt-1">총 {total}명의 사용자</p>
         </div>
-        {currentUser?.role === 'admin' && selectedUserIds.size > 0 && (
+        {isAdminLike(currentUser?.role) && selectedUserIds.size > 0 && (
           <button
             onClick={() => openCouponModal(Array.from(selectedUserIds))}
             className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -334,7 +335,7 @@ export default function UsersTab() {
             className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        {currentUser?.role === 'admin' && (
+        {isAdminLike(currentUser?.role) && (
           <div className="flex gap-2 flex-wrap">
             {[
               { value: 'all', label: '전체' },
@@ -364,7 +365,7 @@ export default function UsersTab() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {currentUser?.role === 'admin' && (
+                {isAdminLike(currentUser?.role) && (
                   <th className="px-4 py-2 w-10">
                     <input
                       type="checkbox"
@@ -395,7 +396,7 @@ export default function UsersTab() {
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   가입일
                 </th>
-                {currentUser?.role === 'admin' && (
+                {isAdminLike(currentUser?.role) && (
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     작업
                   </th>
@@ -408,7 +409,7 @@ export default function UsersTab() {
                   key={user.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  {currentUser?.role === 'admin' && (
+                  {isAdminLike(currentUser?.role) && (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <input
                         type="checkbox"
@@ -441,13 +442,13 @@ export default function UsersTab() {
                         user.role
                       )}`}
                     >
-                      {user.role === 'admin' && <Shield className="w-3 h-3" />}
+                      {isAdminLike(user.role) && <Shield className="w-3 h-3" />}
                       {user.role === 'factory' && <FactoryIcon className="w-3 h-3" />}
                       {getRoleLabel(user.role)}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {currentUser?.role === 'admin' && user.role === 'factory' ? (
+                    {isAdminLike(currentUser?.role) && user.role === 'factory' ? (
                       <div className="flex items-center gap-2">
                         <select
                           value={user.manufacturer_id || ''}
@@ -483,7 +484,7 @@ export default function UsersTab() {
                       {formatKstDateLong(user.created_at)}
                     </div>
                   </td>
-                  {currentUser?.role === 'admin' && (
+                  {isAdminLike(currentUser?.role) && (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <select
@@ -525,7 +526,7 @@ export default function UsersTab() {
 
         {/* Mobile Card List */}
         <div className="md:hidden divide-y divide-gray-200">
-          {currentUser?.role === 'admin' && users.length > 0 && (
+          {isAdminLike(currentUser?.role) && users.length > 0 && (
             <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
               <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
               <span className="text-[11px] text-gray-600">전체 선택</span>
@@ -534,7 +535,7 @@ export default function UsersTab() {
           {users.map((user) => (
             <div key={user.id} className="p-3 space-y-2">
               <div className="flex items-start gap-2">
-                {currentUser?.role === 'admin' && (
+                {isAdminLike(currentUser?.role) && (
                   <input
                     type="checkbox"
                     checked={selectedUserIds.has(user.id)}
@@ -549,7 +550,7 @@ export default function UsersTab() {
                       <div className="text-[11px] text-gray-500">{user.name || '-'}</div>
                     </div>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${getRoleColor(user.role)}`}>
-                      {user.role === 'admin' && <Shield className="w-3 h-3" />}
+                      {isAdminLike(user.role) && <Shield className="w-3 h-3" />}
                       {user.role === 'factory' && <FactoryIcon className="w-3 h-3" />}
                       {getRoleLabel(user.role)}
                     </span>
@@ -563,7 +564,7 @@ export default function UsersTab() {
                     <Calendar className="w-3 h-3" />
                     {formatKstDateLong(user.created_at)}
                   </div>
-                  {currentUser?.role === 'admin' && (
+                  {isAdminLike(currentUser?.role) && (
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <select
                         value={user.role}
